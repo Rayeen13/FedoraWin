@@ -20,9 +20,10 @@ jobs:
           node-version: 22
       - name: UI contract tests
         run: node --test tests/ui_contract.test.mjs
-      - name: Rust format check
-        working-directory: src-tauri
-        run: cargo fmt --all -- --check
       - name: Rust compile check
         working-directory: src-tauri
         run: cargo check
+      - name: Rust format check
+        if: always()
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check

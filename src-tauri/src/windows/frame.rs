@@ -39,7 +39,6 @@ struct FramePalette {
     dark: i32,
     caption: u32,
     text: u32,
-    border: u32,
 }
 
 fn colorref(r: u8, g: u8, b: u8) -> u32 {
@@ -50,18 +49,7 @@ fn palette(appearance: &AppearanceState) -> FramePalette {
     let dark = !matches!(appearance.theme, ThemeMode::Light);
     let caption = if dark { colorref(48, 48, 48) } else { colorref(246, 245, 244) };
     let text = if dark { colorref(255, 255, 255) } else { colorref(32, 32, 32) };
-    let border = match appearance.accent {
-        Accent::Blue => colorref(53, 132, 228),
-        Accent::Teal => colorref(33, 144, 164),
-        Accent::Green => colorref(58, 148, 74),
-        Accent::Yellow => colorref(200, 136, 0),
-        Accent::Orange => colorref(237, 91, 0),
-        Accent::Red => colorref(230, 45, 66),
-        Accent::Pink => colorref(213, 97, 153),
-        Accent::Purple => colorref(145, 65, 172),
-        Accent::Slate => colorref(111, 131, 150),
-    };
-    FramePalette { dark: if dark { 1 } else { 0 }, caption, text, border }
+    FramePalette { dark: if dark { 1 } else { 0 }, caption, text }
 }
 
 unsafe fn set_attr<T>(hwnd: isize, attribute: u32, value: &T) {
@@ -112,8 +100,9 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
             set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner);
             set_attr(hwnd, DWMWA_CAPTION_COLOR, &ctx.palette.caption);
             set_attr(hwnd, DWMWA_TEXT_COLOR, &ctx.palette.text);
-            // The accent is intentionally a subtle native DWM border, never a fake titlebar overlay.
-            set_attr(hwnd, DWMWA_BORDER_COLOR, &ctx.palette.border);
+            // libadwaita does not paint an accent outline around every application window.
+            // Keep the real Windows non-client frame, but suppress its colored border.
+            set_attr(hwnd, DWMWA_BORDER_COLOR, &DWMWA_COLOR_NONE);
             ctx.count += 1;
         }
     }

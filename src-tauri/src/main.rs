@@ -5,7 +5,9 @@ mod windows;
 
 use shell::{AppearanceState, ShellState};
 use std::sync::Arc;
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{LogicalPosition, Manager, WebviewUrl, WebviewWindowBuilder};
+
+const PANEL_HEIGHT: f64 = 32.0;
 
 #[tauri::command]
 fn get_shell_state(state: tauri::State<'_, Arc<ShellState>>) -> shell::ShellSnapshot {
@@ -19,12 +21,59 @@ fn set_appearance(
     accent: String,
 ) -> Result<shell::ShellSnapshot, String> {
     state.set_appearance(AppearanceState::parse(&theme, &accent)?)?;
-    Ok(state.snapshot())
+    let snapshot = state.snapshot();
+    windows::frame::apply_to_top_level_windows(&snapshot.appearance).map_err(|e| e.to_string())?;
+    Ok(snapshot)
 }
 
 #[tauri::command]
 fn toggle_activities(app: tauri::AppHandle) -> Result<(), String> {
     shell::toggle_activities(&app)
+}
+
+#[tauri::command]
+fn toggle_surface(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    if !matches!(label.as_str(), "date-menu" | "quick-settings") {
+        return Err("unsupported shell surface".into());
+    }
+    let window = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("{label} window is unavailable"))?;
+    let visible = window.is_visible().map_err(|e| e.to_string())?;
+    if visible {
+        window.hide().map_err(|e| e.to_string())?;
+    } else {
+        for other in ["date-menu", "quick-settings"] {
+            if other != label {
+                if let Some(w) = app.get_webview_window(other) {
+                    let _ = w.hide();
+                }
+            }
+        }
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn list_apps() -> Result<Vec<windows::apps::AppEntry>, String> {
+    windows::apps::list()
+}
+
+#[tauri::command]
+fn launch_app(app_id: String) -> Result<(), String> {
+    windows::apps::launch(&app_id)
+}
+
+#[tauri::command]
+fn list_windows() -> Result<Vec<windows::windows_list::WindowEntry>, String> {
+    windows::windows_list::list()
+}
+
+#[tauri::command]
+fn activate_window(handle: String) -> Result<(), String> {
+    windows::windows_list::activate(&handle)
 }
 
 #[tauri::command]
@@ -45,9 +94,10 @@ fn build_window(
     width: f64,
     height: f64,
     visible: bool,
+    position: LogicalPosition<f64>,
 ) -> tauri::Result<()> {
     let url = WebviewUrl::App(format!("index.html?view={view}").into());
-    WebviewWindowBuilder::new(app, label, url)
+    let window = WebviewWindowBuilder::new(app, label, url)
         .title("FedoraWin")
         .decorations(false)
         .resizable(false)
@@ -56,6 +106,7 @@ fn build_window(
         .visible(visible)
         .inner_size(width, height)
         .build()?;
+    window.set_position(position)?;
     Ok(())
 }
 
@@ -68,6 +119,11 @@ fn main() {
             get_shell_state,
             set_appearance,
             toggle_activities,
+            toggle_surface,
+            list_apps,
+            launch_app,
+            list_windows,
+            activate_window,
             set_wifi_enabled,
             refresh_window_frames
         ])
@@ -80,16 +136,16 @@ fn main() {
             let logical_width = size.width as f64 / scale;
             let logical_height = size.height as f64 / scale;
 
-            build_window(app, "panel", "panel", logical_width, 32.0, true)?;
-            build_window(app, "activities", "activities", logical_width, logical_height - 32.0, false)?;
-            build_window(app, "date-menu", "date-menu", 760.0, 620.0, false)?;
-            build_window(app, "quick-settings", "quick-settings", 420.0, 560.0, false)?;
+            build_window(app, "panel", "panel", logical_width, PANEL_HEIGHT, true, LogicalPosition::new(0.0, 0.0))?;
+            build_window(app, "activities", "activities", logical_width, logical_height - PANEL_HEIGHT, false, LogicalPosition::new(0.0, PANEL_HEIGHT))?;
+            build_window(app, "date-menu", "date-menu", 760.0, 540.0, false, LogicalPosition::new(((logical_width - 760.0) / 2.0).max(0.0), PANEL_HEIGHT))?;
+            build_window(app, "quick-settings", "quick-settings", 408.0, 510.0, false, LogicalPosition::new((logical_width - 416.0).max(0.0), PANEL_HEIGHT))?;
 
             #[cfg(windows)]
             {
                 if let Some(panel) = app.get_webview_window("panel") {
                     let hwnd = panel.hwnd()?;
-                    windows::appbar::reserve_top(hwnd.0 as isize, 32)?;
+                    windows::appbar::reserve_top(hwnd.0 as isize)?;
                 }
                 windows::frame::start_frame_watcher(state.clone());
             }

@@ -36,9 +36,9 @@ extern "system" {
     fn GetWindowRect(hwnd: isize, rect: *mut Rect) -> i32;
 }
 
-pub fn reserve_top(hwnd: isize, height_px: i32) -> Result<(), String> {
-    if hwnd == 0 || height_px <= 0 {
-        return Err("invalid panel HWND or height".into());
+pub fn reserve_top(hwnd: isize) -> Result<(), String> {
+    if hwnd == 0 {
+        return Err("invalid panel HWND".into());
     }
 
     let mut rect = Rect::default();
@@ -47,6 +47,9 @@ pub fn reserve_top(hwnd: isize, height_px: i32) -> Result<(), String> {
         return Err("GetWindowRect failed for panel".into());
     }
 
+    // GetWindowRect is in physical pixels, so reserving the panel's real HWND height
+    // remains correct at 125/150/200% display scaling.
+    let height_px = (rect.bottom - rect.top).max(1);
     let mut data = AppBarData {
         cb_size: size_of::<AppBarData>() as u32,
         hwnd,
