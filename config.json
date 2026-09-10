@@ -1,0 +1,14 @@
+{
+  "hideTaskbarWhileRunning": true,
+  "applyWallpaperWhileRunning": false,
+  "hideDesktopIconsWhileRunning": true,
+  "reservePanelInSafePreview": true,
+  "activitiesHotkey": "Alt+F1",
+  "panelHeight": 32,
+  "showTrayIcon": false,
+  "maxLauncherApps": 96,
+  "windowFrameEnabled": true,
+  "windowFrameExcludedProcesses": "chrome,msedge,firefox,opera,Code,devenv,ApplicationFrameHost,ShellExperienceHost,StartMenuExperienceHost,SearchHost,TextInputHost",
+  "theme": "dark",
+  "accent": "blue"
+}
