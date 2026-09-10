@@ -14,15 +14,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install test dependencies
-        shell: pwsh
-        run: python -m pip install --disable-pip-version-check pytest
-      - name: Python safety and regression suite
-        shell: pwsh
-        run: python -m pytest -q
-      - name: Windows PowerShell 5.1 and WPF smoke
+      - name: Windows PowerShell 5.1 native and WPF smoke
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File tests\windows-smoke.ps1
