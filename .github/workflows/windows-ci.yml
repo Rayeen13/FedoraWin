@@ -1,0 +1,25 @@
+name: Windows CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python safety and regression suite
+        shell: pwsh
+        run: python -m pytest -q
+      - name: Windows PowerShell 5.1 and WPF smoke
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File tests\windows-smoke.ps1
