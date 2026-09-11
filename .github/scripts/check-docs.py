@@ -4,22 +4,35 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
+PUBLIC_PAGES = {"index.html", "getting-started.html", "architecture.html", "status.html"}
 
 class Collector(HTMLParser):
     def __init__(self):
         super().__init__()
         self.refs = []
+        self.ids = set()
         self.images_without_alt = []
+        self.meta_description = False
+        self.canonical = False
+        self.favicon = False
+
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if attrs.get("id"):
+            self.ids.add(attrs["id"])
         if tag == "a" and attrs.get("href"):
             self.refs.append(("href", attrs["href"]))
-        if tag in {"img", "script"}:
-            key = "src"
-            if attrs.get(key):
-                self.refs.append((key, attrs[key]))
+        if tag in {"img", "script"} and attrs.get("src"):
+            self.refs.append(("src", attrs["src"]))
         if tag == "link" and attrs.get("href"):
             self.refs.append(("href", attrs["href"]))
+            rel = attrs.get("rel", "")
+            if rel == "canonical":
+                self.canonical = True
+            if "icon" in rel:
+                self.favicon = True
+        if tag == "meta" and attrs.get("name") == "description" and attrs.get("content", "").strip():
+            self.meta_description = True
         if tag == "img" and "alt" not in attrs:
             self.images_without_alt.append(attrs.get("src", "<unknown>"))
 
@@ -28,25 +41,54 @@ html_files = sorted(DOCS.glob("*.html"))
 if not html_files:
     errors.append("No documentation HTML files found.")
 
+parsed = {}
 for html_file in html_files:
     parser = Collector()
     parser.feed(html_file.read_text(encoding="utf-8"))
+    parsed[html_file.name] = parser
+
     if parser.images_without_alt:
         errors.append(f"{html_file.name}: images missing alt: {parser.images_without_alt}")
+
+    if html_file.name in PUBLIC_PAGES:
+        if not parser.meta_description:
+            errors.append(f"{html_file.name}: missing meta description")
+        if not parser.canonical:
+            errors.append(f"{html_file.name}: missing canonical link")
+        if not parser.favicon:
+            errors.append(f"{html_file.name}: missing favicon link")
+
+for html_file in html_files:
+    parser = parsed[html_file.name]
     for _, ref in parser.refs:
-        if not ref or ref.startswith(("#", "mailto:", "javascript:")):
+        if not ref or ref.startswith(("mailto:", "javascript:")):
             continue
-        parsed = urlparse(ref)
-        if parsed.scheme in {"http", "https"}:
+
+        if ref.startswith("#"):
+            anchor = ref[1:]
+            if anchor and anchor not in parser.ids:
+                errors.append(f"{html_file.name}: missing local anchor: {ref}")
             continue
-        target = (html_file.parent / parsed.path).resolve()
+
+        parsed_ref = urlparse(ref)
+        if parsed_ref.scheme in {"http", "https"}:
+            continue
+
+        target = (html_file.parent / parsed_ref.path).resolve()
         try:
             target.relative_to(DOCS.resolve())
         except ValueError:
             errors.append(f"{html_file.name}: local reference escapes docs/: {ref}")
             continue
-        if parsed.path and not target.exists():
+
+        if parsed_ref.path and not target.exists():
             errors.append(f"{html_file.name}: missing local target: {ref}")
+            continue
+
+        if parsed_ref.fragment and target.suffix.lower() == ".html" and target.exists():
+            target_parser = parsed.get(target.name)
+            if target_parser and parsed_ref.fragment not in target_parser.ids:
+                errors.append(f"{html_file.name}: missing anchor #{parsed_ref.fragment} in {target.name}")
 
 index = (DOCS / "index.html").read_text(encoding="utf-8")
 for required in [
@@ -55,17 +97,22 @@ for required in [
     "Native HWNDs",
     "No system DLL patches",
     "assets/screenshots/quick-settings-dark.webp",
+    "./status.html",
 ]:
     if required not in index:
         errors.append(f"index.html: missing required content: {required}")
 
-if not (DOCS / "status.html").exists():
-    errors.append("docs/status.html is missing")
-
-if not (DOCS / ".nojekyll").exists():
-    errors.append("docs/.nojekyll is missing")
+for required_file in [
+    ".nojekyll",
+    "status.html",
+    "assets/favicon.svg",
+    "robots.txt",
+    "sitemap.xml",
+]:
+    if not (DOCS / required_file).exists():
+        errors.append(f"docs/{required_file} is missing")
 
 if errors:
-    raise SystemExit("\n".join(f"ERROR: {e}" for e in errors))
+    raise SystemExit("\n".join(f"ERROR: {error}" for error in errors))
 
-print(f"Docs validation passed: {len(html_files)} HTML pages")
+print(f"Docs validation passed: {len(html_files)} HTML pages, links and metadata verified")
