@@ -1,9 +1,12 @@
 name: Docs Pages
 
 on:
-  # Private personal-account repositories cannot publish a private-access Pages site.
-  # Keep deployment manual until FedoraWin is intentionally made public or moved
-  # behind a host/access-control layer that can enforce private access.
+  push:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+      - '.github/scripts/check-docs.py'
   workflow_dispatch:
 
 permissions:
@@ -34,7 +37,7 @@ jobs:
           enablement: true
 
       - name: Upload docs site
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: docs
 
