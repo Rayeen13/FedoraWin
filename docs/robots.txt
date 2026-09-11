@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://rayeen13.github.io/FedoraWin/sitemap.xml
