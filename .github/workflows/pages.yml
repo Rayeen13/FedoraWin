@@ -1,12 +1,9 @@
 name: Docs Pages
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - 'docs/**'
-      - '.github/workflows/pages.yml'
-      - '.github/scripts/check-docs.py'
+  # Private personal-account repositories cannot publish a private-access Pages site.
+  # Keep deployment manual until FedoraWin is intentionally made public or moved
+  # behind a host/access-control layer that can enforce private access.
   workflow_dispatch:
 
 permissions:
