@@ -59,6 +59,9 @@ for required in [
     if required not in index:
         errors.append(f"index.html: missing required content: {required}")
 
+if not (DOCS / "status.html").exists():
+    errors.append("docs/status.html is missing")
+
 if not (DOCS / ".nojekyll").exists():
     errors.append("docs/.nojekyll is missing")
 
