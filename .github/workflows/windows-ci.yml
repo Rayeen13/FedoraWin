@@ -20,7 +20,7 @@ jobs:
       - name: Verify and expand working snapshot
         shell: pwsh
         run: |
-          $expected = '0a0755d3541f1048bc783ea930aa6b6c2e418b53424682e461e407dacc9bb4dc'
+          $expected = '579c78aec047d04909c6f0f46b22d18dce97cc3b98f37ae69b536a908c4d7c46'
           $actual = (Get-FileHash -Algorithm SHA256 '.ci/FedoraWin-worktree.tar.gz').Hash.ToLowerInvariant()
           if ($actual -ne $expected) { throw "Snapshot hash mismatch: $actual" }
           New-Item -ItemType Directory -Force '_snapshot' | Out-Null
