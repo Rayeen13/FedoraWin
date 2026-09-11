@@ -74,7 +74,16 @@ for html_file in html_files:
         if parsed_ref.scheme in {"http", "https"}:
             continue
 
-        target = (html_file.parent / parsed_ref.path).resolve()
+        local_path = parsed_ref.path
+        if local_path == "/FedoraWin" or local_path == "/FedoraWin/":
+            local_path = "index.html"
+        elif local_path.startswith("/FedoraWin/"):
+            local_path = local_path[len("/FedoraWin/"):]
+        elif local_path.startswith("/"):
+            errors.append(f"{html_file.name}: unexpected site-root reference: {ref}")
+            continue
+
+        target = (DOCS / local_path).resolve() if parsed_ref.path.startswith("/") else (html_file.parent / local_path).resolve()
         try:
             target.relative_to(DOCS.resolve())
         except ValueError:
