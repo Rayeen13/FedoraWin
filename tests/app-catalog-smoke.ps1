@@ -29,7 +29,7 @@ Assert-True ($filesResult[0].Name -eq 'File Explorer') 'Files search must rank F
 $partial = @(Search-FedoraWinApps -Apps $apps -Query 'note' -Limit 10)
 Assert-True ($partial.Count -gt 0 -and $partial[0].Name -eq 'Notepad') 'Prefix search must rank Notepad.'
 
-$all = @(Search-FedoraWinApps -Apps $apps -Query '' -Limit 3)
+$all = @(Search-FedoraWinApps -Apps $apps -Limit 3)
 Assert-True ($all.Count -eq 3) 'Empty-query app drawer results must obey the limit.'
 
 $source = Get-Content -Raw (Join-Path $PSScriptRoot '..\shell\AppCatalog.ps1')
