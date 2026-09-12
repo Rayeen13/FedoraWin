@@ -126,7 +126,7 @@ function Get-FedoraWinInstalledApps {
 function Get-FedoraWinAppSearchScore {
     param(
         [Parameter(Mandatory=$true)]$App,
-        [Parameter(Mandatory=$true)][string]$Query
+        [Parameter(Mandatory=$true)][AllowEmptyString()][string]$Query
     )
 
     $q = ConvertTo-FedoraWinSearchText $Query
