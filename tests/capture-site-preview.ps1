@@ -1,5 +1,5 @@
 param(
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\artifacts\site-preview')
+    [string]$OutputDirectory = 'artifacts\site-preview'
 )
 
 Set-StrictMode -Version Latest
@@ -11,7 +11,11 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$output = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDirectory))
+$output = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
+    [System.IO.Path]::GetFullPath($OutputDirectory)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDirectory))
+}
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 $stdoutPath = Join-Path $output 'fedora-win.stdout.log'
