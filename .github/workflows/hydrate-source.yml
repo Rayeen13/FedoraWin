@@ -19,23 +19,13 @@ jobs:
           ref: develop
           fetch-depth: 0
 
-      - name: Verify archived working snapshot
+      - name: Reconstitute verified source bundle
         shell: bash
         run: |
           set -euo pipefail
-          echo '579c78aec047d04909c6f0f46b22d18dce97cc3b98f37ae69b536a908c4d7c46  .ci/FedoraWin-worktree.tar.gz' | sha256sum -c -
-          rm -rf _hydrate
-          mkdir _hydrate
-          tar -xzf .ci/FedoraWin-worktree.tar.gz -C _hydrate
-
-      - name: Promote working shell source into repository
-        shell: bash
-        run: |
-          set -euo pipefail
-          for f in FedoraWin.ps1 CHANGELOG.md TESTING.md Disable-Startup.cmd Enable-Startup.cmd Install-Startup.ps1 Remove-Startup.ps1 Open-Log.cmd Preflight.cmd Preflight.ps1 Restore-Windows.cmd Restore-Windows.ps1 Safe-Preview.cmd Start-FedoraWin.cmd ui/Activities.xaml ui/Appearance.xaml ui/Calendar.xaml ui/Panel.xaml ui/PowerMenu.xaml tests/test_safety.py tests/test_structure.py; do
-            mkdir -p "$(dirname "$f")"
-            cp "_hydrate/$f" "$f"
-          done
+          cat .ci/hydrate-bundle/part-* | base64 -d > /tmp/hydrate_bundle.tar.gz
+          echo 'b9dedb7c401f62a4f2d0c752bceb860a833c0d3a464fc0e543f4359df4eb8adc  /tmp/hydrate_bundle.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/hydrate_bundle.tar.gz -C .
 
       - name: Static regression tests before commit
         shell: bash
@@ -45,10 +35,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf _hydrate
           git config user.name 'FedoraWin Automation'
           git config user.email 'actions@users.noreply.github.com'
-          git add FedoraWin.ps1 CHANGELOG.md TESTING.md Disable-Startup.cmd Enable-Startup.cmd Install-Startup.ps1 Remove-Startup.ps1 Open-Log.cmd Preflight.cmd Preflight.ps1 Restore-Windows.cmd Restore-Windows.ps1 Safe-Preview.cmd Start-FedoraWin.cmd ui tests/test_safety.py tests/test_structure.py
+          git add FedoraWin.ps1 CHANGELOG.md TESTING.md Disable-Startup.cmd Enable-Startup.cmd Install-Startup.ps1 Remove-Startup.ps1 Open-Log.cmd Preflight.cmd Preflight.ps1 Restore-Windows.cmd Restore-Windows.ps1 Safe-Preview.cmd Start-FedoraWin.cmd ui/Activities.xaml ui/Appearance.xaml ui/Calendar.xaml ui/Panel.xaml ui/PowerMenu.xaml tests/test_safety.py tests/test_structure.py tests/test_regressions.py
           if git diff --cached --quiet; then
             echo 'No source changes to commit.'
           else
