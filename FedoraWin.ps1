@@ -1143,8 +1143,15 @@ function Show-Activities {
         $script:ActivitiesWindow.Width = $workArea.Width
         $script:ActivitiesWindow.Height = [Math]::Max(300, $workArea.Height)
         $card = $script:ActivitiesWindow.FindName('WorkspaceCard')
-        $card.Width = [Math]::Max(520, [Math]::Min(1040, $script:ActivitiesWindow.Width - 420))
-        $card.Height = [Math]::Max(300, [Math]::Min(585, $script:ActivitiesWindow.Height - 185))
+        $workspaceWidth = [Math]::Max(520, [Math]::Min(760, $script:ActivitiesWindow.Width - 220))
+        $workspaceHeight = [Math]::Round($workspaceWidth * 9.0 / 16.0)
+        $maxWorkspaceHeight = [Math]::Max(292, $script:ActivitiesWindow.Height - 210)
+        if ($workspaceHeight -gt $maxWorkspaceHeight) {
+            $workspaceHeight = $maxWorkspaceHeight
+            $workspaceWidth = [Math]::Round($workspaceHeight * 16.0 / 9.0)
+        }
+        $card.Width = $workspaceWidth
+        $card.Height = $workspaceHeight
 
         $script:ActivitiesSearchBox = $script:ActivitiesWindow.FindName('SearchBox')
         $clear = $script:ActivitiesWindow.FindName('ClearSearchButton')
