@@ -91,7 +91,12 @@ function Wait-FedoraWinTheme {
 }
 
 function Copy-FedoraWinRuntimeLog {
-    Copy-FedoraWinRuntimeLog
+    try {
+        $runtimeLog=Join-Path $env:LOCALAPPDATA 'FedoraWin\FedoraWin.log'
+        if(Test-Path -LiteralPath $runtimeLog){
+            Copy-Item -LiteralPath $runtimeLog -Destination (Join-Path $output 'fedora-win.runtime.log') -Force
+        }
+    } catch {}
 }
 
 function Save-DesktopCapture {
