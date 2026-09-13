@@ -1157,7 +1157,8 @@ function Resolve-DashFavorite {
         return New-DashRecord -Name 'Files' -FavoriteKey 'Files' -Target $path -TargetPath $path -IconPath $path -ProcessName 'explorer' -IsFavorite $true
     }
     if ($Key -eq 'Terminal') {
-        $app=Search-FedoraWinApps -Apps $script:InstalledApps -Query 'terminal' -Limit 8 | Where-Object { $_.Name -match 'Windows Terminal|Terminal|PowerShell' } | Select-Object -First 1
+        $app=$null
+        if(@($script:InstalledApps).Count -gt 0){$app=Search-FedoraWinApps -Apps $script:InstalledApps -Query 'terminal' -Limit 8 | Where-Object { $_.Name -match 'Windows Terminal|Terminal|PowerShell' } | Select-Object -First 1}
         if ($app) { return ConvertTo-DashRecord -App $app -FavoriteKey 'Terminal' -IsFavorite $true }
         $cmd=Get-Command 'powershell.exe' -ErrorAction SilentlyContinue
         if ($cmd) { return New-DashRecord -Name 'Terminal' -FavoriteKey 'Terminal' -Target $cmd.Source -TargetPath $cmd.Source -IconPath $cmd.Source -ProcessName 'powershell' -IsFavorite $true }
@@ -1173,7 +1174,7 @@ function Resolve-DashFavorite {
         return New-DashRecord -Name 'Settings' -FavoriteKey 'Settings' -Target 'ms-settings:' -IconPath $icon -ProcessName 'SystemSettings' -IsFavorite $true
     }
     $app=$script:InstalledApps | Where-Object { $_.Name -eq $Key } | Select-Object -First 1
-    if (-not $app) { $app=Search-FedoraWinApps -Apps $script:InstalledApps -Query $Key -Limit 1 | Select-Object -First 1 }
+    if (-not $app -and @($script:InstalledApps).Count -gt 0) { $app=Search-FedoraWinApps -Apps $script:InstalledApps -Query $Key -Limit 1 | Select-Object -First 1 }
     if ($app) { return ConvertTo-DashRecord -App $app -FavoriteKey $Key -IsFavorite $true }
     return $null
 }
