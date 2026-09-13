@@ -414,7 +414,7 @@ function Set-ResourceBrush {
     if ($null -eq $Window) { return }
     try {
         $converted = [System.Windows.Media.ColorConverter]::ConvertFromString($Color)
-        $brush = New-Object System.Windows.Media.SolidColorBrush -ArgumentList $converted
+        $brush = [System.Windows.Media.SolidColorBrush]::new($converted)
         $Window.Resources[$Key] = $brush
     } catch { }
 }
