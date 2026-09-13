@@ -43,3 +43,16 @@ jobs:
       - name: Windows PowerShell 5.1 and WPF smoke
         shell: powershell
         run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File tests\windows-smoke.ps1
+
+      - name: Capture real FedoraWin UI surfaces
+        shell: powershell
+        run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File tests\capture-site-preview.ps1
+
+      - name: Upload FedoraWin UI preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedora-win-site-preview
+          path: artifacts/site-preview
+          if-no-files-found: warn
+          retention-days: 14
