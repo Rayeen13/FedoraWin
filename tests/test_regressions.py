@@ -107,3 +107,23 @@ def test_workspace_controls_use_documented_windows_shortcuts():
     for method in ['SendDesktopLeft','SendDesktopRight','SendDesktopNew']:
         assert method in MAIN
     assert 'SetWindowsHookEx' not in MAIN
+
+
+def test_gnome_dash_can_live_in_overview_or_on_desktop():
+    dock=(ROOT/'ui'/'Dock.xaml').read_text(encoding='utf-8')
+    assert 'DesktopDockPanel' in dock
+    for token in ['Get-FedoraDashItems','Get-RunningDashRecords','Set-DashFavorite','SetForegroundWindow','Initialize-DesktopDock','Set-FedoraDockMode','Set-FedoraDockPosition']:
+        assert token in MAIN
+    for token in ['DockOverviewButton','DockDesktopButton','DockBothButton','DockBottomButton','DockLeftButton','DockRightButton']:
+        assert token in APPEARANCE
+
+
+def test_ci_visual_gate_runs_packaged_executable_and_rejects_taskbar():
+    capture=(ROOT/'tests'/'capture-site-preview.ps1').read_text(encoding='utf-8')
+    build=(ROOT/'tests'/'build-exe.ps1').read_text(encoding='utf-8')
+    workflow=(ROOT/'.github'/'workflows'/'windows-ci.yml').read_text(encoding='utf-8')
+    assert 'FedoraWin.exe' in build
+    assert 'FedoraWin.exe' in capture
+    assert 'Assert-WindowsTaskbarHidden' in capture
+    assert "launch_executable='FedoraWin.exe'" in capture
+    assert 'Build FedoraWin executable package' in workflow

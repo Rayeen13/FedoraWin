@@ -50,13 +50,18 @@ try:
     assert 10 <= int(cfg['maxLauncherApps']) <= 250
     assert cfg['theme'] in {'light','dark','system'}
     assert cfg['accent'] in {'blue','teal','green','yellow','orange','red','pink','purple','slate'}
+    assert cfg['dockMode'] in {'overview','desktop','both'}
+    assert cfg['dockPosition'] in {'bottom','left','right'}
+    assert isinstance(cfg['dockTopmost'], bool)
+    assert 32 <= int(cfg['dockIconSize']) <= 64
+    assert isinstance(cfg['dockFavorites'], list) and len(cfg['dockFavorites']) >= 1
 except Exception as exc:
     errors.append(f"config.json validation failed: {exc}")
 
 for required in [
     'Restore-Windows.cmd','Restore-Windows.ps1','Safe-Preview.cmd','Start-FedoraWin.cmd',
     'native/FedoraWinNativeUi.cs','ui/Activities.xaml','ui/QuickSettings.xaml',
-    'ui/Appearance.xaml','ui/PowerMenu.xaml'
+    'ui/Appearance.xaml','ui/PowerMenu.xaml','ui/Dock.xaml','native/FedoraWinLauncher.cs','tests/build-exe.ps1'
 ]:
     if not (ROOT / required).exists():
         errors.append(f"missing required file: {required}")

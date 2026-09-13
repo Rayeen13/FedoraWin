@@ -44,7 +44,11 @@ jobs:
         shell: powershell
         run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File tests\windows-smoke.ps1
 
-      - name: Capture real FedoraWin UI surfaces
+      - name: Build FedoraWin executable package
+        shell: powershell
+        run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tests\build-exe.ps1
+
+      - name: Capture real FedoraWin.exe UI surfaces
         shell: powershell
         run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File tests\capture-site-preview.ps1
 
