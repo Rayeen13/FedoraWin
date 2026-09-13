@@ -101,10 +101,10 @@ for html_file in html_files:
 
 index = (DOCS / "index.html").read_text(encoding="utf-8")
 for required in [
-    "Alpha preview",
-    "Showcase-ready, not stability-ready.",
-    "Native HWNDs",
-    "No system DLL patches",
+    "Pre-beta shell development",
+    "The shell is becoming coherent. Runtime breadth still matters.",
+    "Real FedoraWin.exe CI",
+    "Native HWND + DWM integration",
     "assets/screenshots/quick-settings-dark.webp",
     "./status.html",
 ]:
