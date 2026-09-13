@@ -12,9 +12,6 @@ Add-Type -AssemblyName UIAutomationTypes
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $output = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDirectory))
-if (Test-Path -LiteralPath $output) {
-    Remove-Item -LiteralPath $output -Recurse -Force
-}
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 $stdoutPath = Join-Path $output 'fedora-win.stdout.log'
