@@ -142,3 +142,21 @@ def test_activities_uses_native_dwm_live_window_thumbnails():
     assert 'Refresh-WorkspacePresenter' in MAIN
     assert 'ActivateAt' in MAIN
     assert 'AllowsTransparency="False"' in ACTIVITIES
+
+
+def test_super_activities_uses_documented_hotkey_api_without_global_hook():
+    for token in ['SuperLeftHotkeyId','SuperRightHotkeyId','VK_LWIN','VK_RWIN','Super Activities hotkey registered']:
+        assert token in MAIN
+    assert 'RegisterHotKey' in MAIN
+    assert 'SetWindowsHookEx' not in MAIN
+
+
+def test_quick_settings_packs_only_available_hardware_tiles():
+    assert 'QuickTilesPanel' in QUICK
+    assert '<WrapPanel' in QUICK
+    assert 'Rows="3"' not in QUICK[QUICK.index('x:Name="QuickTilesPanel"'):]
+    assert "$wifiButton.Visibility" in MAIN
+    assert "$btButton.Visibility" in MAIN
+    assert "$airButton.Visibility" in MAIN
+    assert "$powerButton.Visibility" in MAIN
+    assert "$script:QuickWindow.Height" in MAIN

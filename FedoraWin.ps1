@@ -36,6 +36,10 @@ $script:TaskbarWasVisible = $true
 $script:OriginalWallpaper = $null
 $script:HotkeyRegistered = $false
 $script:HotkeyId = 44050
+$script:SuperLeftHotkeyRegistered = $false
+$script:SuperRightHotkeyRegistered = $false
+$script:SuperLeftHotkeyId = 44051
+$script:SuperRightHotkeyId = 44052
 $script:PanelHandle = [IntPtr]::Zero
 $script:PanelWindow = $null
 $script:TrayIcon = $null
@@ -174,6 +178,7 @@ public static class FedoraWinNative
     public const int WM_HOTKEY = 0x0312;
     public const int VK_F1 = 0x70;
     public const byte VK_LWIN = 0x5B;
+    public const byte VK_RWIN = 0x5C;
     public const byte VK_TAB = 0x09;
     public const byte VK_A = 0x41;
     public const byte VK_CONTROL = 0x11;
@@ -656,6 +661,16 @@ function Refresh-QuickSettingsState {
     try {
         $wifiState = Get-RadioState -Kind 'WiFi'
         $btState = Get-RadioState -Kind 'Bluetooth'
+        $wifiAvailable = ($wifiState -ne 'Unavailable')
+        $btAvailable = ($btState -ne 'Unavailable')
+
+        $wifiButton = $script:QuickWindow.FindName('WifiButton')
+        $btButton = $script:QuickWindow.FindName('BluetoothButton')
+        $airButton = $script:QuickWindow.FindName('AirplaneButton')
+        if ($wifiButton) { $wifiButton.Visibility = if ($wifiAvailable) { 'Visible' } else { 'Collapsed' } }
+        if ($btButton) { $btButton.Visibility = if ($btAvailable) { 'Visible' } else { 'Collapsed' } }
+        if ($airButton) { $airButton.Visibility = if ($wifiAvailable -or $btAvailable) { 'Visible' } else { 'Collapsed' } }
+
         $wifiSub = $script:QuickWindow.FindName('WifiSubText')
         $btSub = $script:QuickWindow.FindName('BluetoothSubText')
         if ($wifiSub) {
@@ -663,14 +678,31 @@ function Refresh-QuickSettingsState {
             $wifiSub.Text = if ($wifiState -eq 'On' -and $ssid) { $ssid } else { $wifiState }
         }
         if ($btSub) { $btSub.Text = $btState }
+
         Set-QuickTileActive -Name 'WifiButton' -Active ($wifiState -eq 'On')
         Set-QuickTileActive -Name 'BluetoothButton' -Active ($btState -eq 'On')
-        $airOn = ($wifiState -eq 'Off' -and $btState -eq 'Off')
+
+        $availableRadioStates = @()
+        if ($wifiAvailable) { $availableRadioStates += $wifiState }
+        if ($btAvailable) { $availableRadioStates += $btState }
+        $airOn = ($availableRadioStates.Count -gt 0 -and @($availableRadioStates | Where-Object { $_ -eq 'On' }).Count -eq 0)
         Set-QuickTileActive -Name 'AirplaneButton' -Active $airOn
         $airText = $script:QuickWindow.FindName('AirplaneSubText')
         if ($airText) { $airText.Text = if ($airOn) { 'Radios off' } else { 'Radios on' } }
+
+        $powerMode = Get-PowerModeName
+        $powerButton = $script:QuickWindow.FindName('PowerModeButton')
         $powerText = $script:QuickWindow.FindName('PowerModeText')
-        if ($powerText) { $powerText.Text = Get-PowerModeName }
+        if ($powerText) { $powerText.Text = $powerMode }
+        if ($powerButton) { $powerButton.Visibility = if ($powerMode -eq 'Unavailable') { 'Collapsed' } else { 'Visible' } }
+
+        $visibleTiles = 0
+        foreach ($tileName in @('WifiButton','BluetoothButton','PowerModeButton','DarkStyleButton','AirplaneButton')) {
+            $tile = $script:QuickWindow.FindName($tileName)
+            if ($tile -and $tile.Visibility -eq [System.Windows.Visibility]::Visible) { $visibleTiles++ }
+        }
+        $rows = [Math]::Max(1,[int][Math]::Ceiling($visibleTiles / 2.0))
+        $script:QuickWindow.Height = [Math]::Min(428,[Math]::Max(288,218 + (70 * $rows)))
     } catch { Write-FedoraWinLog 'warn' ('Quick Settings state refresh failed: ' + $_.Exception.Message) }
 }
 
@@ -1743,8 +1775,16 @@ function Stop-FedoraWin {
     if ($script:Exiting) { return }
     $script:Exiting = $true
 
-    if ($script:HotkeyRegistered -and $script:PanelHandle -ne [IntPtr]::Zero) {
-        try { [FedoraWinNative]::UnregisterHotKey($script:PanelHandle, $script:HotkeyId) | Out-Null } catch { }
+    if ($script:PanelHandle -ne [IntPtr]::Zero) {
+        if ($script:HotkeyRegistered) {
+            try { [FedoraWinNative]::UnregisterHotKey($script:PanelHandle, $script:HotkeyId) | Out-Null } catch { }
+        }
+        if ($script:SuperLeftHotkeyRegistered) {
+            try { [FedoraWinNative]::UnregisterHotKey($script:PanelHandle, $script:SuperLeftHotkeyId) | Out-Null } catch { }
+        }
+        if ($script:SuperRightHotkeyRegistered) {
+            try { [FedoraWinNative]::UnregisterHotKey($script:PanelHandle, $script:SuperRightHotkeyId) | Out-Null } catch { }
+        }
     }
 
     if ($script:DockTimer) { try { $script:DockTimer.Stop() } catch { }; $script:DockTimer = $null }
@@ -1903,10 +1943,17 @@ $script:PanelWindow.Add_SourceInitialized({
         $source = [System.Windows.Interop.HwndSource]::FromHwnd($script:PanelHandle)
         $hook = [System.Windows.Interop.HwndSourceHook]{
             param($hwnd, $msg, $wParam, $lParam, [ref]$handled)
-            if ($msg -eq [FedoraWinNative]::WM_HOTKEY -and $wParam.ToInt32() -eq $script:HotkeyId) {
-                try { Toggle-Activities }
-                catch { Write-FedoraWinLog 'error' ('Alt+F1 Activities handler failed: ' + $_.Exception.ToString()) }
-                $handled.Value = $true
+            if ($msg -eq [FedoraWinNative]::WM_HOTKEY) {
+                $hotkeyId = $wParam.ToInt32()
+                if ($hotkeyId -eq $script:HotkeyId) {
+                    try { Toggle-Activities }
+                    catch { Write-FedoraWinLog 'error' ('Alt+F1 Activities handler failed: ' + $_.Exception.ToString()) }
+                    $handled.Value = $true
+                } elseif ($hotkeyId -eq $script:SuperLeftHotkeyId -or $hotkeyId -eq $script:SuperRightHotkeyId) {
+                    try { Toggle-Activities }
+                    catch { Write-FedoraWinLog 'error' ('Super Activities handler failed: ' + $_.Exception.ToString()) }
+                    $handled.Value = $true
+                }
             }
             return [IntPtr]::Zero
         }
@@ -1922,6 +1969,28 @@ $script:PanelWindow.Add_SourceInitialized({
             Write-FedoraWinLog 'warn' 'Alt+F1 could not be registered. The Activities button still works.'
         } else {
             Write-FedoraWinLog 'info' 'Alt+F1 global hotkey registered.'
+        }
+
+        # Windows reserves many Win-key combinations. Register the bare left/right
+        # Super keys only through the documented hotkey API; never install a
+        # low-level/global keyboard hook. If Windows refuses the reservation,
+        # Activities and Alt+F1 remain fully functional.
+        $script:SuperLeftHotkeyRegistered = [FedoraWinNative]::RegisterHotKey(
+            $script:PanelHandle,
+            $script:SuperLeftHotkeyId,
+            [FedoraWinNative]::MOD_NOREPEAT,
+            [FedoraWinNative]::VK_LWIN
+        )
+        $script:SuperRightHotkeyRegistered = [FedoraWinNative]::RegisterHotKey(
+            $script:PanelHandle,
+            $script:SuperRightHotkeyId,
+            [FedoraWinNative]::MOD_NOREPEAT,
+            [FedoraWinNative]::VK_RWIN
+        )
+        if ($script:SuperLeftHotkeyRegistered -or $script:SuperRightHotkeyRegistered) {
+            Write-FedoraWinLog 'info' ('Super Activities hotkey registered: left={0}; right={1}.' -f $script:SuperLeftHotkeyRegistered,$script:SuperRightHotkeyRegistered)
+        } else {
+            Write-FedoraWinLog 'warn' 'Windows reserved the bare Super key; Alt+F1 and the Activities button remain the safe fallback.'
         }
     } catch {
         Write-FedoraWinLog 'warn' ('Panel native integration failed: ' + $_.Exception.Message)

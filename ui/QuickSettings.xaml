@@ -45,6 +45,7 @@
     </Style>
 
     <Style x:Key="QuickTileStyle" TargetType="Button">
+      <Setter Property="Width" Value="205"/>
       <Setter Property="Height" Value="60"/>
       <Setter Property="Margin" Value="5"/>
       <Setter Property="Padding" Value="14,8"/>
@@ -222,7 +223,7 @@
                 Value="70" Margin="10,0,0,0" ToolTip="Display Brightness"/>
       </Grid>
 
-      <UniformGrid Grid.Row="3" Columns="2" Rows="3" Margin="-5,4,-5,-5">
+      <WrapPanel x:Name="QuickTilesPanel" Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="-5,4,-5,-5">
         <Button x:Name="WifiButton" Style="{StaticResource QuickTileStyle}">
           <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -317,7 +318,7 @@
 
         <Button x:Name="MoreSettingsButton" Visibility="Collapsed" IsHitTestVisible="False"/>
         <TextBlock x:Name="StatusText" Visibility="Collapsed" Text="FedoraWin"/>
-      </UniformGrid>
+      </WrapPanel>
     </Grid>
   </Border>
 </Window>
