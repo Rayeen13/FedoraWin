@@ -1187,42 +1187,47 @@ function Test-DashAppRunning {
 }
 
 function Get-RunningDashRecords {
-    param([string[]]$SkipProcessNames)
+    param([object[]]$SkipProcessNames = @())
     $skip=@{}
-    foreach($name in @($SkipProcessNames)){if($name){$skip[$name.ToLowerInvariant()]=$true}}
+    foreach($name in $SkipProcessNames){if($name){$skip[([string]$name).ToLowerInvariant()]=$true}}
     $ignored=@('ShellExperienceHost','StartMenuExperienceHost','SearchHost','TextInputHost','ApplicationFrameHost','dwm')
-    $records=New-Object System.Collections.Generic.List[object]
-    foreach($process in @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero })){
+    $records=@()
+    foreach($process in (Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero })){
         $processName=[string]$process.ProcessName
         if(-not $processName -or $ignored -contains $processName){continue}
         if($skip.ContainsKey($processName.ToLowerInvariant())){continue}
         $path=$null
         try{$path=[string]$process.Path}catch{}
         $catalogApp=$null
-        if($path){$catalogApp=$script:InstalledApps | Where-Object { $_.TargetPath -and ([IO.Path]::GetFileNameWithoutExtension([string]$_.TargetPath) -ieq $processName) } | Select-Object -First 1}
-        if(-not $catalogApp -and $processName -eq 'WindowsTerminal'){$catalogApp=$script:InstalledApps | Where-Object { $_.Name -match 'Windows Terminal' } | Select-Object -First 1}
+        if($path -and $script:InstalledAppsLoaded){
+            $catalogApp=$script:InstalledApps | Where-Object { $_.TargetPath -and ([IO.Path]::GetFileNameWithoutExtension([string]$_.TargetPath) -ieq $processName) } | Select-Object -First 1
+        }
+        if(-not $catalogApp -and $script:InstalledAppsLoaded -and $processName -eq 'WindowsTerminal'){
+            $catalogApp=$script:InstalledApps | Where-Object { $_.Name -match 'Windows Terminal' } | Select-Object -First 1
+        }
         if($catalogApp){$record=ConvertTo-DashRecord -App $catalogApp -FavoriteKey ([string]$catalogApp.Name) -IsFavorite $false; $record.ProcessName=$processName}
         elseif($path){$record=New-DashRecord -Name $processName -FavoriteKey $processName -Target $path -TargetPath $path -IconPath $path -ProcessName $processName -IsFavorite $false}
         else{continue}
         $record.IsRunning=$true
-        [void]$records.Add($record)
+        $records += $record
         $skip[$processName.ToLowerInvariant()]=$true
     }
-    return @($records | Sort-Object Name)
+    return $records | Sort-Object Name
 }
 
 function Get-FedoraDashItems {
-    $items=New-Object System.Collections.Generic.List[object]
-    $processNames=New-Object System.Collections.Generic.List[string]
-    foreach($key in @($script:DockFavorites)){
+    $items=@()
+    $processNames=@()
+    foreach($key in $script:DockFavorites){
         $record=Resolve-DashFavorite -Key ([string]$key)
         if(-not $record){continue}
         $record.IsRunning=Test-DashAppRunning -App $record
-        [void]$items.Add($record)
-        if($record.ProcessName){[void]$processNames.Add([string]$record.ProcessName)}
+        $items += $record
+        if($record.ProcessName){$processNames += [string]$record.ProcessName}
     }
-    foreach($record in @(Get-RunningDashRecords -SkipProcessNames @($processNames))){[void]$items.Add($record)}
-    return @($items)
+    $running = Get-RunningDashRecords -SkipProcessNames $processNames
+    foreach($record in $running){$items += $record}
+    return $items
 }
 
 function Invoke-DashApp {
@@ -1245,10 +1250,10 @@ function Set-DashFavorite {
     param($App,[bool]$Favorite)
     if($null -eq $App){return}
     $key=if($App.FavoriteKey){[string]$App.FavoriteKey}else{[string]$App.Name}
-    $current=New-Object System.Collections.Generic.List[string]
-    foreach($item in @($script:DockFavorites)){if(-not [string]::Equals([string]$item,$key,[StringComparison]::OrdinalIgnoreCase)){[void]$current.Add([string]$item)}}
-    if($Favorite){[void]$current.Add($key)}
-    $script:DockFavorites=@($current)
+    $current=@()
+    foreach($item in $script:DockFavorites){if(-not [string]::Equals([string]$item,$key,[StringComparison]::OrdinalIgnoreCase)){$current += [string]$item}}
+    if($Favorite){$current += $key}
+    $script:DockFavorites=$current
     Save-FedoraWinSettings
     Refresh-Docks -Force
 }
@@ -1756,7 +1761,7 @@ $clockTimer.Add_Tick({
 $clockTimer.Start()
 $clockButton.Content = (Get-Date).ToString('ddd HH:mm')
 
-if ($script:DockMode -ne 'overview') { Initialize-DesktopDock }
+if ($script:DockMode -ne 'overview') { Write-FedoraWinLog 'info' 'Initializing desktop dock.'; Initialize-DesktopDock; Write-FedoraWinLog 'info' 'Desktop dock initialized.' }
 $script:DockTimer = New-Object System.Windows.Threading.DispatcherTimer
 $script:DockTimer.Interval = [TimeSpan]::FromSeconds(2)
 $script:DockTimer.Add_Tick({ try { Refresh-Docks } catch { Write-FedoraWinLog 'warn' ('Dock refresh failed: ' + $_.Exception.Message) } })
