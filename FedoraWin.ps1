@@ -413,10 +413,9 @@ function Set-ResourceBrush {
     param($Window, [string]$Key, [string]$Color)
     if ($null -eq $Window) { return }
     try {
-        $brush = $Window.Resources[$Key]
-        if ($brush -is [System.Windows.Media.SolidColorBrush]) {
-            $brush.Color = [System.Windows.Media.ColorConverter]::ConvertFromString($Color)
-        }
+        $converted = [System.Windows.Media.ColorConverter]::ConvertFromString($Color)
+        $brush = New-Object System.Windows.Media.SolidColorBrush -ArgumentList $converted
+        $Window.Resources[$Key] = $brush
     } catch { }
 }
 
@@ -1176,12 +1175,16 @@ function Show-Activities {
         })
         $showApps.Add_Click({
             try {
-                $script:ActivitiesMode = 'apps'
-                $script:AppGridPage = 0
-                $script:AppGridPopulated = $false
+                if ($script:ActivitiesMode -eq 'apps') {
+                    $script:ActivitiesMode = 'overview'
+                } else {
+                    $script:ActivitiesMode = 'apps'
+                    $script:AppGridPage = 0
+                    $script:AppGridPopulated = $false
+                }
                 $script:ActivitiesWindow.FindName('SearchBox').Text = ''
                 Populate-Apps
-            } catch { Write-FedoraWinLog 'error' ('Show applications failed: ' + $_.Exception.ToString()) }
+            } catch { Write-FedoraWinLog 'error' ('Show applications toggle failed: ' + $_.Exception.ToString()) }
         })
         $back.Add_Click({
             try {

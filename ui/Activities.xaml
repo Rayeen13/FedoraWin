@@ -194,7 +194,7 @@
 
       <Grid>
         <Button x:Name="BackToOverviewButton" Style="{StaticResource WorkspaceNavButtonStyle}"
-                HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,4,0,0">
+                HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,4,0,0" Visibility="Collapsed">
           <Viewbox Width="13" Height="20">
             <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2.3" StrokeStartLineCap="Round"
                   StrokeEndLineCap="Round" Data="M11,2 L3,10 L11,18"/>
