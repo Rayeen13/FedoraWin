@@ -56,6 +56,7 @@ $script:SuppressBrightnessEvent = $false
 $script:AudioAvailable = $false
 $script:DesktopIconsWereVisible = $true
 $script:ActivitiesSearchBox = $null
+$script:WorkspacePresenter = $null
 $script:FrameManager = $null
 $script:FrameTimer = $null
 $script:AppBarRegistered = $false
@@ -1097,6 +1098,7 @@ function Populate-Apps {
     $hint = $script:ActivitiesWindow.FindName('SearchHint')
 
     if ($needle) {
+        Set-WorkspacePresenterVisible -Visible $false
         $overview.Visibility = 'Collapsed'
         $appsView.Visibility = 'Collapsed'
         $searchView.Visibility = 'Visible'
@@ -1114,12 +1116,14 @@ function Populate-Apps {
     $hint.Visibility = 'Visible'
     $searchView.Visibility = 'Collapsed'
     if ($script:ActivitiesMode -eq 'apps') {
+        Set-WorkspacePresenterVisible -Visible $false
         $overview.Visibility = 'Collapsed'
         $appsView.Visibility = 'Visible'
         if (-not $script:AppGridPopulated) { Render-AppGridPage }
     } else {
         $appsView.Visibility = 'Collapsed'
         $overview.Visibility = 'Visible'
+        Set-WorkspacePresenterVisible -Visible $true
     }
 }
 
@@ -1384,7 +1388,40 @@ function Set-FedoraDockPosition {
     $script:DockPosition=$Position; Save-FedoraWinSettings; if($script:DockWindow){Render-DesktopDock}; Update-AppearanceControls
 }
 
+function Set-WorkspacePresenterVisible {
+    param([bool]$Visible)
+    if ($script:WorkspacePresenter) {
+        try { $script:WorkspacePresenter.SetVisible($Visible) } catch { }
+    }
+}
+
+function Refresh-WorkspacePresenter {
+    if ($null -eq $script:ActivitiesWindow -or -not $script:ActivitiesWindow.IsVisible) { return 0 }
+    try {
+        if ($null -eq $script:WorkspacePresenter) {
+            $helper = New-Object System.Windows.Interop.WindowInteropHelper -ArgumentList $script:ActivitiesWindow
+            if ($helper.Handle -eq [IntPtr]::Zero) { return 0 }
+            $script:WorkspacePresenter = New-Object FedoraWinWorkspacePresenter -ArgumentList $helper.Handle,([string]$config.windowFrameExcludedProcesses)
+        }
+
+        $card = $script:ActivitiesWindow.FindName('WorkspaceCard')
+        if (-not $card) { return 0 }
+        $script:ActivitiesWindow.UpdateLayout()
+        $origin = $card.TranslatePoint((New-Object System.Windows.Point -ArgumentList 0,0), $script:ActivitiesWindow)
+        $dpi = [System.Windows.Media.VisualTreeHelper]::GetDpi($script:ActivitiesWindow)
+        $left = [int][Math]::Round($origin.X * $dpi.DpiScaleX)
+        $top = [int][Math]::Round($origin.Y * $dpi.DpiScaleY)
+        $width = [int][Math]::Round($card.ActualWidth * $dpi.DpiScaleX)
+        $height = [int][Math]::Round($card.ActualHeight * $dpi.DpiScaleY)
+        return $script:WorkspacePresenter.Refresh($left,$top,$width,$height)
+    } catch {
+        Write-FedoraWinLog 'warn' ('Live workspace thumbnails unavailable: ' + $_.Exception.Message)
+        return 0
+    }
+}
+
 function Hide-Activities {
+    if ($script:WorkspacePresenter) { try { $script:WorkspacePresenter.SetVisible($false) } catch { } }
     if ($null -ne $script:ActivitiesWindow) { $script:ActivitiesWindow.Hide() }
     if ($script:DockMode -ne 'overview' -and $script:DockWindow) { $script:DockWindow.Show(); Update-DesktopDockPosition }
 }
@@ -1466,6 +1503,21 @@ function Show-Activities {
                 Populate-Apps
             } catch { Write-FedoraWinLog 'error' ('Back to overview failed: ' + $_.Exception.ToString()) }
         })
+        $workspace.Add_PreviewMouseLeftButtonDown({
+            param($sender,$eventArgs)
+            try {
+                if ($script:WorkspacePresenter) {
+                    $point = $eventArgs.GetPosition($script:ActivitiesWindow)
+                    $dpi = [System.Windows.Media.VisualTreeHelper]::GetDpi($script:ActivitiesWindow)
+                    $x = [int][Math]::Round($point.X * $dpi.DpiScaleX)
+                    $y = [int][Math]::Round($point.Y * $dpi.DpiScaleY)
+                    if ($script:WorkspacePresenter.ActivateAt($x,$y)) {
+                        Hide-Activities
+                        $eventArgs.Handled = $true
+                    }
+                }
+            } catch { Write-FedoraWinLog 'warn' ('Workspace thumbnail activation failed: ' + $_.Exception.Message) }
+        })
         $workspace.Add_Click({
             try { Hide-Activities; [FedoraWinNative]::SendWinTab() }
             catch { Write-FedoraWinLog 'error' ('Workspace action failed: ' + $_.Exception.ToString()) }
@@ -1526,13 +1578,23 @@ function Show-Activities {
         Build-Dash
     }
 
-    $preview = Get-ScreenCaptureSource
-    if ($preview) { $script:ActivitiesWindow.FindName('WorkspacePreview').Source = $preview }
     $script:ActivitiesMode = 'overview'
     $script:ActivitiesWindow.FindName('SearchBox').Text = ''
     Populate-Apps
     $script:ActivitiesWindow.Show()
     $script:ActivitiesWindow.Activate() | Out-Null
+    $script:ActivitiesWindow.UpdateLayout()
+    $liveCount = Refresh-WorkspacePresenter
+    $previewControl = $script:ActivitiesWindow.FindName('WorkspacePreview')
+    if ($liveCount -gt 0) {
+        $previewControl.Source = $null
+        $previewControl.Visibility = 'Collapsed'
+        Set-WorkspacePresenterVisible -Visible $true
+    } else {
+        $previewControl.Visibility = 'Visible'
+        $preview = Get-ScreenCaptureSource
+        if ($preview) { $previewControl.Source = $preview }
+    }
     $script:ActivitiesWindow.FindName('SearchBox').Focus() | Out-Null
 }
 
@@ -1686,6 +1748,8 @@ function Stop-FedoraWin {
     }
 
     if ($script:DockTimer) { try { $script:DockTimer.Stop() } catch { }; $script:DockTimer = $null }
+    if ($script:WorkspacePresenter) { try { $script:WorkspacePresenter.Dispose() } catch { }; $script:WorkspacePresenter = $null }
+    if ($script:WorkspacePresenter) { try { $script:WorkspacePresenter.Dispose() } catch { }; $script:WorkspacePresenter = $null }
     if ($script:FrameTimer) { try { $script:FrameTimer.Stop() } catch { }; $script:FrameTimer = $null }
     if ($script:FrameManager) { try { $script:FrameManager.Dispose() } catch { }; $script:FrameManager = $null }
     if ($script:AppBarRegistered -and $script:PanelHandle -ne [IntPtr]::Zero) {

@@ -133,3 +133,12 @@ def test_beta_dock_filters_unregistered_windows_and_exposes_settings():
     assert "Dock Settings" in MAIN
     assert "elseif($path){$record=New-DashRecord" not in MAIN
     assert "PrimaryScreenHeight - [double]$config.panelHeight" in MAIN
+
+
+def test_activities_uses_native_dwm_live_window_thumbnails():
+    assert 'FedoraWinWorkspacePresenter' in NATIVE
+    for token in ['DwmRegisterThumbnail','DwmUpdateThumbnailProperties','DwmQueryThumbnailSourceSize','DwmUnregisterThumbnail']:
+        assert token in NATIVE
+    assert 'Refresh-WorkspacePresenter' in MAIN
+    assert 'ActivateAt' in MAIN
+    assert 'AllowsTransparency="False"' in ACTIVITIES

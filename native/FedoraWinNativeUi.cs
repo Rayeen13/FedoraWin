@@ -340,6 +340,242 @@ public sealed class FedoraWinDwmFrameManager : IDisposable
     }
 }
 
+
+public sealed class FedoraWinWorkspacePresenter : IDisposable
+{
+    const int GWL_STYLE = -16;
+    const int GWL_EXSTYLE = -20;
+    const long WS_CAPTION = 0x00C00000L;
+    const long WS_CHILD = 0x40000000L;
+    const long WS_EX_TOOLWINDOW = 0x00000080L;
+    const long WS_EX_NOACTIVATE = 0x08000000L;
+    const int GW_OWNER = 4;
+    const int DWMWA_CLOAKED = 14;
+    const uint DWM_TNP_RECTDESTINATION = 0x00000001;
+    const uint DWM_TNP_OPACITY = 0x00000004;
+    const uint DWM_TNP_VISIBLE = 0x00000008;
+    const uint DWM_TNP_SOURCECLIENTAREAONLY = 0x00000010;
+    const int SW_RESTORE = 9;
+
+    readonly IntPtr destination;
+    readonly int ownPid;
+    readonly HashSet<string> excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    readonly List<Entry> entries = new List<Entry>();
+    bool disposed;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct RECT { public int left, top, right, bottom; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct PSIZE { public int x, y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct DWM_THUMBNAIL_PROPERTIES
+    {
+        public uint dwFlags;
+        public RECT rcDestination;
+        public RECT rcSource;
+        public byte opacity;
+        [MarshalAs(UnmanagedType.Bool)] public bool fVisible;
+        [MarshalAs(UnmanagedType.Bool)] public bool fSourceClientAreaOnly;
+    }
+
+    sealed class Entry
+    {
+        public IntPtr Source;
+        public IntPtr Thumbnail;
+        public RECT Rect;
+    }
+
+    public FedoraWinWorkspacePresenter(IntPtr destinationHwnd, string excludedCsv)
+    {
+        destination = destinationHwnd;
+        ownPid = Process.GetCurrentProcess().Id;
+        if (!String.IsNullOrWhiteSpace(excludedCsv))
+        {
+            foreach (string raw in excludedCsv.Split(new char[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+                excluded.Add(raw.Trim());
+        }
+        foreach (string name in new string[] { "ShellExperienceHost", "StartMenuExperienceHost", "SearchHost", "TextInputHost" })
+            excluded.Add(name);
+    }
+
+    public int Refresh(int left, int top, int width, int height)
+    {
+        if (disposed || destination == IntPtr.Zero || width < 80 || height < 80) return 0;
+        Clear();
+
+        List<IntPtr> windows = new List<IntPtr>();
+        Native.EnumWindows(delegate(IntPtr hwnd, IntPtr lParam)
+        {
+            if (windows.Count >= 8) return false;
+            if (IsEligible(hwnd)) windows.Add(hwnd);
+            return true;
+        }, IntPtr.Zero);
+
+        if (windows.Count == 0) return 0;
+
+        int count = windows.Count;
+        int columns = count <= 1 ? 1 : (count <= 4 ? 2 : 3);
+        int rows = (int)Math.Ceiling(count / (double)columns);
+        int gap = Math.Max(12, Math.Min(24, width / 40));
+        int cellWidth = Math.Max(80, (width - gap * (columns + 1)) / columns);
+        int cellHeight = Math.Max(70, (height - gap * (rows + 1)) / rows);
+
+        for (int i = 0; i < count; i++)
+        {
+            IntPtr thumbnail;
+            if (Native.DwmRegisterThumbnail(destination, windows[i], out thumbnail) != 0 || thumbnail == IntPtr.Zero)
+                continue;
+
+            PSIZE sourceSize;
+            if (Native.DwmQueryThumbnailSourceSize(thumbnail, out sourceSize) != 0 || sourceSize.x <= 0 || sourceSize.y <= 0)
+            {
+                Native.DwmUnregisterThumbnail(thumbnail);
+                continue;
+            }
+
+            int column = i % columns;
+            int row = i / columns;
+            int cellLeft = left + gap + column * (cellWidth + gap);
+            int cellTop = top + gap + row * (cellHeight + gap);
+
+            double scale = Math.Min(cellWidth / (double)sourceSize.x, cellHeight / (double)sourceSize.y);
+            if (count == 1) scale = Math.Min(scale, 0.88);
+            int renderWidth = Math.Max(40, (int)Math.Round(sourceSize.x * scale));
+            int renderHeight = Math.Max(40, (int)Math.Round(sourceSize.y * scale));
+            int renderLeft = cellLeft + (cellWidth - renderWidth) / 2;
+            int renderTop = cellTop + (cellHeight - renderHeight) / 2;
+
+            RECT rect = new RECT {
+                left = renderLeft, top = renderTop,
+                right = renderLeft + renderWidth, bottom = renderTop + renderHeight
+            };
+            DWM_THUMBNAIL_PROPERTIES props = new DWM_THUMBNAIL_PROPERTIES {
+                dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_OPACITY | DWM_TNP_VISIBLE | DWM_TNP_SOURCECLIENTAREAONLY,
+                rcDestination = rect,
+                opacity = 255,
+                fVisible = true,
+                fSourceClientAreaOnly = false
+            };
+
+            if (Native.DwmUpdateThumbnailProperties(thumbnail, ref props) != 0)
+            {
+                Native.DwmUnregisterThumbnail(thumbnail);
+                continue;
+            }
+
+            entries.Add(new Entry { Source = windows[i], Thumbnail = thumbnail, Rect = rect });
+        }
+
+        return entries.Count;
+    }
+
+    public void SetVisible(bool visible)
+    {
+        if (disposed) return;
+        foreach (Entry entry in entries)
+        {
+            DWM_THUMBNAIL_PROPERTIES props = new DWM_THUMBNAIL_PROPERTIES {
+                dwFlags = DWM_TNP_VISIBLE,
+                fVisible = visible
+            };
+            try { Native.DwmUpdateThumbnailProperties(entry.Thumbnail, ref props); } catch { }
+        }
+    }
+
+    public bool ActivateAt(int x, int y)
+    {
+        if (disposed) return false;
+        for (int i = entries.Count - 1; i >= 0; i--)
+        {
+            Entry entry = entries[i];
+            if (x < entry.Rect.left || x > entry.Rect.right || y < entry.Rect.top || y > entry.Rect.bottom) continue;
+            if (!Native.IsWindow(entry.Source)) return false;
+            Native.ShowWindow(entry.Source, SW_RESTORE);
+            Native.SetForegroundWindow(entry.Source);
+            return true;
+        }
+        return false;
+    }
+
+    bool IsEligible(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero || !Native.IsWindow(hwnd) || !Native.IsWindowVisible(hwnd)) return false;
+        if (Native.GetWindow(hwnd, GW_OWNER) != IntPtr.Zero) return false;
+
+        int pid;
+        Native.GetWindowThreadProcessId(hwnd, out pid);
+        if (pid == 0 || pid == ownPid) return false;
+
+        long style = Native.GetWindowStyle(hwnd);
+        long exStyle = Native.GetWindowExStyle(hwnd);
+        if ((style & WS_CHILD) != 0 || (style & WS_CAPTION) != WS_CAPTION) return false;
+        if ((exStyle & WS_EX_TOOLWINDOW) != 0 || (exStyle & WS_EX_NOACTIVATE) != 0) return false;
+
+        int cloaked = 0;
+        if (Native.DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out cloaked, sizeof(int)) == 0 && cloaked != 0) return false;
+
+        StringBuilder title = new StringBuilder(512);
+        Native.GetWindowText(hwnd, title, title.Capacity);
+        if (String.IsNullOrWhiteSpace(title.ToString())) return false;
+
+        try
+        {
+            Process process = Process.GetProcessById(pid);
+            if (excluded.Contains(process.ProcessName)) return false;
+        }
+        catch { return false; }
+
+        return true;
+    }
+
+    void Clear()
+    {
+        foreach (Entry entry in entries)
+        {
+            try { if (entry.Thumbnail != IntPtr.Zero) Native.DwmUnregisterThumbnail(entry.Thumbnail); } catch { }
+        }
+        entries.Clear();
+    }
+
+    public void Dispose()
+    {
+        if (disposed) return;
+        disposed = true;
+        Clear();
+    }
+
+    static class Native
+    {
+        public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+
+        [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool IsWindow(IntPtr hwnd);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool IsWindowVisible(IntPtr hwnd);
+        [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hwnd, int command);
+        [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out int processId);
+        [DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool ShowWindow(IntPtr hwnd, int command);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetForegroundWindow(IntPtr hwnd);
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")] static extern IntPtr GetWindowLongPtr64(IntPtr hwnd, int index);
+        [DllImport("user32.dll", EntryPoint = "GetWindowLong")] static extern int GetWindowLong32(IntPtr hwnd, int index);
+        [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
+        [DllImport("dwmapi.dll")] public static extern int DwmRegisterThumbnail(IntPtr destination, IntPtr source, out IntPtr thumbnail);
+        [DllImport("dwmapi.dll")] public static extern int DwmUnregisterThumbnail(IntPtr thumbnail);
+        [DllImport("dwmapi.dll")] public static extern int DwmQueryThumbnailSourceSize(IntPtr thumbnail, out PSIZE size);
+        [DllImport("dwmapi.dll")] public static extern int DwmUpdateThumbnailProperties(IntPtr thumbnail, ref DWM_THUMBNAIL_PROPERTIES properties);
+
+        static long GetWindowLongValue(IntPtr hwnd, int index)
+        {
+            return IntPtr.Size == 8 ? GetWindowLongPtr64(hwnd, index).ToInt64() : GetWindowLong32(hwnd, index);
+        }
+
+        public static long GetWindowStyle(IntPtr hwnd) { return GetWindowLongValue(hwnd, GWL_STYLE); }
+        public static long GetWindowExStyle(IntPtr hwnd) { return GetWindowLongValue(hwnd, GWL_EXSTYLE); }
+    }
+}
+
 public static class FedoraWinPowerMode
 {
     public static readonly Guid BestEfficiency = new Guid("961cc777-2547-4f9d-8174-7d86181b8a7a");

@@ -7,7 +7,7 @@
         ShowInTaskbar="False"
         Topmost="True"
         Background="{DynamicResource OverlayBg}"
-        AllowsTransparency="True"
+        AllowsTransparency="False"
         FontFamily="Segoe UI Variable Text">
   <Window.Resources>
     <SolidColorBrush x:Key="PanelBg" Color="#242424"/>
