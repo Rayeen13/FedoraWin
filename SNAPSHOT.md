@@ -2,21 +2,28 @@
 
 The active development line is the `develop` branch. Repository-visible source on that branch is the authoritative continuation point for daily work.
 
-The legacy `.ci/FedoraWin-worktree.tar.gz` is retained unchanged as a source-snapshot artifact from the earlier bootstrap. Its recorded SHA256 is:
+## 2026-09-13 continuation point
 
-`579c78aec047d04909c6f0f46b22d18dce97cc3b98f37ae69b536a908c4d7c46`
+The previously archived working shell has been restored into normal tracked source files. The bootstrap archive is no longer the CI source of truth. Windows CI now tests the tracked tree directly and currently passes all available automated gates:
 
-The hash still matches in Windows CI, but the archive currently fails gzip extraction on the GitHub Windows runner. It must therefore **not** be treated as a green full-runtime/regression gate until it is regenerated from a verified working tree.
+- Python safety, structure, and regression tests;
+- native C# bridge compilation on `windows-latest`;
+- installed-app catalog smoke coverage under Windows PowerShell 5.1;
+- WPF/XAML and PowerShell 5.1 smoke coverage.
 
-Current repo-native Windows gates compile `native/FedoraWinNativeUi.cs` under Windows PowerShell 5.1 and exercise `shell/AppCatalog.ps1`, including GNOME-style aliases such as `terminal -> Windows Terminal` and `files -> File Explorer`.
+Implementation advanced in this pass:
 
-Current implementation delta after the archived snapshot:
+- `FedoraWin.ps1` consumes the dedicated `shell/AppCatalog.ps1` module rather than maintaining a second monolithic launcher index;
+- Activities/app search uses ranked aliases from the shared catalog, including GNOME-style terms such as `terminal`, `files`, `preferences`, and `screenshot`;
+- packaged apps launch through `shell:AppsFolder`, while classic Start Menu apps use their resolved targets;
+- the application drawer uses GNOME-style page indicators instead of desktop-style previous/next pager chrome;
+- Activities now exposes previous, next, and new workspace controls backed by documented Windows virtual-desktop shortcuts, without installing global hooks;
+- existing native DWM frame styling, AppBar top-panel reservation, power-mode integration, Quick Settings work, recovery paths, and non-destructive shell policy remain preserved.
 
-- real DWM/native frame manager remains compiled and guarded by CI;
-- top-panel AppBar and native power integration remain compiled and guarded by CI;
-- installed-app discovery now combines `Get-StartApps` packaged entries with classic Start Menu `.lnk` discovery;
-- launcher search has normalized aliases and deterministic ranking for GNOME-style names;
-- packaged applications launch through `shell:AppsFolder`, while classic shortcuts launch their resolved target;
-- Windows CI keeps the archived full-suite gate visible as a warning instead of silently claiming it passed.
+The authoritative native bridge is `native/FedoraWinNativeUi.cs`; do not replace it with the older copy that existed in the recovered working snapshot. Likewise, keep the repository's newer `ui/QuickSettings.xaml` and `shell/AppCatalog.ps1` implementations unless a deliberate newer change supersedes them.
 
-Do not publish a ZIP from this state. Continue development on `develop` until the shell is coherent and the full regenerated snapshot/runtime regression gate is green.
+## Remaining runtime gate
+
+Automated Windows CI is green, but final release readiness still requires hands-on desktop validation on a real Windows session for native caption-button hit testing, Snap Layouts, resize borders, multi-monitor AppBar work areas, Activities keyboard/click toggling, Quick Settings device effects, and virtual-desktop transitions. These behaviors depend on an interactive Explorer/DWM session that a hosted CI runner cannot faithfully validate.
+
+Do not publish a release ZIP from this state. Continue development on `develop` until the shell is coherent enough to reasonably call a GNOME clone and both automated gates and interactive Windows runtime validation are green.
