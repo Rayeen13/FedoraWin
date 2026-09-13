@@ -125,50 +125,57 @@
       </Border>
     </Grid>
 
-    <Grid x:Name="OverviewView" Grid.Row="1" Margin="22,6,22,4">
-      <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="52"/>
-          <ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="52"/>
-        </Grid.ColumnDefinitions>
+    <Grid x:Name="OverviewView" Grid.Row="1" Margin="22,2,22,4">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="50"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
 
-        <Button x:Name="PreviousWorkspaceButton" Grid.Column="0"
-                Style="{StaticResource WorkspaceNavButtonStyle}" HorizontalAlignment="Center">
-          <Viewbox Width="13" Height="20">
-            <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2.3" StrokeStartLineCap="Round"
-                  StrokeEndLineCap="Round" Data="M11,2 L3,10 L11,18"/>
+      <StackPanel x:Name="WorkspaceStrip" Grid.Row="0" Orientation="Horizontal"
+                  HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Button x:Name="PreviousWorkspaceButton" Style="{StaticResource WorkspaceNavButtonStyle}"
+                Width="40" Height="32" Margin="4,0" ToolTip="Previous Workspace">
+          <Viewbox Width="9" Height="14">
+            <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2" StrokeStartLineCap="Round"
+                  StrokeEndLineCap="Round" Data="M8,1 L2,7 L8,13"/>
           </Viewbox>
         </Button>
 
-        <Button x:Name="WorkspaceButton" Grid.Column="1" Style="{StaticResource ChromeButtonStyle}"
-                Background="Transparent" Padding="0">
-          <Border x:Name="WorkspaceCard" Width="720" Height="405" CornerRadius="14"
-                  BorderBrush="{DynamicResource Border}" BorderThickness="1"
-                  Background="#151515" ClipToBounds="True">
-            <Image x:Name="WorkspacePreview" Stretch="UniformToFill"/>
-          </Border>
+        <Border Width="76" Height="40" Margin="5,0" CornerRadius="8"
+                Background="#151515" BorderBrush="{DynamicResource Accent}" BorderThickness="2">
+          <Grid>
+            <Border Margin="7" CornerRadius="4" Background="{DynamicResource CardBg}"/>
+            <Ellipse Width="5" Height="5" Fill="{DynamicResource AccentForeground}"
+                     HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,4"/>
+          </Grid>
+        </Border>
+
+        <Button x:Name="NextWorkspaceButton" Style="{StaticResource WorkspaceNavButtonStyle}"
+                Width="40" Height="32" Margin="4,0" ToolTip="Next Workspace">
+          <Viewbox Width="9" Height="14">
+            <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2" StrokeStartLineCap="Round"
+                  StrokeEndLineCap="Round" Data="M2,1 L8,7 L2,13"/>
+          </Viewbox>
         </Button>
 
-        <Grid Grid.Column="2">
-          <Button x:Name="NextWorkspaceButton"
-                  Style="{StaticResource WorkspaceNavButtonStyle}" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <Viewbox Width="13" Height="20">
-              <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2.3" StrokeStartLineCap="Round"
-                    StrokeEndLineCap="Round" Data="M3,2 L11,10 L3,18"/>
-            </Viewbox>
-          </Button>
+        <Button x:Name="NewWorkspaceButton" Style="{StaticResource WorkspaceNavButtonStyle}"
+                Width="40" Height="32" Margin="12,0,4,0" ToolTip="New Workspace">
+          <Viewbox Width="13" Height="13">
+            <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2"
+                  StrokeStartLineCap="Round" Data="M6.5,1 L6.5,12 M1,6.5 L12,6.5"/>
+          </Viewbox>
+        </Button>
+      </StackPanel>
 
-          <Button x:Name="NewWorkspaceButton" Style="{StaticResource ChromeButtonStyle}"
-                  Width="34" Height="34" Padding="0" Background="{DynamicResource Accent}"
-                  HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-6,0,0">
-            <Viewbox Width="14" Height="14">
-              <Path Stroke="{DynamicResource AccentForeground}" StrokeThickness="2.2"
-                    StrokeStartLineCap="Round" Data="M7,1 L7,13 M1,7 L13,7"/>
-            </Viewbox>
-          </Button>
-        </Grid>
-      </Grid>
+      <Button x:Name="WorkspaceButton" Grid.Row="1" Style="{StaticResource ChromeButtonStyle}"
+              HorizontalAlignment="Center" VerticalAlignment="Center"
+              Background="Transparent" Padding="0">
+        <Border x:Name="WorkspaceCard" Width="720" Height="405" CornerRadius="14"
+                BorderBrush="{DynamicResource Border}" BorderThickness="1"
+                Background="#151515" ClipToBounds="True">
+          <Image x:Name="WorkspacePreview" Stretch="UniformToFill"/>
+        </Border>
+      </Button>
     </Grid>
 
     <Grid x:Name="SearchResultsView" Grid.Row="1" Visibility="Collapsed" Margin="28,8">

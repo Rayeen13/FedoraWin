@@ -160,3 +160,11 @@ def test_quick_settings_packs_only_available_hardware_tiles():
     assert "$airButton.Visibility" in MAIN
     assert "$powerButton.Visibility" in MAIN
     assert "$script:QuickWindow.Height" in MAIN
+
+
+def test_workspace_navigation_is_compact_strip_not_side_rails():
+    overview=ACTIVITIES[ACTIVITIES.index('x:Name="OverviewView"'):ACTIVITIES.index('x:Name="SearchResultsView"')]
+    assert 'x:Name="WorkspaceStrip"' in overview
+    assert 'Grid.Row="1"' in overview
+    assert 'ColumnDefinition Width="52"' not in overview
+    assert 'Margin="12,0,4,0"' in overview
