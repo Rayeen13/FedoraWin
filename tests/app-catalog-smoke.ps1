@@ -46,8 +46,11 @@ Assert-True ($source -match 'Select-FedoraWinPreferredAppRecords') 'Catalog must
 
 $discovered = @(Get-FedoraWinInstalledApps)
 Assert-True ($discovered.Count -gt 0) 'Real Windows installed-app discovery returned no applications.'
-$normalizedNames = @($discovered | ForEach-Object { ConvertTo-FedoraWinSearchText ([string]$_.Name })
-    | Where-Object { $_ })
+$normalizedNames = @(
+    $discovered |
+        ForEach-Object { ConvertTo-FedoraWinSearchText ([string]$_.Name) } |
+        Where-Object { $_ }
+)
 $uniqueNames = @($normalizedNames | Select-Object -Unique)
 Assert-True ($normalizedNames.Count -eq $uniqueNames.Count) 'Installed-app reconciliation left duplicate normalized app names.'
 
