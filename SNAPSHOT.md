@@ -4,7 +4,9 @@ The active development line is the `develop` branch. Repository-visible source o
 
 ## 2026-09-13 continuation point
 
-The previously archived working shell has been restored into normal tracked source files. The bootstrap archive is no longer the CI source of truth. Windows CI now tests the tracked tree directly and currently passes all available automated gates:
+The previously archived working shell has been restored into normal tracked source files. The bootstrap archive is no longer the CI source of truth. The corrupt legacy archive and one-time hydration staging files have now been removed from `develop`, so future work and CI operate only on reviewable tracked source.
+
+Windows CI now tests the tracked tree directly and currently passes all available automated gates:
 
 - Python safety, structure, and regression tests;
 - native C# bridge compilation on `windows-latest`;
