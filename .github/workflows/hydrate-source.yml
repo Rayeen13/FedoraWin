@@ -1,4 +1,4 @@
-name: Hydrate FedoraWin source
+name: Retire FedoraWin hydration bootstrap
 
 on:
   push:
@@ -10,55 +10,23 @@ permissions:
   contents: write
 
 jobs:
-  hydrate:
+  cleanup:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with:
           ref: develop
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Install test dependency
-        shell: bash
-        run: python -m pip install --disable-pip-version-check pytest
-
-      - name: Reconstitute verified source bundle
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat .ci/hydrate-bundle/part-00 .ci/hydrate-bundle/part-01 .ci/hydrate-bundle/part-02 .ci/hydrate-bundle/part-03a .ci/hydrate-bundle/part-03b .ci/hydrate-bundle/part-04 | base64 -d > /tmp/hydrate_bundle.tar.gz
-          echo 'b9dedb7c401f62a4f2d0c752bceb860a833c0d3a464fc0e543f4359df4eb8adc  /tmp/hydrate_bundle.tar.gz' | sha256sum -c -
-          tar -xzf /tmp/hydrate_bundle.tar.gz -C .
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('tests/test_regressions.py')
-          text = path.read_text(encoding='utf-8')
-          old = "for token in ['Windows Terminal','terminal','Get-StartApps','shell:AppsFolder','SearchText']:\n        assert token in APP_CATALOG"
-          new = "for token in ['windows terminal','terminal','get-startapps','shell:appsfolder','searchtext']:\n        assert token in APP_CATALOG.lower()"
-          if old not in text:
-              raise SystemExit('app catalog assertion patch anchor missing')
-          path.write_text(text.replace(old, new), encoding='utf-8')
-          PY
-
-      - name: Static regression tests before commit
-        shell: bash
-        run: python -m pytest -q
-
-      - name: Commit hydrated source
+      - name: Remove one-time hydration artifacts
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'FedoraWin Automation'
           git config user.email 'actions@users.noreply.github.com'
-          git add FedoraWin.ps1 CHANGELOG.md TESTING.md Disable-Startup.cmd Enable-Startup.cmd Install-Startup.ps1 Remove-Startup.ps1 Open-Log.cmd Preflight.cmd Preflight.ps1 Restore-Windows.cmd Restore-Windows.ps1 Safe-Preview.cmd Start-FedoraWin.cmd ui/Activities.xaml ui/Appearance.xaml ui/Calendar.xaml ui/Panel.xaml ui/PowerMenu.xaml tests/test_safety.py tests/test_structure.py tests/test_regressions.py
-          if git diff --cached --quiet; then
-            echo 'No source changes to commit.'
-          else
-            git commit -m 'feat(shell): restore tracked GNOME shell source'
-            git push origin HEAD:develop
-          fi
+          git rm -f .ci/FedoraWin-worktree.tar.gz
+          git rm -rf .ci/hydrate-bundle
+          git rm -f .github/workflows/hydrate-source.yml
+          git commit -m 'chore(ci): remove obsolete bootstrap snapshot artifacts'
+          git push origin HEAD:develop
