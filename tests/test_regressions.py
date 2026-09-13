@@ -8,6 +8,7 @@ NATIVE = (ROOT/'native'/'FedoraWinNativeUi.cs').read_text(encoding='utf-8')
 ACTIVITIES = (ROOT/'ui'/'Activities.xaml').read_text(encoding='utf-8')
 QUICK = (ROOT/'ui'/'QuickSettings.xaml').read_text(encoding='utf-8')
 APPEARANCE = (ROOT/'ui'/'Appearance.xaml').read_text(encoding='utf-8')
+APP_CATALOG = (ROOT/'shell'/'AppCatalog.ps1').read_text(encoding='utf-8')
 
 
 def test_xaml_is_ascii_safe_and_valid_xml():
@@ -32,12 +33,10 @@ def test_activities_is_explicit_toggle_without_deactivation_race():
 
 
 def test_launcher_search_supports_terminal_alias_and_packaged_apps():
-    assert "'terminal'" in MAIN.lower()
-    assert 'Windows Terminal' in MAIN
-    assert 'Get-StartApps' in MAIN
-    assert 'shell:AppsFolder' in MAIN
-    assert 'SearchText' in MAIN
-    assert "([string]$_.SearchText).IndexOf" in MAIN
+    assert 'Get-FedoraWinInstalledApps' in MAIN
+    assert 'Search-FedoraWinApps' in MAIN
+    for token in ['windows terminal','terminal','get-startapps','shell:appsfolder','searchtext']:
+        assert token in APP_CATALOG.lower()
 
 
 def test_quick_settings_is_compact_and_direct_for_supported_controls():
@@ -83,3 +82,26 @@ def test_appbar_and_power_menu_are_reversible_native_integrations():
     power=(ROOT/'ui'/'PowerMenu.xaml').read_text(encoding='utf-8')
     for name in ['LockButton','SuspendButton','RestartButton','PowerOffButton','LogOutButton']:
         assert name in power
+
+
+def test_app_drawer_uses_gnome_style_page_dots():
+    assert 'Render-AppGridPage' in MAIN
+    assert 'Move-AppGridPage' in MAIN
+    assert '$script:AppGridPageSize = 30' in MAIN
+    assert 'AppPageDotsPanel' in ACTIVITIES
+    assert 'PageDotButtonStyle' in ACTIVITIES
+    assert 'PrevAppPageButton' not in ACTIVITIES
+    assert 'NextAppPageButton' not in ACTIVITIES
+    assert 'AppPageText' not in ACTIVITIES
+    apps_view = ACTIVITIES[ACTIVITIES.index('x:Name="AppsView"'):]
+    assert 'VerticalScrollBarVisibility="Auto"' not in apps_view
+    for key in ['PageDown', 'PageUp', "Key]::Right", "Key]::Left", 'Add_PreviewMouseWheel']:
+        assert key in MAIN
+
+
+def test_workspace_controls_use_documented_windows_shortcuts():
+    for name in ['PreviousWorkspaceButton','NextWorkspaceButton','NewWorkspaceButton']:
+        assert name in ACTIVITIES
+    for method in ['SendDesktopLeft','SendDesktopRight','SendDesktopNew']:
+        assert method in MAIN
+    assert 'SetWindowsHookEx' not in MAIN

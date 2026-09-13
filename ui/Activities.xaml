@@ -1,0 +1,236 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Name="ActivitiesWindow"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Background="{DynamicResource OverlayBg}"
+        AllowsTransparency="True"
+        FontFamily="Segoe UI Variable Text">
+  <Window.Resources>
+    <SolidColorBrush x:Key="PanelBg" Color="#242424"/>
+    <SolidColorBrush x:Key="OverlayBg" Color="#F21D1D20"/>
+    <SolidColorBrush x:Key="CardBg" Color="#333338"/>
+    <SolidColorBrush x:Key="CardHover" Color="#48484E"/>
+    <SolidColorBrush x:Key="Foreground" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Muted" Color="#C4C4C8"/>
+    <SolidColorBrush x:Key="Border" Color="#55555B"/>
+    <SolidColorBrush x:Key="Accent" Color="#3584E4"/>
+    <SolidColorBrush x:Key="AccentForeground" Color="#FFFFFF"/>
+
+    <Style x:Key="ChromeButtonStyle" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource Foreground}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FontFamily" Value="Segoe UI Variable Text"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="14" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="{DynamicResource CardHover}"/></Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.82"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="AppButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+      <Setter Property="Width" Value="126"/>
+      <Setter Property="Height" Value="112"/>
+      <Setter Property="Margin" Value="8"/>
+      <Setter Property="Padding" Value="8"/>
+    </Style>
+
+    <Style x:Key="DashButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+      <Setter Property="Width" Value="56"/>
+      <Setter Property="Height" Value="56"/>
+      <Setter Property="Margin" Value="3,0"/>
+      <Setter Property="Padding" Value="6"/>
+    </Style>
+
+    <Style x:Key="PageDotButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+      <Setter Property="Height" Value="8"/>
+      <Setter Property="MinWidth" Value="8"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Margin" Value="4,0"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Background" Value="{DynamicResource Muted}"/>
+      <Setter Property="Opacity" Value="0.58"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="{TemplateBinding Background}" CornerRadius="4"/>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="78"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="90"/>
+    </Grid.RowDefinitions>
+
+    <Grid Grid.Row="0" Margin="24,18,24,8">
+      <Border Width="560" Height="44" HorizontalAlignment="Center" CornerRadius="22"
+              Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="46"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="34"/>
+          </Grid.ColumnDefinitions>
+          <Viewbox Grid.Column="0" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Canvas Width="20" Height="20">
+              <Ellipse Width="11" Height="11" Canvas.Left="2" Canvas.Top="2" Stroke="{DynamicResource Muted}" StrokeThickness="2"/>
+              <Path Stroke="{DynamicResource Muted}" StrokeThickness="2" StrokeStartLineCap="Round" Data="M11,11 L17,17"/>
+            </Canvas>
+          </Viewbox>
+          <Grid Grid.Column="1">
+            <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource Foreground}"
+                     CaretBrush="{DynamicResource Foreground}" VerticalContentAlignment="Center" FontSize="15" Padding="0"
+                     FontFamily="Segoe UI Variable Text"/>
+            <TextBlock x:Name="SearchHint" Text="Type to search" Foreground="{DynamicResource Muted}" FontSize="15"
+                       VerticalAlignment="Center" IsHitTestVisible="False"/>
+          </Grid>
+          <Button x:Name="ClearSearchButton" Grid.Column="2" Style="{StaticResource ChromeButtonStyle}" Width="28" Height="28"
+                  Visibility="Collapsed" ToolTip="Clear search">
+            <Grid Width="12" Height="12">
+              <Path Stroke="{DynamicResource Muted}" StrokeThickness="1.8" StrokeStartLineCap="Round" Data="M1,1 L11,11 M11,1 L1,11"/>
+            </Grid>
+          </Button>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <Grid Grid.Row="1" Margin="30,0,30,0">
+      <Grid x:Name="OverviewView">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="150"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="150"/>
+        </Grid.ColumnDefinitions>
+
+        <Button x:Name="PreviousWorkspaceButton" Grid.Column="0" Style="{StaticResource ChromeButtonStyle}"
+                Width="118" Height="360" HorizontalAlignment="Right" VerticalAlignment="Center"
+                Background="{DynamicResource CardBg}" Opacity="0.72" Margin="0,0,26,0"
+                ToolTip="Previous workspace">
+          <Grid>
+            <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                  Data="M15,5 L7,13 L15,21" Width="22" Height="26" Stretch="Uniform"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock Text="Previous" Foreground="{DynamicResource Muted}" FontSize="12"
+                       HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12"/>
+          </Grid>
+        </Button>
+
+        <Button x:Name="WorkspaceButton" Grid.Column="1" Style="{StaticResource ChromeButtonStyle}"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Padding="0" Background="Transparent"
+                ToolTip="Open Windows Task View">
+          <Border x:Name="WorkspaceCard" Width="1040" Height="585" CornerRadius="18"
+                  Background="#202024" BorderBrush="{DynamicResource Border}" BorderThickness="1">
+            <Grid ClipToBounds="True">
+              <Image x:Name="WorkspacePreview" Stretch="UniformToFill"/>
+              <Border VerticalAlignment="Bottom" Height="46" Background="#9918181A">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <Ellipse Width="7" Height="7" Fill="{DynamicResource Accent}" Margin="0,0,8,0"/>
+                  <TextBlock Text="Current workspace" Foreground="White" FontSize="13" FontWeight="SemiBold"/>
+                </StackPanel>
+              </Border>
+            </Grid>
+          </Border>
+        </Button>
+
+        <Grid Grid.Column="2" Width="118" Height="360" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="26,0,0,0">
+          <Button x:Name="NextWorkspaceButton" Style="{StaticResource ChromeButtonStyle}"
+                  Background="{DynamicResource CardBg}" Opacity="0.72" ToolTip="Next workspace">
+            <Grid>
+              <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                    Data="M7,5 L15,13 L7,21" Width="22" Height="26" Stretch="Uniform"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              <TextBlock Text="Next" Foreground="{DynamicResource Muted}" FontSize="12"
+                         HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12"/>
+            </Grid>
+          </Button>
+          <Button x:Name="NewWorkspaceButton" Style="{StaticResource ChromeButtonStyle}"
+                  Width="34" Height="34" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,10,0"
+                  Background="{DynamicResource Accent}" ToolTip="New workspace">
+            <Grid Width="14" Height="14">
+              <Path Stroke="{DynamicResource AccentForeground}" StrokeThickness="2" StrokeStartLineCap="Round"
+                    Data="M7,1 L7,13 M1,7 L13,7"/>
+            </Grid>
+          </Button>
+        </Grid>
+      </Grid>
+
+      <Grid x:Name="SearchResultsView" Visibility="Collapsed">
+        <StackPanel VerticalAlignment="Top" Margin="0,20,0,0">
+          <TextBlock Text="Search results" Foreground="{DynamicResource Foreground}" FontSize="18" FontWeight="SemiBold"
+                     HorizontalAlignment="Center" Margin="0,0,0,16"/>
+          <WrapPanel x:Name="SearchResultsPanel" HorizontalAlignment="Center" MaxWidth="1120"/>
+          <TextBlock x:Name="NoResultsText" Text="No matching applications" Foreground="{DynamicResource Muted}" FontSize="15"
+                     HorizontalAlignment="Center" Margin="0,28,0,0" Visibility="Collapsed"/>
+        </StackPanel>
+      </Grid>
+
+      <Grid x:Name="AppsView" Visibility="Collapsed">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="50"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid Grid.Row="0">
+          <TextBlock Text="Applications" Foreground="{DynamicResource Foreground}" FontSize="20" FontWeight="SemiBold"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          <Button x:Name="BackToOverviewButton" Style="{StaticResource ChromeButtonStyle}" Width="42" Height="42"
+                  HorizontalAlignment="Left" VerticalAlignment="Center" Margin="4,0,0,0" ToolTip="Back to overview">
+            <Viewbox Width="16" Height="16">
+              <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                    Data="M15,8 L3,8 M8,3 L3,8 L8,13"/>
+            </Viewbox>
+          </Button>
+        </Grid>
+        <Grid Grid.Row="1" Margin="12,4,12,4">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="48"/>
+          </Grid.RowDefinitions>
+          <WrapPanel x:Name="AppPanel" Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="1220"/>
+          <StackPanel x:Name="AppPageDotsPanel" Grid.Row="1" Orientation="Horizontal"
+                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+      </Grid>
+    </Grid>
+
+    <Grid Grid.Row="2">
+      <Border Height="68" Padding="7" HorizontalAlignment="Center" VerticalAlignment="Center"
+              CornerRadius="24" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1">
+        <StackPanel x:Name="DashPanel" Orientation="Horizontal" VerticalAlignment="Center">
+          <Separator Width="1" Margin="7,9" Background="{DynamicResource Border}"/>
+          <Button x:Name="ShowAppsButton" Style="{StaticResource DashButtonStyle}" ToolTip="Show Applications">
+            <Grid Width="24" Height="24">
+              <UniformGrid Columns="3" Rows="3">
+                <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Foreground}" Margin="1"/>
+                <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Foreground}" Margin="1"/>
+                <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Foreground}" Margin="1"/>
+                <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Foreground}" Margin="1"/>
+                <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Foreground}" Margin="1"/>
+                <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Foreground}" Margin="1"/>
+                <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Foreground}" Margin="1"/>
+                <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Foreground}" Margin="1"/>
+                <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Foreground}" Margin="1"/>
+              </UniformGrid>
+            </Grid>
+          </Button>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>

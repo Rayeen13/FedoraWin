@@ -1,0 +1,42 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Name="AppearanceWindow"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Background="Transparent"
+        AllowsTransparency="True"
+        Width="410" Height="250"
+        FontFamily="Segoe UI Variable Text">
+  <Window.Resources>
+    <SolidColorBrush x:Key="PanelBg" Color="#242424"/>
+    <SolidColorBrush x:Key="OverlayBg" Color="#242424"/>
+    <SolidColorBrush x:Key="CardBg" Color="#353535"/>
+    <SolidColorBrush x:Key="CardHover" Color="#474747"/>
+    <SolidColorBrush x:Key="Foreground" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Muted" Color="#BDBDBD"/>
+    <SolidColorBrush x:Key="Border" Color="#4B4B4B"/>
+    <SolidColorBrush x:Key="Accent" Color="#3584E4"/>
+    <SolidColorBrush x:Key="AccentForeground" Color="#FFFFFF"/>
+    <Style x:Key="ChoiceStyle" TargetType="Button">
+      <Setter Property="Height" Value="40"/><Setter Property="Margin" Value="4"/><Setter Property="Padding" Value="14,5"/>
+      <Setter Property="Foreground" Value="{DynamicResource Foreground}"/><Setter Property="Background" Value="{DynamicResource CardBg}"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="12" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.86"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="AccentChoiceStyle" TargetType="Button">
+      <Setter Property="Width" Value="30"/><Setter Property="Height" Value="30"/><Setter Property="Margin" Value="5"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Grid><Ellipse x:Name="Dot" Fill="{TemplateBinding Background}" Stroke="Transparent" StrokeThickness="2"/><Ellipse x:Name="SelectedRing" Margin="-3" Fill="Transparent" Stroke="{DynamicResource Foreground}" StrokeThickness="2" Visibility="Collapsed"/></Grid><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Dot" Property="Opacity" Value="0.82"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+    </Style>
+  </Window.Resources>
+  <Border Margin="8" CornerRadius="18" Background="{DynamicResource OverlayBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1">
+    <Border.Effect><DropShadowEffect BlurRadius="24" ShadowDepth="5" Opacity="0.32" Color="#000000"/></Border.Effect>
+    <Grid Margin="18">
+      <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="58"/><RowDefinition Height="74"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Grid Grid.Row="0"><TextBlock Text="Appearance" Foreground="{DynamicResource Foreground}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/><Button x:Name="AppearanceCloseButton" HorizontalAlignment="Right" Width="34" Height="34" Background="{DynamicResource CardBg}" Foreground="{DynamicResource Foreground}" BorderThickness="0" Content="x" Cursor="Hand"/></Grid>
+      <UniformGrid Grid.Row="1" Columns="3"><Button x:Name="ThemeLightButton" Tag="light" Style="{StaticResource ChoiceStyle}" Content="Light"/><Button x:Name="ThemeDarkButton" Tag="dark" Style="{StaticResource ChoiceStyle}" Content="Dark"/><Button x:Name="ThemeSystemButton" Tag="system" Style="{StaticResource ChoiceStyle}" Content="System"/></UniformGrid>
+      <StackPanel Grid.Row="2"><TextBlock Text="Accent Color" Foreground="{DynamicResource Muted}" FontSize="11" Margin="4,2,0,4"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Button x:Name="AccentBlueButton" Tag="blue" Style="{StaticResource AccentChoiceStyle}" Background="#3584E4"/><Button x:Name="AccentTealButton" Tag="teal" Style="{StaticResource AccentChoiceStyle}" Background="#2190A4"/><Button x:Name="AccentGreenButton" Tag="green" Style="{StaticResource AccentChoiceStyle}" Background="#3A944A"/><Button x:Name="AccentYellowButton" Tag="yellow" Style="{StaticResource AccentChoiceStyle}" Background="#C88800"/><Button x:Name="AccentOrangeButton" Tag="orange" Style="{StaticResource AccentChoiceStyle}" Background="#ED5B00"/><Button x:Name="AccentRedButton" Tag="red" Style="{StaticResource AccentChoiceStyle}" Background="#E62D42"/><Button x:Name="AccentPinkButton" Tag="pink" Style="{StaticResource AccentChoiceStyle}" Background="#D56199"/><Button x:Name="AccentPurpleButton" Tag="purple" Style="{StaticResource AccentChoiceStyle}" Background="#9141AC"/><Button x:Name="AccentSlateButton" Tag="slate" Style="{StaticResource AccentChoiceStyle}" Background="#6F8396"/></StackPanel></StackPanel>
+      <TextBlock Grid.Row="3" Text="Theme changes apply to FedoraWin and supported native window frames." Foreground="{DynamicResource Muted}" FontSize="10" TextWrapping="Wrap" Margin="4,6,4,0"/>
+    </Grid>
+  </Border>
+</Window>
