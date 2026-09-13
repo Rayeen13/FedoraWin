@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Name="PanelWindow"
@@ -10,12 +11,12 @@
         FontFamily="Segoe UI Variable Text">
   <Window.Resources>
     <SolidColorBrush x:Key="PanelBg" Color="#242424"/>
-    <SolidColorBrush x:Key="OverlayBg" Color="#242424"/>
-    <SolidColorBrush x:Key="CardBg" Color="#353535"/>
-    <SolidColorBrush x:Key="CardHover" Color="#454545"/>
+    <SolidColorBrush x:Key="OverlayBg" Color="#303030"/>
+    <SolidColorBrush x:Key="CardBg" Color="#3B3B3B"/>
+    <SolidColorBrush x:Key="CardHover" Color="#4A4A4A"/>
     <SolidColorBrush x:Key="Foreground" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="Muted" Color="#C8C8C8"/>
-    <SolidColorBrush x:Key="Border" Color="#4B4B4B"/>
+    <SolidColorBrush x:Key="Muted" Color="#D0D0D0"/>
+    <SolidColorBrush x:Key="Border" Color="#505050"/>
     <SolidColorBrush x:Key="Accent" Color="#3584E4"/>
     <SolidColorBrush x:Key="AccentForeground" Color="#FFFFFF"/>
 
@@ -30,7 +31,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="13" Padding="{TemplateBinding Padding}">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
@@ -51,40 +52,37 @@
     </Grid.ColumnDefinitions>
 
     <Button x:Name="ActivitiesButton" Grid.Column="0" Style="{StaticResource PanelButtonStyle}"
-            HorizontalAlignment="Left" Margin="6,3,0,3" Padding="8,0" ToolTip="Activities (Alt+F1)">
-      <Grid Width="38" Height="18">
-        <Border Width="20" Height="9" CornerRadius="4.5" Background="{DynamicResource Foreground}"
-                HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,0,0,0"/>
-        <Ellipse Width="5" Height="5" Fill="{DynamicResource Muted}"
-                 HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,3,0"/>
-      </Grid>
-    </Button>
+            HorizontalAlignment="Left" Margin="4,3,0,3" Padding="10,0"
+            ToolTip="Activities (Alt+F1)" Content="Activities"/>
 
-    <Button x:Name="ClockButton" Grid.Column="1" Style="{StaticResource PanelButtonStyle}" Margin="0,3" Padding="12,0"/>
+    <Button x:Name="ClockButton" Grid.Column="1" Style="{StaticResource PanelButtonStyle}"
+            Margin="0,3" Padding="12,0"/>
 
     <Button x:Name="QuickButton" Grid.Column="2" Style="{StaticResource PanelButtonStyle}"
-            HorizontalAlignment="Right" Margin="0,3,6,3" Padding="9,0" ToolTip="Quick Settings">
+            HorizontalAlignment="Right" Margin="0,3,5,3" Padding="10,0"
+            Background="{DynamicResource CardBg}" ToolTip="Quick Settings">
       <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-        <Viewbox Width="17" Height="13" Margin="0,0,9,0">
+        <Viewbox Width="16" Height="12" Margin="0,0,8,0">
           <Canvas Width="20" Height="16">
-            <Path Stroke="{DynamicResource Foreground}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                  Data="M2,6 C6,2 14,2 18,6 M5,9 C8,6.5 12,6.5 15,9 M8.5,12 C9.5,11 10.5,11 11.5,12"/>
+            <Path Stroke="{DynamicResource Foreground}" StrokeThickness="1.8" StrokeStartLineCap="Round" Data="M2,6 C6,2 14,2 18,6 M5,9 C8,6.5 12,6.5 15,9 M8.5,12 C9.5,11 10.5,11 11.5,12"/>
             <Ellipse Width="2.6" Height="2.6" Fill="{DynamicResource Foreground}" Canvas.Left="8.7" Canvas.Top="12.4"/>
           </Canvas>
         </Viewbox>
-        <Viewbox Width="16" Height="14" Margin="0,0,9,0">
+
+        <Viewbox Width="15" Height="13" Margin="0,0,8,0">
           <Canvas Width="20" Height="18">
             <Path Fill="{DynamicResource Foreground}" Data="M2,7 L6,7 L11,3 L11,15 L6,11 L2,11 Z"/>
-            <Path Stroke="{DynamicResource Foreground}" StrokeThickness="1.6" StrokeStartLineCap="Round" Fill="Transparent"
-                  Data="M13,6 C15,8 15,10 13,12 M15,4 C19,8 19,10 15,14"/>
+            <Path Stroke="{DynamicResource Foreground}" StrokeThickness="1.6" StrokeStartLineCap="Round" Data="M13,6 C15,8 15,10 13,12 M15,4 C19,8 19,10 15,14"/>
           </Canvas>
         </Viewbox>
-        <Grid Width="23" Height="12" Margin="0,0,8,0">
-          <Border BorderBrush="{DynamicResource Foreground}" BorderThickness="1.5" CornerRadius="2" Margin="0,0,3,0"/>
+
+        <Grid Width="22" Height="12" Margin="0,0,7,0">
+          <Border BorderBrush="{DynamicResource Foreground}" BorderThickness="1.4" CornerRadius="2" Margin="0,0,3,0"/>
           <Rectangle Fill="{DynamicResource Foreground}" Width="2.5" Height="5" HorizontalAlignment="Right" VerticalAlignment="Center"/>
           <Rectangle x:Name="PanelBatteryFill" Fill="{DynamicResource Foreground}" Height="6" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,0,0,0" Width="12"/>
         </Grid>
-        <Viewbox Width="10" Height="7">
+
+        <Viewbox Width="9" Height="6">
           <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M1,1 L5,5 L9,1"/>
         </Viewbox>
       </StackPanel>

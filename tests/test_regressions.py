@@ -40,7 +40,7 @@ def test_launcher_search_supports_terminal_alias_and_packaged_apps():
 
 
 def test_quick_settings_is_compact_and_direct_for_supported_controls():
-    assert 'Height="470"' in QUICK
+    assert 'Height="426"' in QUICK
     assert 'Windows.Devices.Radios.Radio' in MAIN
     assert 'Toggle-RadioState' in MAIN
     assert 'FedoraWinPowerMode' in MAIN
@@ -48,6 +48,8 @@ def test_quick_settings_is_compact_and_direct_for_supported_controls():
     assert 'FedoraWinAudio' in MAIN
     assert "ms-settings:network" not in MAIN.lower()
     assert "ms-settings:bluetooth" not in MAIN.lower()
+    assert 'QuickLockButton' in QUICK
+    assert 'Visibility="Collapsed"' in QUICK
     assert 'Windows API unavailable' in QUICK
 
 

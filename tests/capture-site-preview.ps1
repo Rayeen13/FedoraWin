@@ -95,7 +95,6 @@ $arguments = @(
     '-ExecutionPolicy', 'Bypass',
     '-STA',
     '-File', (Join-Path $repoRoot 'FedoraWin.ps1'),
-    '-SafeMode',
     '-Diagnostic'
 )
 $startArgs = @{

@@ -1344,6 +1344,7 @@ function Toggle-QuickPopover {
         })
         $script:QuickWindow.FindName('AirplaneButton').Add_Click({ $off = ((Get-RadioState -Kind 'WiFi') -eq 'On' -or (Get-RadioState -Kind 'Bluetooth') -eq 'On'); $state = if ($off) { 'Off' } else { 'On' }; [void](Set-RadioState -Kind 'WiFi' -State $state); [void](Set-RadioState -Kind 'Bluetooth' -State $state); Refresh-QuickSettingsState })
         $script:QuickWindow.FindName('SettingsButton').Add_Click({ Start-Target -Target 'ms-settings:'; $script:QuickWindow.Hide() })
+        $script:QuickWindow.FindName('QuickLockButton').Add_Click({ $script:QuickWindow.Hide(); Invoke-PowerAction -Action 'Lock' })
         $script:QuickWindow.FindName('MoreSettingsButton').Add_Click({ Start-Target -Target 'ms-settings:'; $script:QuickWindow.Hide() })
         $script:QuickWindow.FindName('PowerButton').Add_Click({ $script:QuickWindow.Hide(); Toggle-PowerPopover })
         $script:QuickWindow.FindName('ScreenshotButton').Add_Click({ Start-Target -Target 'ms-screenclip:'; $script:QuickWindow.Hide() })
