@@ -1,6 +1,6 @@
 {
   "hideTaskbarWhileRunning": true,
-  "applyWallpaperWhileRunning": false,
+  "applyWallpaperWhileRunning": true,
   "hideDesktopIconsWhileRunning": true,
   "reservePanelInSafePreview": true,
   "activitiesHotkey": "Alt+F1",

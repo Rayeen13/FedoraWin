@@ -17,7 +17,7 @@ $script:StatePath = Join-Path $script:RuntimeDir 'state.json'
 $script:RestoreRequestPath = Join-Path $script:RuntimeDir 'restore.request'
 $script:PidPath = Join-Path $script:RuntimeDir 'pid.txt'
 $script:ConfigPath = Join-Path $script:Root 'config.json'
-$script:WallpaperPath = Join-Path $script:Root 'assets\fedora-blue.png'
+$script:WallpaperPath = Join-Path $script:RuntimeDir 'fedora-win-blue.png'
 $script:Exiting = $false
 $script:ActivitiesWindow = $null
 $script:CalendarWindow = $null
@@ -837,6 +837,47 @@ function Set-Wallpaper {
         $Path,
         [FedoraWinNative]::SPIF_UPDATEINIFILE -bor [FedoraWinNative]::SPIF_SENDWININICHANGE
     ) | Out-Null
+}
+
+function Ensure-FedoraWinWallpaper {
+    if (Test-Path -LiteralPath $script:WallpaperPath) { return $script:WallpaperPath }
+    try {
+        $width = 1920
+        $height = 1080
+        $bitmap = New-Object System.Drawing.Bitmap -ArgumentList $width,$height,([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+        try {
+            $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $rect = New-Object System.Drawing.Rectangle -ArgumentList 0,0,$width,$height
+            $start = [System.Drawing.Color]::FromArgb(255,18,36,82)
+            $finish = [System.Drawing.Color]::FromArgb(255,46,116,190)
+            $gradient = New-Object System.Drawing.Drawing2D.LinearGradientBrush -ArgumentList $rect,$start,$finish,28.0
+            try { $graphics.FillRectangle($gradient,$rect) } finally { $gradient.Dispose() }
+
+            $haloOne = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(54,120,190,255))
+            $haloTwo = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(46,108,72,188))
+            $haloThree = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(44,20,45,105))
+            try {
+                $graphics.FillEllipse($haloOne,980,-330,1180,1180)
+                $graphics.FillEllipse($haloTwo,-320,520,980,980)
+                $graphics.FillEllipse($haloThree,1180,610,850,850)
+            } finally {
+                $haloOne.Dispose()
+                $haloTwo.Dispose()
+                $haloThree.Dispose()
+            }
+
+            $bitmap.Save($script:WallpaperPath,[System.Drawing.Imaging.ImageFormat]::Png)
+        } finally {
+            $graphics.Dispose()
+            $bitmap.Dispose()
+        }
+        Write-FedoraWinLog 'info' ('Generated FedoraWin session wallpaper: ' + $script:WallpaperPath)
+        return $script:WallpaperPath
+    } catch {
+        Write-FedoraWinLog 'warn' ('Could not generate FedoraWin wallpaper: ' + $_.Exception.Message)
+        return $null
+    }
 }
 
 function Save-State {
@@ -1837,8 +1878,9 @@ Save-State
 
 try {
 if (-not $SafeMode) {
-    if ([bool]$config.applyWallpaperWhileRunning -and $script:OriginalWallpaper -and (Test-Path -LiteralPath $script:OriginalWallpaper)) {
-        Set-Wallpaper -Path $script:WallpaperPath
+    if ([bool]$config.applyWallpaperWhileRunning) {
+        $sessionWallpaper = Ensure-FedoraWinWallpaper
+        if ($sessionWallpaper) { Set-Wallpaper -Path $sessionWallpaper }
     }
     if ([bool]$config.hideTaskbarWhileRunning) {
         Hide-WindowsTaskbar

@@ -168,3 +168,11 @@ def test_workspace_navigation_is_compact_strip_not_side_rails():
     assert 'Grid.Row="1"' in overview
     assert 'ColumnDefinition Width="52"' not in overview
     assert 'Margin="12,0,4,0"' in overview
+
+
+def test_session_wallpaper_is_generated_and_reversible():
+    cfg=__import__('json').loads((ROOT/'config.json').read_text(encoding='utf-8'))
+    assert cfg['applyWallpaperWhileRunning'] is True
+    assert 'Ensure-FedoraWinWallpaper' in MAIN
+    assert "Join-Path $script:RuntimeDir 'fedora-win-blue.png'" in MAIN
+    assert 'Set-Wallpaper -Path $script:OriginalWallpaper' in MAIN
