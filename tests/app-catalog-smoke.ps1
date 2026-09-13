@@ -44,4 +44,11 @@ Assert-True ($source -match 'WScript\.Shell') 'Catalog must discover classic Sta
 Assert-True ($source -match 'shell:AppsFolder') 'Packaged apps must launch through AppsFolder.'
 Assert-True ($source -match 'Select-FedoraWinPreferredAppRecords') 'Catalog must reconcile duplicate StartApps and Start Menu records.'
 
-Write-Host 'App catalog smoke passed.'
+$discovered = @(Get-FedoraWinInstalledApps)
+Assert-True ($discovered.Count -gt 0) 'Real Windows installed-app discovery returned no applications.'
+$normalizedNames = @($discovered | ForEach-Object { ConvertTo-FedoraWinSearchText ([string]$_.Name })
+    | Where-Object { $_ })
+$uniqueNames = @($normalizedNames | Select-Object -Unique)
+Assert-True ($normalizedNames.Count -eq $uniqueNames.Count) 'Installed-app reconciliation left duplicate normalized app names.'
+
+Write-Host ("App catalog smoke passed ({0} real applications discovered)." -f $discovered.Count)

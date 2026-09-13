@@ -1503,7 +1503,7 @@ function Show-Activities {
     if ($script:DockWindow) { $script:DockWindow.Hide() }
     if (-not $script:InstalledAppsLoaded) {
         Write-FedoraWinLog 'info' 'Discovering launcher applications.'
-        $script:InstalledApps = Get-StartMenuApps
+        $script:InstalledApps = @(Get-StartMenuApps)
         $script:InstalledAppsLoaded = $true
         Write-FedoraWinLog 'info' ('Discovered {0} user-facing applications.' -f $script:InstalledApps.Count)
         Refresh-Docks -Force

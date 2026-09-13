@@ -113,7 +113,7 @@ function Get-FedoraWinInstalledApps {
     [CmdletBinding()]
     param()
 
-    $records = New-Object System.Collections.Generic.List[object]
+    $records = @()
     $seen = @{}
 
     try {
@@ -123,7 +123,7 @@ function Get-FedoraWinInstalledApps {
                 $key = ('appid:' + ([string]$app.AppID).ToLowerInvariant())
                 if ($seen.ContainsKey($key)) { continue }
                 $seen[$key] = $true
-                [void]$records.Add((New-FedoraWinAppRecord -Name ([string]$app.Name) -AppId ([string]$app.AppID) -TargetPath $null -Arguments $null -Source 'StartApps'))
+                $records += New-FedoraWinAppRecord -Name ([string]$app.Name) -AppId ([string]$app.AppID) -TargetPath $null -Arguments $null -Source 'StartApps'
             }
         }
     } catch { }
@@ -150,13 +150,13 @@ function Get-FedoraWinInstalledApps {
                     $key = 'lnk:' + (ConvertTo-FedoraWinSearchText $keyMaterial)
                     if ($seen.ContainsKey($key)) { continue }
                     $seen[$key] = $true
-                    [void]$records.Add((New-FedoraWinAppRecord -Name $name -AppId $null -TargetPath $target -Arguments $args -Source 'StartMenu'))
+                    $records += New-FedoraWinAppRecord -Name $name -AppId $null -TargetPath $target -Arguments $args -Source 'StartMenu'
                 } catch { }
             }
         }
     }
 
-    return @(Select-FedoraWinPreferredAppRecords -Apps @($records))
+    return @(Select-FedoraWinPreferredAppRecords -Apps $records)
 }
 
 function Get-FedoraWinAppSearchScore {
