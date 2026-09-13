@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .ci/hydrate-bundle/part-* | base64 -d > /tmp/hydrate_bundle.tar.gz
+          cat .ci/hydrate-bundle/part-00 .ci/hydrate-bundle/part-01 .ci/hydrate-bundle/part-02 .ci/hydrate-bundle/part-03a .ci/hydrate-bundle/part-03b .ci/hydrate-bundle/part-04 | base64 -d > /tmp/hydrate_bundle.tar.gz
           echo 'b9dedb7c401f62a4f2d0c752bceb860a833c0d3a464fc0e543f4359df4eb8adc  /tmp/hydrate_bundle.tar.gz' | sha256sum -c -
           tar -xzf /tmp/hydrate_bundle.tar.gz -C .
 
