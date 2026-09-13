@@ -73,6 +73,42 @@ function New-FedoraWinAppRecord {
     }
 }
 
+function Get-FedoraWinAppRecordQuality {
+    param($App)
+    if ($null -eq $App) { return -1 }
+
+    $score = 0
+    if ($App.TargetPath) { $score += 100 }
+    if ($App.AppId) { $score += 50 }
+    if ($App.Arguments) { $score += 5 }
+    if ([string]$App.Source -eq 'StartMenu') { $score += 10 }
+    return $score
+}
+
+function Select-FedoraWinPreferredAppRecords {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)][object[]]$Apps)
+
+    $preferred = @{}
+    foreach ($app in $Apps) {
+        if ($null -eq $app -or [string]::IsNullOrWhiteSpace([string]$app.Name)) { continue }
+        $key = ConvertTo-FedoraWinSearchText ([string]$app.Name)
+        if (-not $key) { continue }
+
+        if (-not $preferred.ContainsKey($key)) {
+            $preferred[$key] = $app
+            continue
+        }
+
+        $current = $preferred[$key]
+        if ((Get-FedoraWinAppRecordQuality -App $app) -gt (Get-FedoraWinAppRecordQuality -App $current)) {
+            $preferred[$key] = $app
+        }
+    }
+
+    return @($preferred.Values | Sort-Object Name, Source)
+}
+
 function Get-FedoraWinInstalledApps {
     [CmdletBinding()]
     param()
@@ -120,7 +156,7 @@ function Get-FedoraWinInstalledApps {
         }
     }
 
-    return @($records | Sort-Object Name, Source)
+    return @(Select-FedoraWinPreferredAppRecords -Apps @($records))
 }
 
 function Get-FedoraWinAppSearchScore {
