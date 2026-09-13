@@ -68,4 +68,60 @@
   }else{
     addEventListener('keydown',event=>{if(event.key==='Escape') closeMenu()});
   }
+  const hydrateCiPreview=async()=> {
+    try{
+      const response=await fetch('./assets/runtime/preview-metadata.json',{cache:'no-store'});
+      if(!response.ok) return;
+      const metadata=await response.json();
+      const shots=metadata.screenshots||{};
+
+      document.querySelectorAll('[data-runtime-shot]').forEach(el=>{
+        const file=shots[el.dataset.runtimeShot];
+        if(!file) return;
+        const src='./assets/runtime/'+file;
+        if(el.tagName==='IMG'){
+          el.src=src;
+        }else{
+          const img=el.querySelector('img');
+          if(img) img.src=src;
+          if(el.hasAttribute('data-image')) el.dataset.image=src;
+        }
+      });
+
+      const sha=String(metadata.source_sha||'').trim();
+      const shortSha=sha?sha.slice(0,10):'unknown';
+      const run=String(metadata.github_run_number||'').trim();
+      const runId=String(metadata.github_run_id||'').trim();
+      const captured=metadata.captured_utc?new Date(metadata.captured_utc):null;
+      const capturedLabel=captured&&!Number.isNaN(captured.valueOf())
+        ? captured.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'})
+        : 'latest successful capture';
+      const resolution=metadata.screen&&metadata.screen.width&&metadata.screen.height
+        ? metadata.screen.width+'×'+metadata.screen.height
+        : 'runner desktop';
+      const image=String(metadata.runner_image||'Windows runner');
+
+      document.querySelectorAll('[data-ci-provenance]').forEach(el=>{
+        el.textContent='Rendered from '+metadata.source_branch+' @ '+shortSha+' · '+capturedLabel+' · '+image+' · '+resolution;
+        if(runId){
+          el.append(' · ');
+          const link=document.createElement('a');
+          link.href='https://github.com/Rayeen13/FedoraWin/actions/runs/'+runId;
+          link.target='_blank';
+          link.rel='noreferrer';
+          link.textContent=run?'GitHub Actions #'+run:'GitHub Actions run';
+          el.append(link);
+        }
+      });
+
+      document.querySelectorAll('[data-ci-run-link]').forEach(link=>{
+        if(runId) link.href='https://github.com/Rayeen13/FedoraWin/actions/runs/'+runId;
+      });
+      root.classList.add('ci-preview-ready');
+    }catch(_){
+      // Keep committed screenshots and static copy as a reliable fallback.
+    }
+  };
+  hydrateCiPreview();
+
 })();
