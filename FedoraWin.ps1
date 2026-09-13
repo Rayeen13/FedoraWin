@@ -1324,7 +1324,6 @@ function Render-DesktopDock {
 
 function Initialize-DesktopDock {
     if($script:DockMode -eq 'overview'){return}
-    if(-not $script:InstalledAppsLoaded){$script:InstalledApps=Get-StartMenuApps; $script:InstalledAppsLoaded=$true}
     if($null -eq $script:DockWindow){$script:DockWindow=Import-XamlWindow -Path (Join-Path $script:Root 'ui\Dock.xaml'); Apply-ThemeToWindow -Window $script:DockWindow; Render-DesktopDock}
     if(-not ($script:ActivitiesWindow -and $script:ActivitiesWindow.IsVisible)){$script:DockWindow.Show(); $script:DockWindow.UpdateLayout(); Update-DesktopDockPosition}
 }
@@ -1337,7 +1336,6 @@ function Update-DockModeVisibility {
 
 function Refresh-Docks {
     param([switch]$Force)
-    if(-not $script:InstalledAppsLoaded){return}
     $items=@(Get-FedoraDashItems)
     $signature=(($items | ForEach-Object { '{0}:{1}:{2}' -f $_.FavoriteKey,$_.ProcessName,$_.IsRunning }) -join '|')+'|'+$script:DockMode+'|'+$script:DockPosition+'|'+$script:ThemeMode+'|'+$script:AccentName
     if(-not $Force -and $signature -eq $script:DockSignature){return}
@@ -1376,6 +1374,7 @@ function Show-Activities {
         $script:InstalledApps = Get-StartMenuApps
         $script:InstalledAppsLoaded = $true
         Write-FedoraWinLog 'info' ('Discovered {0} user-facing applications.' -f $script:InstalledApps.Count)
+        Refresh-Docks -Force
     }
 
     if ($null -eq $script:ActivitiesWindow) {

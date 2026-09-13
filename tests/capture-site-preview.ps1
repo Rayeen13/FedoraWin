@@ -150,6 +150,10 @@ try {
     } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $output 'preview-metadata.json') -Encoding UTF8
 } catch {
     $captureError=$_
+    try {
+        $runtimeLog=Join-Path $env:LOCALAPPDATA 'FedoraWin\FedoraWin.log'
+        if(Test-Path -LiteralPath $runtimeLog){Copy-Item -LiteralPath $runtimeLog -Destination (Join-Path $output 'fedora-win.runtime.log') -Force}
+    } catch {}
 } finally {
     try {
         $runtime=Join-Path $env:LOCALAPPDATA 'FedoraWin'
