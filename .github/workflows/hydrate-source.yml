@@ -1,0 +1,377 @@
+name: Hydrate FedoraWin source
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/hydrate-source.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  hydrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Verify archived working snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '579c78aec047d04909c6f0f46b22d18dce97cc3b98f37ae69b536a908c4d7c46  .ci/FedoraWin-worktree.tar.gz' | sha256sum -c -
+          rm -rf _hydrate
+          mkdir _hydrate
+          tar -xzf .ci/FedoraWin-worktree.tar.gz -C _hydrate
+
+      - name: Promote working shell source into repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in \
+            FedoraWin.ps1 CHANGELOG.md TESTING.md \
+            Disable-Startup.cmd Enable-Startup.cmd Install-Startup.ps1 Remove-Startup.ps1 Open-Log.cmd \
+            Preflight.cmd Preflight.ps1 Restore-Windows.cmd Restore-Windows.ps1 Safe-Preview.cmd Start-FedoraWin.cmd \
+            ui/Activities.xaml ui/Appearance.xaml ui/Calendar.xaml ui/Panel.xaml ui/PowerMenu.xaml \
+            tests/test_safety.py tests/test_structure.py; do
+            mkdir -p "$(dirname "$f")"
+            cp "_hydrate/$f" "$f"
+          done
+
+      - name: Integrate app catalog, GNOME paging and workspace controls
+        shell: python
+        run: |
+          from pathlib import Path
+
+          main = Path('FedoraWin.ps1')
+          s = main.read_text(encoding='utf-8')
+
+          s = s.replace("$script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path\n", """$script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+          $script:AppCatalogPath = Join-Path $script:Root 'shell\\AppCatalog.ps1'
+          if (-not (Test-Path -LiteralPath $script:AppCatalogPath)) {
+              throw "Required app catalog module is missing: $script:AppCatalogPath"
+          }
+          . $script:AppCatalogPath
+          """)
+
+          s = s.replace("    public const byte VK_A = 0x41;\n", """    public const byte VK_A = 0x41;
+              public const byte VK_CONTROL = 0x11;
+              public const byte VK_LEFT = 0x25;
+              public const byte VK_RIGHT = 0x27;
+              public const byte VK_D = 0x44;
+          """)
+
+          win_a = """    public static void SendWinA()
+              {
+                  keybd_event(VK_LWIN, 0, 0, UIntPtr.Zero);
+                  keybd_event(VK_A, 0, 0, UIntPtr.Zero);
+                  keybd_event(VK_A, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                  keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+              }
+          """
+          shortcuts = win_a + """
+              private static void SendCtrlWinKey(byte key)
+              {
+                  keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+                  keybd_event(VK_LWIN, 0, 0, UIntPtr.Zero);
+                  keybd_event(key, 0, 0, UIntPtr.Zero);
+                  keybd_event(key, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                  keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                  keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+              }
+
+              public static void SendDesktopLeft() { SendCtrlWinKey(VK_LEFT); }
+              public static void SendDesktopRight() { SendCtrlWinKey(VK_RIGHT); }
+              public static void SendDesktopNew() { SendCtrlWinKey(VK_D); }
+          """
+          if win_a not in s:
+              raise SystemExit('SendWinA patch anchor missing')
+          s = s.replace(win_a, shortcuts)
+
+          start = s.index('function Get-AppSearchAliases {')
+          end = s.index('function Get-AppIconSource {')
+          s = s[:start] + """function Get-StartMenuApps {
+              try {
+                  $apps = @(Get-FedoraWinInstalledApps)
+                  if ($config.maxLauncherApps) {
+                      $apps = @($apps | Select-Object -First ([int]$config.maxLauncherApps))
+                  }
+                  return $apps
+              } catch {
+                  Write-FedoraWinLog 'warn' ('App discovery failed: ' + $_.Exception.Message)
+                  return @()
+              }
+          }
+
+          """ + s[end:]
+
+          old = """    $button.Content = $stack
+              $button.Tag = $App.Path
+              $button.Add_Click({
+                  param($sender, $eventArgs)
+                  Start-Target -Target ([string]$sender.Tag)
+                  Hide-Activities
+              })
+          """
+          new = """    $button.Content = $stack
+              $button.Tag = $App
+              $button.Add_Click({
+                  param($sender, $eventArgs)
+                  try {
+                      Start-FedoraWinApp -App $sender.Tag
+                      Hide-Activities
+                  } catch {
+                      Write-FedoraWinLog 'warn' ('Could not launch app: ' + $_.Exception.Message)
+                  }
+              })
+          """
+          if old not in s:
+              raise SystemExit('app button patch anchor missing')
+          s = s.replace(old, new)
+
+          old = """    $pageText = $script:ActivitiesWindow.FindName('AppPageText')
+              if ($pageText) { $pageText.Text = ('{0} / {1}' -f ($script:AppGridPage + 1), $script:AppGridPageCount) }
+              $prev = $script:ActivitiesWindow.FindName('PrevAppPageButton')
+              $next = $script:ActivitiesWindow.FindName('NextAppPageButton')
+              if ($prev) { $prev.IsEnabled = ($script:AppGridPage -gt 0); $prev.Opacity = if ($prev.IsEnabled) { 1.0 } else { 0.35 } }
+              if ($next) { $next.IsEnabled = ($script:AppGridPage -lt ($script:AppGridPageCount - 1)); $next.Opacity = if ($next.IsEnabled) { 1.0 } else { 0.35 } }
+              $script:AppGridPopulated = $true
+          """
+          new = """    $dots = $script:ActivitiesWindow.FindName('AppPageDotsPanel')
+              if ($dots) {
+                  $dots.Children.Clear()
+                  for ($i = 0; $i -lt $script:AppGridPageCount; $i++) {
+                      $dot = New-Object System.Windows.Controls.Button
+                      $dot.Style = $script:ActivitiesWindow.FindResource('PageDotButtonStyle')
+                      $dot.Tag = $i
+                      $dot.ToolTip = ('Application page {0}' -f ($i + 1))
+                      if ($i -eq $script:AppGridPage) {
+                          $dot.Width = 18
+                          $dot.Background = $script:ActivitiesWindow.Resources['Accent']
+                          $dot.Opacity = 1.0
+                      } else {
+                          $dot.Width = 8
+                          $dot.Background = $script:ActivitiesWindow.Resources['Muted']
+                          $dot.Opacity = 0.58
+                      }
+                      $dot.Add_Click({
+                          param($sender,$eventArgs)
+                          $script:AppGridPage = [int]$sender.Tag
+                          Render-AppGridPage
+                      })
+                      [void]$dots.Children.Add($dot)
+                  }
+              }
+              $script:AppGridPopulated = $true
+          """
+          if old not in s:
+              raise SystemExit('app paging patch anchor missing')
+          s = s.replace(old, new)
+
+          s = s.replace("        $matches = @($script:InstalledApps | Where-Object { ([string]$_.SearchText).IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First 16)\n", "        $matches = @(Search-FedoraWinApps -Apps $script:InstalledApps -Query $needle -Limit 16)\n")
+          s = s.replace("if ($browser) { Add-DashApp -Name $browser.Name -Target $browser.Path -IconPath $browser.TargetPath }", """if ($browser) {
+                  $browserTarget = if ($browser.AppId) { 'shell:AppsFolder\\' + $browser.AppId } else { $browser.TargetPath }
+                  Add-DashApp -Name $browser.Name -Target $browserTarget -IconPath $browser.TargetPath
+              }""")
+          s = s.replace("if ($code) { Add-DashApp -Name 'Visual Studio Code' -Target $code.Path -IconPath $code.TargetPath }", """if ($code) {
+                  $codeTarget = if ($code.AppId) { 'shell:AppsFolder\\' + $code.AppId } else { $code.TargetPath }
+                  Add-DashApp -Name 'Visual Studio Code' -Target $codeTarget -IconPath $code.TargetPath
+              }""")
+
+          old = """        $workspace = $script:ActivitiesWindow.FindName('WorkspaceButton')
+                  $prevAppPage = $script:ActivitiesWindow.FindName('PrevAppPageButton')
+                  $nextAppPage = $script:ActivitiesWindow.FindName('NextAppPageButton')
+                  if ($prevAppPage) { $prevAppPage.Add_Click({ Move-AppGridPage -Delta -1 }) }
+                  if ($nextAppPage) { $nextAppPage.Add_Click({ Move-AppGridPage -Delta 1 }) }
+          """
+          new = """        $workspace = $script:ActivitiesWindow.FindName('WorkspaceButton')
+                  $previousWorkspace = $script:ActivitiesWindow.FindName('PreviousWorkspaceButton')
+                  $nextWorkspace = $script:ActivitiesWindow.FindName('NextWorkspaceButton')
+                  $newWorkspace = $script:ActivitiesWindow.FindName('NewWorkspaceButton')
+          """
+          if old not in s:
+              raise SystemExit('workspace refs patch anchor missing')
+          s = s.replace(old, new)
+
+          workspace_click = """        $workspace.Add_Click({
+                  try { Hide-Activities; [FedoraWinNative]::SendWinTab() }
+                  catch { Write-FedoraWinLog 'error' ('Workspace action failed: ' + $_.Exception.ToString()) }
+              })
+          """
+          workspace_handlers = workspace_click + """        if ($previousWorkspace) {
+                  $previousWorkspace.Add_Click({
+                      try { Hide-Activities; [FedoraWinNative]::SendDesktopLeft() }
+                      catch { Write-FedoraWinLog 'error' ('Previous workspace action failed: ' + $_.Exception.ToString()) }
+                  })
+              }
+              if ($nextWorkspace) {
+                  $nextWorkspace.Add_Click({
+                      try { Hide-Activities; [FedoraWinNative]::SendDesktopRight() }
+                      catch { Write-FedoraWinLog 'error' ('Next workspace action failed: ' + $_.Exception.ToString()) }
+                  })
+              }
+              if ($newWorkspace) {
+                  $newWorkspace.Add_Click({
+                      try { Hide-Activities; [FedoraWinNative]::SendDesktopNew() }
+                      catch { Write-FedoraWinLog 'error' ('New workspace action failed: ' + $_.Exception.ToString()) }
+                  })
+              }
+          """
+          if workspace_click not in s:
+              raise SystemExit('workspace click patch anchor missing')
+          s = s.replace(workspace_click, workspace_handlers)
+          main.write_text(s, encoding='utf-8')
+
+          activities = Path('ui/Activities.xaml')
+          x = activities.read_text(encoding='utf-8')
+          dash_style = '''    <Style x:Key="DashButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+                <Setter Property="Width" Value="56"/>
+                <Setter Property="Height" Value="56"/>
+                <Setter Property="Margin" Value="3,0"/>
+                <Setter Property="Padding" Value="6"/>
+              </Style>
+          '''
+          dot_style = dash_style + '''
+              <Style x:Key="PageDotButtonStyle" TargetType="Button" BasedOn="{StaticResource ChromeButtonStyle}">
+                <Setter Property="Height" Value="8"/>
+                <Setter Property="MinWidth" Value="8"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="4,0"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Background" Value="{DynamicResource Muted}"/>
+                <Setter Property="Opacity" Value="0.58"/>
+                <Setter Property="Template">
+                  <Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" CornerRadius="4"/></ControlTemplate></Setter.Value>
+                </Setter>
+              </Style>
+          '''
+          if dash_style not in x:
+              raise SystemExit('dash style patch anchor missing')
+          x = x.replace(dash_style, dot_style)
+
+          left = '''        <Border Grid.Column="0" Width="118" Height="360" HorizontalAlignment="Right" VerticalAlignment="Center"
+                        CornerRadius="18" Background="{DynamicResource CardBg}" Opacity="0.72" Margin="0,0,26,0">
+                  <Grid><TextBlock Text="1" Foreground="{DynamicResource Muted}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12"/></Grid>
+                </Border>
+          '''
+          left_new = '''        <Button x:Name="PreviousWorkspaceButton" Grid.Column="0" Style="{StaticResource ChromeButtonStyle}"
+                        Width="118" Height="360" HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Background="{DynamicResource CardBg}" Opacity="0.72" Margin="0,0,26,0" ToolTip="Previous workspace">
+                  <Grid>
+                    <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M15,5 L7,13 L15,21" Width="22" Height="26" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <TextBlock Text="Previous" Foreground="{DynamicResource Muted}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12"/>
+                  </Grid>
+                </Button>
+          '''
+          if left not in x:
+              raise SystemExit('left workspace patch anchor missing')
+          x = x.replace(left, left_new)
+
+          right = '''        <Border Grid.Column="2" Width="118" Height="360" HorizontalAlignment="Left" VerticalAlignment="Center"
+                        CornerRadius="18" Background="{DynamicResource CardBg}" Opacity="0.72" Margin="26,0,0,0">
+                  <Grid><TextBlock Text="+" Foreground="{DynamicResource Muted}" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
+                </Border>
+          '''
+          right_new = '''        <Grid Grid.Column="2" Width="118" Height="360" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="26,0,0,0">
+                  <Button x:Name="NextWorkspaceButton" Style="{StaticResource ChromeButtonStyle}" Background="{DynamicResource CardBg}" Opacity="0.72" ToolTip="Next workspace">
+                    <Grid>
+                      <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M7,5 L15,13 L7,21" Width="22" Height="26" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      <TextBlock Text="Next" Foreground="{DynamicResource Muted}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12"/>
+                    </Grid>
+                  </Button>
+                  <Button x:Name="NewWorkspaceButton" Style="{StaticResource ChromeButtonStyle}" Width="34" Height="34" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,10,0" Background="{DynamicResource Accent}" ToolTip="New workspace">
+                    <Grid Width="14" Height="14"><Path Stroke="{DynamicResource AccentForeground}" StrokeThickness="2" StrokeStartLineCap="Round" Data="M7,1 L7,13 M1,7 L13,7"/></Grid>
+                  </Button>
+                </Grid>
+          '''
+          if right not in x:
+              raise SystemExit('right workspace patch anchor missing')
+          x = x.replace(right, right_new)
+
+          pager = '''          <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Button x:Name="PrevAppPageButton" Style="{StaticResource ChromeButtonStyle}" Width="36" Height="36" Padding="8" ToolTip="Previous application page">
+                      <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M13,4 L6,11 L13,18"/>
+                    </Button>
+                    <Border Margin="10,0" MinWidth="64" Height="28" CornerRadius="14" Background="{DynamicResource CardBg}">
+                      <TextBlock x:Name="AppPageText" Text="1 / 1" Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <Button x:Name="NextAppPageButton" Style="{StaticResource ChromeButtonStyle}" Width="36" Height="36" Padding="8" ToolTip="Next application page">
+                      <Path Stroke="{DynamicResource Foreground}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M7,4 L14,11 L7,18"/>
+                    </Button>
+                  </StackPanel>
+          '''
+          pager_new = '''          <StackPanel x:Name="AppPageDotsPanel" Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          '''
+          if pager not in x:
+              raise SystemExit('pager patch anchor missing')
+          activities.write_text(x.replace(pager, pager_new), encoding='utf-8')
+
+          tests = Path('tests/test_regressions.py')
+          t = tests.read_text(encoding='utf-8')
+          if "APP_CATALOG =" not in t:
+              t = t.replace("APPEARANCE = (ROOT/'ui'/'Appearance.xaml').read_text(encoding='utf-8')\n", "APPEARANCE = (ROOT/'ui'/'Appearance.xaml').read_text(encoding='utf-8')\nAPP_CATALOG = (ROOT/'shell'/'AppCatalog.ps1').read_text(encoding='utf-8')\n")
+          a = '''def test_launcher_search_supports_terminal_alias_and_packaged_apps():
+              assert "'terminal'" in MAIN.lower()
+              assert 'Windows Terminal' in MAIN
+              assert 'Get-StartApps' in MAIN
+              assert 'shell:AppsFolder' in MAIN
+              assert 'SearchText' in MAIN
+              assert "([string]$_.SearchText).IndexOf" in MAIN
+          '''
+          b = '''def test_launcher_search_supports_terminal_alias_and_packaged_apps():
+              assert 'Get-FedoraWinInstalledApps' in MAIN
+              assert 'Search-FedoraWinApps' in MAIN
+              for token in ['Windows Terminal','terminal','Get-StartApps','shell:AppsFolder','SearchText']:
+                  assert token in APP_CATALOG
+          '''
+          if a in t:
+              t = t.replace(a, b)
+          t += '''\n\ndef test_app_drawer_uses_gnome_style_page_dots():
+              assert 'Render-AppGridPage' in MAIN
+              assert 'Move-AppGridPage' in MAIN
+              assert '$script:AppGridPageSize = 30' in MAIN
+              assert 'AppPageDotsPanel' in ACTIVITIES
+              assert 'PageDotButtonStyle' in ACTIVITIES
+              assert 'PrevAppPageButton' not in ACTIVITIES
+              assert 'NextAppPageButton' not in ACTIVITIES
+              assert 'AppPageText' not in ACTIVITIES
+              apps_view = ACTIVITIES[ACTIVITIES.index('x:Name="AppsView"'):]
+              assert 'VerticalScrollBarVisibility="Auto"' not in apps_view
+              for key in ['PageDown', 'PageUp', "Key]::Right", "Key]::Left", 'Add_PreviewMouseWheel']:
+                  assert key in MAIN
+
+
+def test_workspace_controls_use_documented_windows_shortcuts():
+              for name in ['PreviousWorkspaceButton','NextWorkspaceButton','NewWorkspaceButton']:
+                  assert name in ACTIVITIES
+              for method in ['SendDesktopLeft','SendDesktopRight','SendDesktopNew']:
+                  assert method in MAIN
+              assert 'SetWindowsHookEx' not in MAIN
+          '''
+          tests.write_text(t, encoding='utf-8')
+
+      - name: Static regression tests before commit
+        shell: bash
+        run: python -m pytest -q
+
+      - name: Commit hydrated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _hydrate
+          git config user.name 'FedoraWin Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add FedoraWin.ps1 CHANGELOG.md TESTING.md \
+            Disable-Startup.cmd Enable-Startup.cmd Install-Startup.ps1 Remove-Startup.ps1 Open-Log.cmd \
+            Preflight.cmd Preflight.ps1 Restore-Windows.cmd Restore-Windows.ps1 Safe-Preview.cmd Start-FedoraWin.cmd \
+            ui tests/test_safety.py tests/test_structure.py tests/test_regressions.py
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+          else
+            git commit -m 'feat(shell): restore tracked GNOME shell source'
+            git push origin HEAD:develop
+          fi
