@@ -74,6 +74,26 @@ function Assert-WindowsTaskbarHidden {
     }
 }
 
+function Wait-FedoraWinTheme {
+    param([Parameter(Mandatory)][string]$Expected,[int]$TimeoutSeconds=8)
+    $settings=Join-Path $env:LOCALAPPDATA 'FedoraWin\settings.json'
+    $deadline=[DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        try {
+            if(Test-Path -LiteralPath $settings){
+                $saved=Get-Content -Raw -Encoding UTF8 -LiteralPath $settings | ConvertFrom-Json
+                if([string]$saved.theme -eq $Expected){return}
+            }
+        } catch {}
+        Start-Sleep -Milliseconds 200
+    } while([DateTime]::UtcNow -lt $deadline)
+    throw "FedoraWin theme did not persist as '$Expected' after the Quick Settings action."
+}
+
+function Copy-FedoraWinRuntimeLog {
+    Copy-FedoraWinRuntimeLog
+}
+
 function Save-DesktopCapture {
     param([Parameter(Mandatory)][string]$FileName)
     Assert-WindowsTaskbarHidden
@@ -124,13 +144,16 @@ try {
     $captures.quick_settings_dark=Split-Path -Leaf (Save-DesktopCapture -FileName 'quick-settings-dark.png')
 
     Invoke-AutomationButton -ProcessId $shellPid -AutomationId 'DarkStyleButton'
+    Wait-FedoraWinTheme -Expected 'light'
     Start-Sleep -Milliseconds 700
     $captures.quick_settings_light=Split-Path -Leaf (Save-DesktopCapture -FileName 'quick-settings-light.png')
 
     $hashes=[ordered]@{}
     foreach($entry in $captures.GetEnumerator()){$hashes[$entry.Key]=(Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $output $entry.Value)).Hash.ToLowerInvariant()}
     if(($hashes.Values | Select-Object -Unique).Count -lt 4){throw 'CI UI captures are not sufficiently distinct; the desktop session may not be rendering FedoraWin correctly.'}
+    if($hashes.quick_settings_dark -eq $hashes.quick_settings_light){throw 'Quick Settings dark/light captures are identical; theme switching is not visually working.'}
 
+    Copy-FedoraWinRuntimeLog
     [ordered]@{
         source_branch=$sourceBranch
         source_sha=$sourceSha
