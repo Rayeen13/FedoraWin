@@ -10,5 +10,16 @@
   "windowFrameEnabled": true,
   "windowFrameExcludedProcesses": "chrome,msedge,firefox,opera,Code,devenv,ApplicationFrameHost,ShellExperienceHost,StartMenuExperienceHost,SearchHost,TextInputHost",
   "theme": "dark",
-  "accent": "blue"
+  "accent": "blue",
+  "dockMode": "both",
+  "dockPosition": "bottom",
+  "dockTopmost": true,
+  "dockIconSize": 48,
+  "dockFavorites": [
+    "Files",
+    "Terminal",
+    "Browser",
+    "Visual Studio Code",
+    "Settings"
+  ]
 }

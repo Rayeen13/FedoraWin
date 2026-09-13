@@ -208,7 +208,7 @@
     </Grid>
 
     <Grid Grid.Row="2" VerticalAlignment="Center">
-      <Border Height="68" HorizontalAlignment="Center" VerticalAlignment="Center"
+      <Border x:Name="OverviewDashBorder" Height="68" HorizontalAlignment="Center" VerticalAlignment="Center"
               Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource Border}"
               BorderThickness="1" CornerRadius="24" Padding="10,7">
         <StackPanel x:Name="DashPanel" Orientation="Horizontal" VerticalAlignment="Center">

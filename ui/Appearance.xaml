@@ -7,7 +7,7 @@
         Topmost="True"
         Background="Transparent"
         AllowsTransparency="True"
-        Width="410" Height="250"
+        Width="430" Height="374"
         FontFamily="Segoe UI Variable Text">
   <Window.Resources>
     <SolidColorBrush x:Key="PanelBg" Color="#242424"/>
@@ -32,11 +32,13 @@
   <Border Margin="8" CornerRadius="18" Background="{DynamicResource OverlayBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1">
     <Border.Effect><DropShadowEffect BlurRadius="24" ShadowDepth="5" Opacity="0.32" Color="#000000"/></Border.Effect>
     <Grid Margin="18">
-      <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="58"/><RowDefinition Height="74"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="58"/><RowDefinition Height="74"/><RowDefinition Height="58"/><RowDefinition Height="58"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Grid Grid.Row="0"><TextBlock Text="Appearance" Foreground="{DynamicResource Foreground}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/><Button x:Name="AppearanceCloseButton" HorizontalAlignment="Right" Width="34" Height="34" Background="{DynamicResource CardBg}" Foreground="{DynamicResource Foreground}" BorderThickness="0" Content="x" Cursor="Hand"/></Grid>
       <UniformGrid Grid.Row="1" Columns="3"><Button x:Name="ThemeLightButton" Tag="light" Style="{StaticResource ChoiceStyle}" Content="Light"/><Button x:Name="ThemeDarkButton" Tag="dark" Style="{StaticResource ChoiceStyle}" Content="Dark"/><Button x:Name="ThemeSystemButton" Tag="system" Style="{StaticResource ChoiceStyle}" Content="System"/></UniformGrid>
       <StackPanel Grid.Row="2"><TextBlock Text="Accent Color" Foreground="{DynamicResource Muted}" FontSize="11" Margin="4,2,0,4"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Button x:Name="AccentBlueButton" Tag="blue" Style="{StaticResource AccentChoiceStyle}" Background="#3584E4"/><Button x:Name="AccentTealButton" Tag="teal" Style="{StaticResource AccentChoiceStyle}" Background="#2190A4"/><Button x:Name="AccentGreenButton" Tag="green" Style="{StaticResource AccentChoiceStyle}" Background="#3A944A"/><Button x:Name="AccentYellowButton" Tag="yellow" Style="{StaticResource AccentChoiceStyle}" Background="#C88800"/><Button x:Name="AccentOrangeButton" Tag="orange" Style="{StaticResource AccentChoiceStyle}" Background="#ED5B00"/><Button x:Name="AccentRedButton" Tag="red" Style="{StaticResource AccentChoiceStyle}" Background="#E62D42"/><Button x:Name="AccentPinkButton" Tag="pink" Style="{StaticResource AccentChoiceStyle}" Background="#D56199"/><Button x:Name="AccentPurpleButton" Tag="purple" Style="{StaticResource AccentChoiceStyle}" Background="#9141AC"/><Button x:Name="AccentSlateButton" Tag="slate" Style="{StaticResource AccentChoiceStyle}" Background="#6F8396"/></StackPanel></StackPanel>
-      <TextBlock Grid.Row="3" Text="Theme changes apply to FedoraWin and supported native window frames." Foreground="{DynamicResource Muted}" FontSize="10" TextWrapping="Wrap" Margin="4,6,4,0"/>
+      <StackPanel Grid.Row="3"><TextBlock Text="Dock Location" Foreground="{DynamicResource Muted}" FontSize="11" Margin="4,2,0,2"/><UniformGrid Columns="3"><Button x:Name="DockOverviewButton" Tag="overview" Style="{StaticResource ChoiceStyle}" Content="Overview"/><Button x:Name="DockDesktopButton" Tag="desktop" Style="{StaticResource ChoiceStyle}" Content="Desktop"/><Button x:Name="DockBothButton" Tag="both" Style="{StaticResource ChoiceStyle}" Content="Both"/></UniformGrid></StackPanel>
+      <StackPanel Grid.Row="4"><TextBlock Text="Dock Position" Foreground="{DynamicResource Muted}" FontSize="11" Margin="4,2,0,2"/><UniformGrid Columns="3"><Button x:Name="DockBottomButton" Tag="bottom" Style="{StaticResource ChoiceStyle}" Content="Bottom"/><Button x:Name="DockLeftButton" Tag="left" Style="{StaticResource ChoiceStyle}" Content="Left"/><Button x:Name="DockRightButton" Tag="right" Style="{StaticResource ChoiceStyle}" Content="Right"/></UniformGrid></StackPanel>
+      <TextBlock Grid.Row="5" Text="Favorites and dock placement are saved per user. Running apps are appended automatically." Foreground="{DynamicResource Muted}" FontSize="10" TextWrapping="Wrap" Margin="4,6,4,0"/>
     </Grid>
   </Border>
 </Window>
