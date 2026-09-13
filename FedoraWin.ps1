@@ -1283,7 +1283,7 @@ function New-ShowAppsDashButton {
     param($HostWindow,[string]$StyleName,[int]$IconSize=44)
     $button=New-Object System.Windows.Controls.Button
     $button.Style=$HostWindow.FindResource($StyleName); $button.ToolTip='Show Applications'
-    $grid=New-Object System.Windows.Controls.UniformGrid; $grid.Rows=3; $grid.Columns=3; $grid.Width=[Math]::Max(20,[int]($IconSize*0.52)); $grid.Height=$grid.Width
+    $grid=New-Object System.Windows.Controls.Primitives.UniformGrid; $grid.Rows=3; $grid.Columns=3; $grid.Width=[Math]::Max(20,[int]($IconSize*0.52)); $grid.Height=$grid.Width
     for($i=0;$i -lt 9;$i++){$dot=New-Object System.Windows.Shapes.Ellipse; $dot.Width=4; $dot.Height=4; $dot.Margin='1'; $dot.Fill=$HostWindow.Resources['Foreground']; [void]$grid.Children.Add($dot)}
     $button.Content=$grid
     $button.Add_Click({Show-Activities; $script:ActivitiesMode='apps'; $script:AppGridPage=0; $script:AppGridPopulated=$false; $script:ActivitiesWindow.FindName('SearchBox').Text=''; Populate-Apps})
