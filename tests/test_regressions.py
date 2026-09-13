@@ -127,3 +127,9 @@ def test_ci_visual_gate_runs_packaged_executable_and_rejects_taskbar():
     assert 'Assert-WindowsTaskbarHidden' in capture
     assert "launch_executable='FedoraWin.exe'" in capture
     assert 'Build FedoraWin executable package' in workflow
+
+
+def test_beta_dock_filters_unregistered_windows_and_exposes_settings():
+    assert "Dock Settings" in MAIN
+    assert "elseif($path){$record=New-DashRecord" not in MAIN
+    assert "PrimaryScreenHeight - [double]$config.panelHeight" in MAIN

@@ -1206,7 +1206,6 @@ function Get-RunningDashRecords {
             $catalogApp=$script:InstalledApps | Where-Object { $_.Name -match 'Windows Terminal' } | Select-Object -First 1
         }
         if($catalogApp){$record=ConvertTo-DashRecord -App $catalogApp -FavoriteKey ([string]$catalogApp.Name) -IsFavorite $false; $record.ProcessName=$processName}
-        elseif($path){$record=New-DashRecord -Name $processName -FavoriteKey $processName -Target $path -TargetPath $path -IconPath $path -ProcessName $processName -IsFavorite $false}
         else{continue}
         $record.IsRunning=$true
         $records += $record
@@ -1275,6 +1274,7 @@ function New-DashButton {
     $menu=New-Object System.Windows.Controls.ContextMenu
     $newItem=New-Object System.Windows.Controls.MenuItem; $newItem.Header='New Window'; $newItem.Tag=$App; $newItem.Add_Click({param($sender,$eventArgs); Invoke-DashApp -App $sender.Tag -NewWindow}); [void]$menu.Items.Add($newItem)
     $favoriteItem=New-Object System.Windows.Controls.MenuItem; $favoriteItem.Header=if($App.IsFavorite){'Remove from Favorites'}else{'Add to Favorites'}; $favoriteItem.Tag=$App; $favoriteItem.Add_Click({param($sender,$eventArgs); Set-DashFavorite -App $sender.Tag -Favorite (-not [bool]$sender.Tag.IsFavorite)}); [void]$menu.Items.Add($favoriteItem)
+    $dockSettingsItem=New-Object System.Windows.Controls.MenuItem; $dockSettingsItem.Header='Dock Settings'; $dockSettingsItem.Add_Click({Toggle-AppearancePopover}); [void]$menu.Items.Add($dockSettingsItem)
     $button.ContextMenu=$menu
     return $button
 }
@@ -1287,6 +1287,9 @@ function New-ShowAppsDashButton {
     for($i=0;$i -lt 9;$i++){$dot=New-Object System.Windows.Shapes.Ellipse; $dot.Width=4; $dot.Height=4; $dot.Margin='1'; $dot.Fill=$HostWindow.Resources['Foreground']; [void]$grid.Children.Add($dot)}
     $button.Content=$grid
     $button.Add_Click({Show-Activities; $script:ActivitiesMode='apps'; $script:AppGridPage=0; $script:AppGridPopulated=$false; $script:ActivitiesWindow.FindName('SearchBox').Text=''; Populate-Apps})
+    $menu=New-Object System.Windows.Controls.ContextMenu
+    $settingsItem=New-Object System.Windows.Controls.MenuItem; $settingsItem.Header='Dock Settings'; $settingsItem.Add_Click({Toggle-AppearancePopover}); [void]$menu.Items.Add($settingsItem)
+    $button.ContextMenu=$menu
     return $button
 }
 
@@ -1330,7 +1333,20 @@ function Render-DesktopDock {
 
 function Initialize-DesktopDock {
     if($script:DockMode -eq 'overview'){return}
-    if($null -eq $script:DockWindow){$script:DockWindow=Import-XamlWindow -Path (Join-Path $script:Root 'ui\Dock.xaml'); Apply-ThemeToWindow -Window $script:DockWindow; Render-DesktopDock}
+    if($null -eq $script:DockWindow){
+        $script:DockWindow=Import-XamlWindow -Path (Join-Path $script:Root 'ui\Dock.xaml')
+        Apply-ThemeToWindow -Window $script:DockWindow
+        $surface=$script:DockWindow.FindName('DockSurface')
+        if($surface){
+            $surfaceMenu=New-Object System.Windows.Controls.ContextMenu
+            $surfaceSettings=New-Object System.Windows.Controls.MenuItem
+            $surfaceSettings.Header='Dock Settings'
+            $surfaceSettings.Add_Click({Toggle-AppearancePopover})
+            [void]$surfaceMenu.Items.Add($surfaceSettings)
+            $surface.ContextMenu=$surfaceMenu
+        }
+        Render-DesktopDock
+    }
     if(-not ($script:ActivitiesWindow -and $script:ActivitiesWindow.IsVisible)){$script:DockWindow.Show(); $script:DockWindow.UpdateLayout(); Update-DesktopDockPosition}
 }
 
@@ -1386,11 +1402,18 @@ function Show-Activities {
     if ($null -eq $script:ActivitiesWindow) {
         $script:ActivitiesWindow = Import-XamlWindow -Path (Join-Path $script:Root 'ui\Activities.xaml')
         Apply-ThemeToWindow -Window $script:ActivitiesWindow
-        $workArea = [System.Windows.SystemParameters]::WorkArea
-        $script:ActivitiesWindow.Left = $workArea.Left
-        $script:ActivitiesWindow.Top = $workArea.Top
-        $script:ActivitiesWindow.Width = $workArea.Width
-        $script:ActivitiesWindow.Height = [Math]::Max(300, $workArea.Height)
+        if ($SafeMode) {
+            $workArea = [System.Windows.SystemParameters]::WorkArea
+            $script:ActivitiesWindow.Left = $workArea.Left
+            $script:ActivitiesWindow.Top = $workArea.Top
+            $script:ActivitiesWindow.Width = $workArea.Width
+            $script:ActivitiesWindow.Height = [Math]::Max(300, $workArea.Height)
+        } else {
+            $script:ActivitiesWindow.Left = 0
+            $script:ActivitiesWindow.Top = [double]$config.panelHeight
+            $script:ActivitiesWindow.Width = [System.Windows.SystemParameters]::PrimaryScreenWidth
+            $script:ActivitiesWindow.Height = [Math]::Max(300, [System.Windows.SystemParameters]::PrimaryScreenHeight - [double]$config.panelHeight)
+        }
         $card = $script:ActivitiesWindow.FindName('WorkspaceCard')
         $workspaceWidth = [Math]::Max(520, [Math]::Min(760, $script:ActivitiesWindow.Width - 220))
         $workspaceHeight = [Math]::Round($workspaceWidth * 9.0 / 16.0)
