@@ -24,6 +24,14 @@ $script:CalendarWindow = $null
 $script:QuickWindow = $null
 $script:AppearanceWindow = $null
 $script:PowerWindow = $null
+$script:DockWindow = $null
+$script:DockTimer = $null
+$script:DockSignature = ''
+$script:DockMode = 'both'
+$script:DockPosition = 'bottom'
+$script:DockTopmost = $true
+$script:DockIconSize = 48
+$script:DockFavorites = @()
 $script:TaskbarWasVisible = $true
 $script:OriginalWallpaper = $null
 $script:HotkeyRegistered = $false
@@ -154,6 +162,7 @@ public static class FedoraWinNative
 {
     public const int SW_HIDE = 0;
     public const int SW_SHOW = 5;
+    public const int SW_RESTORE = 9;
     public const int SPI_SETDESKWALLPAPER = 20;
     public const int SPI_GETWORKAREA = 48;
     public const int SPI_SETWORKAREA = 47;
@@ -207,6 +216,9 @@ public static class FedoraWinNative
 
     [DllImport("user32.dll")]
     public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll", SetLastError=true)]
     public static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
@@ -388,25 +400,54 @@ function Get-ResolvedThemeMode {
 function Load-FedoraWinSettings {
     $mode = [string]$config.theme
     $accent = [string]$config.accent
+    $dockMode = if ($config.dockMode) { [string]$config.dockMode } else { 'both' }
+    $dockPosition = if ($config.dockPosition) { [string]$config.dockPosition } else { 'bottom' }
+    $dockTopmost = if ($null -ne $config.dockTopmost) { [bool]$config.dockTopmost } else { $true }
+    $dockIconSize = if ($config.dockIconSize) { [int]$config.dockIconSize } else { 48 }
+    $dockFavorites = @($config.dockFavorites)
+
     if (Test-Path -LiteralPath $script:SettingsPath) {
         try {
             $saved = Get-Content -Raw -Encoding UTF8 -LiteralPath $script:SettingsPath | ConvertFrom-Json
             if ($saved.theme) { $mode = [string]$saved.theme }
             if ($saved.accent) { $accent = [string]$saved.accent }
-        } catch { Write-FedoraWinLog 'warn' ('Could not read appearance settings: ' + $_.Exception.Message) }
+            if ($saved.dockMode) { $dockMode = [string]$saved.dockMode }
+            if ($saved.dockPosition) { $dockPosition = [string]$saved.dockPosition }
+            if ($null -ne $saved.dockTopmost) { $dockTopmost = [bool]$saved.dockTopmost }
+            if ($saved.dockIconSize) { $dockIconSize = [int]$saved.dockIconSize }
+            if ($saved.dockFavorites) { $dockFavorites = @($saved.dockFavorites | ForEach-Object { [string]$_ }) }
+        } catch { Write-FedoraWinLog 'warn' ('Could not read FedoraWin settings: ' + $_.Exception.Message) }
     }
+
     if ($mode -notin @('light','dark','system')) { $mode = 'dark' }
     if (-not $script:AccentColors.Contains($accent)) { $accent = 'blue' }
+    if ($dockMode -notin @('overview','desktop','both')) { $dockMode = 'both' }
+    if ($dockPosition -notin @('bottom','left','right')) { $dockPosition = 'bottom' }
+    $dockIconSize = [Math]::Max(32,[Math]::Min(64,$dockIconSize))
+    if ($dockFavorites.Count -eq 0) { $dockFavorites = @('Files','Terminal','Browser','Visual Studio Code','Settings') }
+
     $script:ThemeMode = $mode
     $script:AccentName = $accent
     $script:AccentHex = [string]$script:AccentColors[$accent]
+    $script:DockMode = $dockMode
+    $script:DockPosition = $dockPosition
+    $script:DockTopmost = $dockTopmost
+    $script:DockIconSize = $dockIconSize
+    $script:DockFavorites = @($dockFavorites)
 }
 
 function Save-FedoraWinSettings {
     try {
-        [ordered]@{ theme = $script:ThemeMode; accent = $script:AccentName } |
-            ConvertTo-Json | Set-Content -LiteralPath $script:SettingsPath -Encoding UTF8
-    } catch { Write-FedoraWinLog 'warn' ('Could not save appearance settings: ' + $_.Exception.Message) }
+        [ordered]@{
+            theme = $script:ThemeMode
+            accent = $script:AccentName
+            dockMode = $script:DockMode
+            dockPosition = $script:DockPosition
+            dockTopmost = $script:DockTopmost
+            dockIconSize = $script:DockIconSize
+            dockFavorites = @($script:DockFavorites)
+        } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $script:SettingsPath -Encoding UTF8
+    } catch { Write-FedoraWinLog 'warn' ('Could not save FedoraWin settings: ' + $_.Exception.Message) }
 }
 
 function Set-ResourceBrush {
@@ -486,12 +527,26 @@ function Update-AppearanceControls {
                 $button = $script:AppearanceWindow.FindName($buttonName)
                 if ($button) { $button.Opacity = if ($name -eq $script:AccentName) { 1.0 } else { 0.52 } }
             }
+            foreach ($pair in @(@('DockOverviewButton','overview'),@('DockDesktopButton','desktop'),@('DockBothButton','both'))) {
+                $button = $script:AppearanceWindow.FindName($pair[0])
+                if ($button) {
+                    if ($script:DockMode -eq $pair[1]) { $button.Background = $script:AppearanceWindow.Resources['Accent']; $button.Foreground = $script:AppearanceWindow.Resources['AccentForeground'] }
+                    else { $button.ClearValue([System.Windows.Controls.Control]::BackgroundProperty); $button.ClearValue([System.Windows.Controls.Control]::ForegroundProperty) }
+                }
+            }
+            foreach ($pair in @(@('DockBottomButton','bottom'),@('DockLeftButton','left'),@('DockRightButton','right'))) {
+                $button = $script:AppearanceWindow.FindName($pair[0])
+                if ($button) {
+                    if ($script:DockPosition -eq $pair[1]) { $button.Background = $script:AppearanceWindow.Resources['Accent']; $button.Foreground = $script:AppearanceWindow.Resources['AccentForeground'] }
+                    else { $button.ClearValue([System.Windows.Controls.Control]::BackgroundProperty); $button.ClearValue([System.Windows.Controls.Control]::ForegroundProperty) }
+                }
+            }
         }
     } catch { Write-FedoraWinLog 'warn' ('Appearance indicator refresh failed: ' + $_.Exception.Message) }
 }
 
 function Apply-FedoraWinTheme {
-    foreach ($w in @($script:PanelWindow,$script:ActivitiesWindow,$script:CalendarWindow,$script:QuickWindow,$script:AppearanceWindow,$script:PowerWindow)) {
+    foreach ($w in @($script:PanelWindow,$script:ActivitiesWindow,$script:CalendarWindow,$script:QuickWindow,$script:AppearanceWindow,$script:PowerWindow,$script:DockWindow)) {
         Apply-ThemeToWindow -Window $w
     }
     Update-AppearanceControls
@@ -633,6 +688,14 @@ function Toggle-AppearancePopover {
         foreach ($accentButtonName in @('AccentBlueButton','AccentTealButton','AccentGreenButton','AccentYellowButton','AccentOrangeButton','AccentRedButton','AccentPinkButton','AccentPurpleButton','AccentSlateButton')) {
             $button = $script:AppearanceWindow.FindName($accentButtonName)
             if ($button) { $button.Add_Click({ param($sender,$eventArgs) Set-FedoraAccent -Name ([string]$sender.Tag) }) }
+        }
+        foreach ($dockButtonName in @('DockOverviewButton','DockDesktopButton','DockBothButton')) {
+            $button = $script:AppearanceWindow.FindName($dockButtonName)
+            if ($button) { $button.Add_Click({ param($sender,$eventArgs) Set-FedoraDockMode -Mode ([string]$sender.Tag) }) }
+        }
+        foreach ($dockButtonName in @('DockBottomButton','DockLeftButton','DockRightButton')) {
+            $button = $script:AppearanceWindow.FindName($dockButtonName)
+            if ($button) { $button.Add_Click({ param($sender,$eventArgs) Set-FedoraDockPosition -Position ([string]$sender.Tag) }) }
         }
         $script:AppearanceWindow.FindName('AppearanceCloseButton').Add_Click({ $script:AppearanceWindow.Hide() })
         $script:AppearanceWindow.Add_Deactivated({ if ($script:AppearanceWindow.IsVisible) { $script:AppearanceWindow.Hide() } })
@@ -1060,72 +1123,254 @@ function Populate-Apps {
     }
 }
 
-function Add-DashApp {
-    param([string]$Name, [string]$Target, [string]$IconPath)
-    if ($null -eq $script:ActivitiesWindow) { return }
-    $panel = $script:ActivitiesWindow.FindName('DashPanel')
-    $showApps = $script:ActivitiesWindow.FindName('ShowAppsButton')
-    $button = New-Object System.Windows.Controls.Button
-    $button.Style = $script:ActivitiesWindow.FindResource('DashButtonStyle')
-    $button.ToolTip = $Name
-    $button.Tag = $Target
-    $source = Get-AppIconSource -ExecutablePath $IconPath -Size 40
-    if ($source) {
-        $image = New-Object System.Windows.Controls.Image
-        $image.Width = 40
-        $image.Height = 40
-        $image.Source = $source
-        $button.Content = $image
-    } else {
-        $text = New-Object System.Windows.Controls.TextBlock
-        $text.Text = $Name.Substring(0,1).ToUpperInvariant()
-        $text.Foreground = $script:ActivitiesWindow.Resources['Foreground']
-        $text.FontSize = 18
-        $text.FontWeight = 'SemiBold'
-        $button.Content = $text
+function Get-DashProcessName {
+    param($App)
+    if ($null -eq $App) { return $null }
+    if ($App.PSObject.Properties['ProcessName'] -and $App.ProcessName) { return [string]$App.ProcessName }
+    $name = [string]$App.Name
+    if ($name -match 'Windows Terminal|^Terminal$') { return 'WindowsTerminal' }
+    if ($name -match 'Visual Studio Code') { return 'Code' }
+    if ($name -match 'Settings') { return 'SystemSettings' }
+    if ($name -match 'File Explorer|^Files$') { return 'explorer' }
+    $path = if ($App.PSObject.Properties['TargetPath']) { [string]$App.TargetPath } else { $null }
+    if (-not $path -and $App.PSObject.Properties['Target']) { $path = [string]$App.Target }
+    if ($path -and $path.EndsWith('.exe',[StringComparison]::OrdinalIgnoreCase)) { return [IO.Path]::GetFileNameWithoutExtension($path) }
+    return $null
+}
+
+function New-DashRecord {
+    param([string]$Name,[string]$FavoriteKey,[string]$Target,[string]$TargetPath,[string]$AppId,[string]$Arguments,[string]$IconPath,[string]$ProcessName,[bool]$IsFavorite=$false)
+    [pscustomobject]@{ Name=$Name; FavoriteKey=if($FavoriteKey){$FavoriteKey}else{$Name}; Target=$Target; TargetPath=$TargetPath; AppId=$AppId; Arguments=$Arguments; IconPath=$IconPath; ProcessName=$ProcessName; IsFavorite=$IsFavorite; IsRunning=$false }
+}
+
+function ConvertTo-DashRecord {
+    param($App,[string]$FavoriteKey,[bool]$IsFavorite=$false)
+    if ($null -eq $App) { return $null }
+    $target = if ($App.AppId) { 'shell:AppsFolder\' + [string]$App.AppId } else { [string]$App.TargetPath }
+    return New-DashRecord -Name ([string]$App.Name) -FavoriteKey $FavoriteKey -Target $target -TargetPath ([string]$App.TargetPath) -AppId ([string]$App.AppId) -Arguments ([string]$App.Arguments) -IconPath ([string]$App.TargetPath) -ProcessName (Get-DashProcessName -App $App) -IsFavorite $IsFavorite
+}
+
+function Resolve-DashFavorite {
+    param([string]$Key)
+    if ($Key -eq 'Files') {
+        $path=Join-Path $env:WINDIR 'explorer.exe'
+        return New-DashRecord -Name 'Files' -FavoriteKey 'Files' -Target $path -TargetPath $path -IconPath $path -ProcessName 'explorer' -IsFavorite $true
     }
-    $button.Add_Click({ param($sender,$eventArgs) Start-Target -Target ([string]$sender.Tag); Hide-Activities })
-    $panel.Children.Insert([Math]::Max(0,$panel.Children.Count - 2), $button)
+    if ($Key -eq 'Terminal') {
+        $app=Search-FedoraWinApps -Apps $script:InstalledApps -Query 'terminal' -Limit 8 | Where-Object { $_.Name -match 'Windows Terminal|Terminal|PowerShell' } | Select-Object -First 1
+        if ($app) { return ConvertTo-DashRecord -App $app -FavoriteKey 'Terminal' -IsFavorite $true }
+        $cmd=Get-Command 'powershell.exe' -ErrorAction SilentlyContinue
+        if ($cmd) { return New-DashRecord -Name 'Terminal' -FavoriteKey 'Terminal' -Target $cmd.Source -TargetPath $cmd.Source -IconPath $cmd.Source -ProcessName 'powershell' -IsFavorite $true }
+        return $null
+    }
+    if ($Key -eq 'Browser') {
+        $app=$script:InstalledApps | Where-Object { $_.Name -match '^(Google Chrome|Microsoft Edge|Opera|Firefox)' } | Select-Object -First 1
+        if ($app) { return ConvertTo-DashRecord -App $app -FavoriteKey 'Browser' -IsFavorite $true }
+        return $null
+    }
+    if ($Key -eq 'Settings') {
+        $icon=Join-Path $env:WINDIR 'ImmersiveControlPanel\SystemSettings.exe'
+        return New-DashRecord -Name 'Settings' -FavoriteKey 'Settings' -Target 'ms-settings:' -IconPath $icon -ProcessName 'SystemSettings' -IsFavorite $true
+    }
+    $app=$script:InstalledApps | Where-Object { $_.Name -eq $Key } | Select-Object -First 1
+    if (-not $app) { $app=Search-FedoraWinApps -Apps $script:InstalledApps -Query $Key -Limit 1 | Select-Object -First 1 }
+    if ($app) { return ConvertTo-DashRecord -App $app -FavoriteKey $Key -IsFavorite $true }
+    return $null
+}
+
+function Test-DashAppRunning {
+    param($App)
+    $processName=Get-DashProcessName -App $App
+    if (-not $processName) { return $false }
+    try { return $null -ne (Get-Process -Name $processName -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1) } catch { return $false }
+}
+
+function Get-RunningDashRecords {
+    param([string[]]$SkipProcessNames)
+    $skip=@{}
+    foreach($name in @($SkipProcessNames)){if($name){$skip[$name.ToLowerInvariant()]=$true}}
+    $ignored=@('ShellExperienceHost','StartMenuExperienceHost','SearchHost','TextInputHost','ApplicationFrameHost','dwm')
+    $records=New-Object System.Collections.Generic.List[object]
+    foreach($process in @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero })){
+        $processName=[string]$process.ProcessName
+        if(-not $processName -or $ignored -contains $processName){continue}
+        if($skip.ContainsKey($processName.ToLowerInvariant())){continue}
+        $path=$null
+        try{$path=[string]$process.Path}catch{}
+        $catalogApp=$null
+        if($path){$catalogApp=$script:InstalledApps | Where-Object { $_.TargetPath -and ([IO.Path]::GetFileNameWithoutExtension([string]$_.TargetPath) -ieq $processName) } | Select-Object -First 1}
+        if(-not $catalogApp -and $processName -eq 'WindowsTerminal'){$catalogApp=$script:InstalledApps | Where-Object { $_.Name -match 'Windows Terminal' } | Select-Object -First 1}
+        if($catalogApp){$record=ConvertTo-DashRecord -App $catalogApp -FavoriteKey ([string]$catalogApp.Name) -IsFavorite $false; $record.ProcessName=$processName}
+        elseif($path){$record=New-DashRecord -Name $processName -FavoriteKey $processName -Target $path -TargetPath $path -IconPath $path -ProcessName $processName -IsFavorite $false}
+        else{continue}
+        $record.IsRunning=$true
+        [void]$records.Add($record)
+        $skip[$processName.ToLowerInvariant()]=$true
+    }
+    return @($records | Sort-Object Name)
+}
+
+function Get-FedoraDashItems {
+    $items=New-Object System.Collections.Generic.List[object]
+    $processNames=New-Object System.Collections.Generic.List[string]
+    foreach($key in @($script:DockFavorites)){
+        $record=Resolve-DashFavorite -Key ([string]$key)
+        if(-not $record){continue}
+        $record.IsRunning=Test-DashAppRunning -App $record
+        [void]$items.Add($record)
+        if($record.ProcessName){[void]$processNames.Add([string]$record.ProcessName)}
+    }
+    foreach($record in @(Get-RunningDashRecords -SkipProcessNames @($processNames))){[void]$items.Add($record)}
+    return @($items)
+}
+
+function Invoke-DashApp {
+    param($App,[switch]$NewWindow)
+    if($null -eq $App){return}
+    if(-not $NewWindow){
+        $processName=Get-DashProcessName -App $App
+        if($processName){
+            try{
+                $running=Get-Process -Name $processName -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Sort-Object StartTime -Descending | Select-Object -First 1
+                if($running){[void][FedoraWinNative]::ShowWindow($running.MainWindowHandle,[FedoraWinNative]::SW_RESTORE); [void][FedoraWinNative]::SetForegroundWindow($running.MainWindowHandle); return}
+            }catch{}
+        }
+    }
+    if($App.AppId -or $App.TargetPath){try{Start-FedoraWinApp -App $App; return}catch{}}
+    if($App.Target){Start-Target -Target ([string]$App.Target)}
+}
+
+function Set-DashFavorite {
+    param($App,[bool]$Favorite)
+    if($null -eq $App){return}
+    $key=if($App.FavoriteKey){[string]$App.FavoriteKey}else{[string]$App.Name}
+    $current=New-Object System.Collections.Generic.List[string]
+    foreach($item in @($script:DockFavorites)){if(-not [string]::Equals([string]$item,$key,[StringComparison]::OrdinalIgnoreCase)){[void]$current.Add([string]$item)}}
+    if($Favorite){[void]$current.Add($key)}
+    $script:DockFavorites=@($current)
+    Save-FedoraWinSettings
+    Refresh-Docks -Force
+}
+
+function New-DashButton {
+    param($App,$HostWindow,[string]$StyleName,[int]$IconSize=44)
+    $button=New-Object System.Windows.Controls.Button
+    $button.Style=$HostWindow.FindResource($StyleName)
+    $button.ToolTip=[string]$App.Name
+    $button.Tag=$App
+    $grid=New-Object System.Windows.Controls.Grid
+    $grid.Width=$IconSize+8; $grid.Height=$IconSize+8
+    $source=Get-AppIconSource -ExecutablePath ([string]$App.IconPath) -Size $IconSize
+    if($source){$image=New-Object System.Windows.Controls.Image; $image.Width=$IconSize; $image.Height=$IconSize; $image.HorizontalAlignment='Center'; $image.VerticalAlignment='Top'; $image.Source=$source; [void]$grid.Children.Add($image)}
+    else{$fallback=New-Object System.Windows.Controls.Border; $fallback.Width=$IconSize; $fallback.Height=$IconSize; $fallback.CornerRadius=[Math]::Max(9,[int]($IconSize/4)); $fallback.Background=$HostWindow.Resources['CardBg']; $letter=New-Object System.Windows.Controls.TextBlock; $letter.Text=if($App.Name){([string]$App.Name).Substring(0,1).ToUpperInvariant()}else{'?'}; $letter.Foreground=$HostWindow.Resources['Foreground']; $letter.FontSize=[Math]::Max(16,[int]($IconSize/2.2)); $letter.FontWeight='SemiBold'; $letter.HorizontalAlignment='Center'; $letter.VerticalAlignment='Center'; $fallback.Child=$letter; [void]$grid.Children.Add($fallback)}
+    if([bool]$App.IsRunning){$dot=New-Object System.Windows.Shapes.Ellipse; $dot.Width=5; $dot.Height=5; $dot.Fill=$HostWindow.Resources['Foreground']; $dot.HorizontalAlignment='Center'; $dot.VerticalAlignment='Bottom'; [void]$grid.Children.Add($dot)}
+    $button.Content=$grid
+    $button.Add_Click({param($sender,$eventArgs); $newWindow=([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control) -ne 0; Invoke-DashApp -App $sender.Tag -NewWindow:$newWindow; if($script:ActivitiesWindow -and $script:ActivitiesWindow.IsVisible){Hide-Activities}})
+    $menu=New-Object System.Windows.Controls.ContextMenu
+    $newItem=New-Object System.Windows.Controls.MenuItem; $newItem.Header='New Window'; $newItem.Tag=$App; $newItem.Add_Click({param($sender,$eventArgs); Invoke-DashApp -App $sender.Tag -NewWindow}); [void]$menu.Items.Add($newItem)
+    $favoriteItem=New-Object System.Windows.Controls.MenuItem; $favoriteItem.Header=if($App.IsFavorite){'Remove from Favorites'}else{'Add to Favorites'}; $favoriteItem.Tag=$App; $favoriteItem.Add_Click({param($sender,$eventArgs); Set-DashFavorite -App $sender.Tag -Favorite (-not [bool]$sender.Tag.IsFavorite)}); [void]$menu.Items.Add($favoriteItem)
+    $button.ContextMenu=$menu
+    return $button
+}
+
+function New-ShowAppsDashButton {
+    param($HostWindow,[string]$StyleName,[int]$IconSize=44)
+    $button=New-Object System.Windows.Controls.Button
+    $button.Style=$HostWindow.FindResource($StyleName); $button.ToolTip='Show Applications'
+    $grid=New-Object System.Windows.Controls.UniformGrid; $grid.Rows=3; $grid.Columns=3; $grid.Width=[Math]::Max(20,[int]($IconSize*0.52)); $grid.Height=$grid.Width
+    for($i=0;$i -lt 9;$i++){$dot=New-Object System.Windows.Shapes.Ellipse; $dot.Width=4; $dot.Height=4; $dot.Margin='1'; $dot.Fill=$HostWindow.Resources['Foreground']; [void]$grid.Children.Add($dot)}
+    $button.Content=$grid
+    $button.Add_Click({Show-Activities; $script:ActivitiesMode='apps'; $script:AppGridPage=0; $script:AppGridPopulated=$false; $script:ActivitiesWindow.FindName('SearchBox').Text=''; Populate-Apps})
+    return $button
+}
+
+function Render-OverviewDash {
+    if($null -eq $script:ActivitiesWindow){return}
+    $panel=$script:ActivitiesWindow.FindName('DashPanel'); if(-not $panel){return}
+    $showApps=$script:ActivitiesWindow.FindName('ShowAppsButton')
+    $panel.Children.Clear()
+    foreach($app in @(Get-FedoraDashItems)){[void]$panel.Children.Add((New-DashButton -App $app -HostWindow $script:ActivitiesWindow -StyleName 'DashButtonStyle' -IconSize 42))}
+    [void]$panel.Children.Add($showApps)
+    $border=$script:ActivitiesWindow.FindName('OverviewDashBorder'); if($border){$border.Visibility=if($script:DockMode -eq 'desktop'){'Collapsed'}else{'Visible'}}
+}
+
+function Update-DesktopDockPosition {
+    if($null -eq $script:DockWindow){return}
+    $screen=[System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $panel=$script:DockWindow.FindName('DesktopDockPanel')
+    $vertical=$script:DockPosition -in @('left','right')
+    $panel.Orientation=if($vertical){'Vertical'}else{'Horizontal'}
+    $script:DockWindow.UpdateLayout()
+    $width=[Math]::Max(1,$script:DockWindow.ActualWidth); $height=[Math]::Max(1,$script:DockWindow.ActualHeight)
+    if($script:DockPosition -eq 'left'){$script:DockWindow.Left=$screen.Left+12; $script:DockWindow.Top=$screen.Top+(($screen.Height-$height)/2)}
+    elseif($script:DockPosition -eq 'right'){$script:DockWindow.Left=$screen.Right-$width-12; $script:DockWindow.Top=$screen.Top+(($screen.Height-$height)/2)}
+    else{$script:DockWindow.Left=$screen.Left+(($screen.Width-$width)/2); $script:DockWindow.Top=$screen.Bottom-$height-12}
+}
+
+function Render-DesktopDock {
+    if($null -eq $script:DockWindow){return}
+    $panel=$script:DockWindow.FindName('DesktopDockPanel'); if(-not $panel){return}
+    $items=@(Get-FedoraDashItems)
+    $screen=[System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $available=if($script:DockPosition -in @('left','right')){$screen.Height-80}else{$screen.Width-80}
+    $count=[Math]::Max(1,$items.Count+1)
+    $iconSize=[Math]::Max(32,[Math]::Min($script:DockIconSize,[int](($available/$count)-12)))
+    $panel.Children.Clear()
+    foreach($app in $items){[void]$panel.Children.Add((New-DashButton -App $app -HostWindow $script:DockWindow -StyleName 'DockButtonStyle' -IconSize $iconSize))}
+    [void]$panel.Children.Add((New-ShowAppsDashButton -HostWindow $script:DockWindow -StyleName 'DockButtonStyle' -IconSize $iconSize))
+    $script:DockWindow.Topmost=$script:DockTopmost
+    Update-DesktopDockPosition
+}
+
+function Initialize-DesktopDock {
+    if($script:DockMode -eq 'overview'){return}
+    if(-not $script:InstalledAppsLoaded){$script:InstalledApps=Get-StartMenuApps; $script:InstalledAppsLoaded=$true}
+    if($null -eq $script:DockWindow){$script:DockWindow=Import-XamlWindow -Path (Join-Path $script:Root 'ui\Dock.xaml'); Apply-ThemeToWindow -Window $script:DockWindow; Render-DesktopDock}
+    if(-not ($script:ActivitiesWindow -and $script:ActivitiesWindow.IsVisible)){$script:DockWindow.Show(); $script:DockWindow.UpdateLayout(); Update-DesktopDockPosition}
+}
+
+function Update-DockModeVisibility {
+    if($script:ActivitiesWindow){$border=$script:ActivitiesWindow.FindName('OverviewDashBorder'); if($border){$border.Visibility=if($script:DockMode -eq 'desktop'){'Collapsed'}else{'Visible'}}}
+    if($script:DockMode -eq 'overview'){if($script:DockWindow){$script:DockWindow.Hide()}}
+    else{Initialize-DesktopDock; if($script:ActivitiesWindow -and $script:ActivitiesWindow.IsVisible){$script:DockWindow.Hide()}elseif($script:DockWindow){$script:DockWindow.Show(); Update-DesktopDockPosition}}
+}
+
+function Refresh-Docks {
+    param([switch]$Force)
+    if(-not $script:InstalledAppsLoaded){return}
+    $items=@(Get-FedoraDashItems)
+    $signature=(($items | ForEach-Object { '{0}:{1}:{2}' -f $_.FavoriteKey,$_.ProcessName,$_.IsRunning }) -join '|')+'|'+$script:DockMode+'|'+$script:DockPosition+'|'+$script:ThemeMode+'|'+$script:AccentName
+    if(-not $Force -and $signature -eq $script:DockSignature){return}
+    $script:DockSignature=$signature
+    if($script:ActivitiesWindow){Render-OverviewDash}
+    if($script:DockWindow){Render-DesktopDock}
 }
 
 function Build-Dash {
-    if ($null -eq $script:ActivitiesWindow) { return }
-    $panel = $script:ActivitiesWindow.FindName('DashPanel')
-    if ($panel.Tag -eq 'built') { return }
-    $panel.Tag = 'built'
+    if($null -eq $script:ActivitiesWindow){return}
+    Render-OverviewDash
+    Update-DockModeVisibility
+}
 
-    Add-DashApp -Name 'Files' -Target 'explorer.exe' -IconPath (Join-Path $env:WINDIR 'explorer.exe')
+function Set-FedoraDockMode {
+    param([string]$Mode)
+    if($Mode -notin @('overview','desktop','both')){return}
+    $script:DockMode=$Mode; Save-FedoraWinSettings; Update-DockModeVisibility; Refresh-Docks -Force; Update-AppearanceControls
+}
 
-    $terminal = Get-Command 'wt.exe' -ErrorAction SilentlyContinue
-    if ($terminal) {
-        Add-DashApp -Name 'Terminal' -Target 'wt.exe' -IconPath $terminal.Source
-    } else {
-        Add-DashApp -Name 'Terminal' -Target 'powershell.exe' -IconPath (Join-Path $PSHOME 'powershell.exe')
-    }
-
-    $browser = $script:InstalledApps | Where-Object { $_.Name -match '^(Google Chrome|Microsoft Edge|Opera|Firefox)' } | Select-Object -First 1
-    if ($browser) {
-        $browserTarget = if ($browser.AppId) { 'shell:AppsFolder\' + $browser.AppId } else { $browser.TargetPath }
-        Add-DashApp -Name $browser.Name -Target $browserTarget -IconPath $browser.TargetPath
-    }
-
-    $code = $script:InstalledApps | Where-Object { $_.Name -match '^Visual Studio Code' } | Select-Object -First 1
-    if ($code) {
-        $codeTarget = if ($code.AppId) { 'shell:AppsFolder\' + $code.AppId } else { $code.TargetPath }
-        Add-DashApp -Name 'Visual Studio Code' -Target $codeTarget -IconPath $code.TargetPath
-    }
-
-    $settingsExe = Join-Path $env:WINDIR 'ImmersiveControlPanel\SystemSettings.exe'
-    Add-DashApp -Name 'Settings' -Target 'ms-settings:' -IconPath $settingsExe
+function Set-FedoraDockPosition {
+    param([string]$Position)
+    if($Position -notin @('bottom','left','right')){return}
+    $script:DockPosition=$Position; Save-FedoraWinSettings; if($script:DockWindow){Render-DesktopDock}; Update-AppearanceControls
 }
 
 function Hide-Activities {
-    if ($null -ne $script:ActivitiesWindow) {
-        $script:ActivitiesWindow.Hide()
-    }
+    if ($null -ne $script:ActivitiesWindow) { $script:ActivitiesWindow.Hide() }
+    if ($script:DockMode -ne 'overview' -and $script:DockWindow) { $script:DockWindow.Show(); Update-DesktopDockPosition }
 }
 
 function Show-Activities {
+    if ($script:DockWindow) { $script:DockWindow.Hide() }
     if (-not $script:InstalledAppsLoaded) {
         Write-FedoraWinLog 'info' 'Discovering launcher applications.'
         $script:InstalledApps = Get-StartMenuApps
@@ -1412,6 +1657,7 @@ function Stop-FedoraWin {
         try { [FedoraWinNative]::UnregisterHotKey($script:PanelHandle, $script:HotkeyId) | Out-Null } catch { }
     }
 
+    if ($script:DockTimer) { try { $script:DockTimer.Stop() } catch { }; $script:DockTimer = $null }
     if ($script:FrameTimer) { try { $script:FrameTimer.Stop() } catch { }; $script:FrameTimer = $null }
     if ($script:FrameManager) { try { $script:FrameManager.Dispose() } catch { }; $script:FrameManager = $null }
     if ($script:AppBarRegistered -and $script:PanelHandle -ne [IntPtr]::Zero) {
@@ -1434,6 +1680,7 @@ function Stop-FedoraWin {
     if ($null -ne $script:QuickWindow) { try { $script:QuickWindow.Close() } catch { } }
     if ($null -ne $script:AppearanceWindow) { try { $script:AppearanceWindow.Close() } catch { } }
     if ($null -ne $script:PowerWindow) { try { $script:PowerWindow.Close() } catch { } }
+    if ($null -ne $script:DockWindow) { try { $script:DockWindow.Close() } catch { }; $script:DockWindow = $null }
     if ($null -ne $script:PanelWindow) { try { $script:PanelWindow.Close() } catch { } }
 
     if ($script:Mutex) {
@@ -1508,6 +1755,12 @@ $clockTimer.Add_Tick({
 })
 $clockTimer.Start()
 $clockButton.Content = (Get-Date).ToString('ddd HH:mm')
+
+if ($script:DockMode -ne 'overview') { Initialize-DesktopDock }
+$script:DockTimer = New-Object System.Windows.Threading.DispatcherTimer
+$script:DockTimer.Interval = [TimeSpan]::FromSeconds(2)
+$script:DockTimer.Add_Tick({ try { Refresh-Docks } catch { Write-FedoraWinLog 'warn' ('Dock refresh failed: ' + $_.Exception.Message) } })
+$script:DockTimer.Start()
 
 $script:TrayIcon = $null
 if ([bool]$config.showTrayIcon) {
