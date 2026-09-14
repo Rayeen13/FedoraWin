@@ -58,7 +58,10 @@ impl AppearanceState {
 
 impl Default for AppearanceState {
     fn default() -> Self {
-        Self { theme: ThemeMode::Dark, accent: Accent::Blue }
+        Self {
+            theme: ThemeMode::Dark,
+            accent: Accent::Blue,
+        }
     }
 }
 
@@ -96,24 +99,53 @@ impl ShellState {
         Ok(())
     }
 
-    fn flip_activities(&self) -> bool {
-        let previous = self.activities_open.fetch_xor(true, Ordering::SeqCst);
-        !previous
+    fn set_activities_open(&self, open: bool) {
+        self.activities_open.store(open, Ordering::SeqCst);
     }
 }
 
-pub fn toggle_activities(app: &tauri::AppHandle) -> Result<(), String> {
+fn hide_popovers(app: &tauri::AppHandle) {
+    for label in ["date-menu", "quick-settings"] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.hide();
+        }
+    }
+}
+
+pub fn hide_activities(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<std::sync::Arc<ShellState>>();
-    let open = state.flip_activities();
     let window = app
         .get_webview_window("activities")
         .ok_or_else(|| "activities window is unavailable".to_string())?;
 
-    if open {
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-    } else {
+    if window.is_visible().map_err(|e| e.to_string())? {
         window.hide().map_err(|e| e.to_string())?;
     }
+    state.set_activities_open(false);
+    Ok(())
+}
+
+pub fn toggle_activities(app: &tauri::AppHandle) -> Result<(), String> {
+    let state = app.state::<std::sync::Arc<ShellState>>();
+    let window = app
+        .get_webview_window("activities")
+        .ok_or_else(|| "activities window is unavailable".to_string())?;
+    let currently_visible = window.is_visible().map_err(|e| e.to_string())?;
+
+    if currently_visible {
+        window.hide().map_err(|e| e.to_string())?;
+        state.set_activities_open(false);
+        return Ok(());
+    }
+
+    hide_popovers(app);
+    window.show().map_err(|e| e.to_string())?;
+    if let Err(error) = window.set_focus() {
+        let _ = window.hide();
+        state.set_activities_open(false);
+        return Err(error.to_string());
+    }
+
+    state.set_activities_open(true);
     Ok(())
 }
