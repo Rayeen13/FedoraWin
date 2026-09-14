@@ -43,6 +43,7 @@ fn toggle_surface(app: tauri::AppHandle, label: String) -> Result<(), String> {
     if visible {
         window.hide().map_err(|e| e.to_string())?;
     } else {
+        shell::hide_activities(&app)?;
         for other in ["date-menu", "quick-settings"] {
             if other != label {
                 if let Some(w) = app.get_webview_window(other) {
@@ -51,7 +52,10 @@ fn toggle_surface(app: tauri::AppHandle, label: String) -> Result<(), String> {
             }
         }
         window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
+        if let Err(error) = window.set_focus() {
+            let _ = window.hide();
+            return Err(error.to_string());
+        }
     }
     Ok(())
 }
@@ -136,10 +140,42 @@ fn main() {
             let logical_width = size.width as f64 / scale;
             let logical_height = size.height as f64 / scale;
 
-            build_window(app, "panel", "panel", logical_width, PANEL_HEIGHT, true, LogicalPosition::new(0.0, 0.0))?;
-            build_window(app, "activities", "activities", logical_width, logical_height - PANEL_HEIGHT, false, LogicalPosition::new(0.0, PANEL_HEIGHT))?;
-            build_window(app, "date-menu", "date-menu", 760.0, 540.0, false, LogicalPosition::new(((logical_width - 760.0) / 2.0).max(0.0), PANEL_HEIGHT))?;
-            build_window(app, "quick-settings", "quick-settings", 408.0, 510.0, false, LogicalPosition::new((logical_width - 416.0).max(0.0), PANEL_HEIGHT))?;
+            build_window(
+                app,
+                "panel",
+                "panel",
+                logical_width,
+                PANEL_HEIGHT,
+                true,
+                LogicalPosition::new(0.0, 0.0),
+            )?;
+            build_window(
+                app,
+                "activities",
+                "activities",
+                logical_width,
+                logical_height - PANEL_HEIGHT,
+                false,
+                LogicalPosition::new(0.0, PANEL_HEIGHT),
+            )?;
+            build_window(
+                app,
+                "date-menu",
+                "date-menu",
+                760.0,
+                540.0,
+                false,
+                LogicalPosition::new(((logical_width - 760.0) / 2.0).max(0.0), PANEL_HEIGHT),
+            )?;
+            build_window(
+                app,
+                "quick-settings",
+                "quick-settings",
+                408.0,
+                510.0,
+                false,
+                LogicalPosition::new((logical_width - 416.0).max(0.0), PANEL_HEIGHT),
+            )?;
 
             #[cfg(windows)]
             {
