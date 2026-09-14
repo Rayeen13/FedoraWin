@@ -20,6 +20,9 @@ jobs:
           node-version: 22
       - name: UI contract tests
         run: node --test tests/ui_contract.test.mjs
+      - name: Rust unit tests
+        working-directory: src-tauri
+        run: cargo test
       - name: Rust compile check
         working-directory: src-tauri
         run: cargo check
