@@ -1,13 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod layout;
 mod shell;
 mod windows;
 
 use shell::{AppearanceState, ShellState};
 use std::sync::Arc;
-use tauri::{Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
-
-const PANEL_HEIGHT: f64 = 32.0;
+#[cfg(windows)]
+use std::{thread, time::Duration};
+use tauri::{
+    LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder,
+};
 
 #[tauri::command]
 fn get_shell_state(state: tauri::State<'_, Arc<ShellState>>) -> shell::ShellSnapshot {
@@ -96,18 +99,12 @@ fn refresh_window_frames(state: tauri::State<'_, Arc<ShellState>>) -> Result<usi
         .map_err(|e| e.to_string())
 }
 
-fn fit_surface(preferred: f64, available: f64, margin: f64) -> f64 {
-    preferred.min((available - margin * 2.0).max(1.0))
-}
-
 fn build_window(
     app: &tauri::App,
     label: &str,
     view: &str,
-    width: f64,
-    height: f64,
+    geometry: layout::SurfaceGeometry,
     visible: bool,
-    position: PhysicalPosition<i32>,
 ) -> tauri::Result<()> {
     let url = WebviewUrl::App(format!("index.html?view={view}").into());
     let window = WebviewWindowBuilder::new(app, label, url)
@@ -117,10 +114,83 @@ fn build_window(
         .skip_taskbar(true)
         .always_on_top(true)
         .visible(visible)
-        .inner_size(width, height)
+        .inner_size(geometry.width, geometry.height)
         .build()?;
-    window.set_position(position)?;
+    window.set_position(PhysicalPosition::new(geometry.x, geometry.y))?;
     Ok(())
+}
+
+fn apply_surface_geometry(
+    window: &tauri::WebviewWindow,
+    geometry: layout::SurfaceGeometry,
+) -> Result<(), String> {
+    window
+        .set_size(LogicalSize::new(geometry.width, geometry.height))
+        .map_err(|error| error.to_string())?;
+    window
+        .set_position(PhysicalPosition::new(geometry.x, geometry.y))
+        .map_err(|error| error.to_string())
+}
+
+fn relayout_shell_surfaces(app: &tauri::AppHandle) -> Result<(), String> {
+    let display = windows::display::primary()?;
+    let shell_layout = layout::for_display(&display);
+
+    #[cfg(windows)]
+    let panel_hwnd = app
+        .get_webview_window("panel")
+        .and_then(|panel| panel.hwnd().ok())
+        .map(|hwnd| hwnd.0 as isize);
+
+    #[cfg(windows)]
+    if let Some(hwnd) = panel_hwnd {
+        windows::appbar::release(hwnd);
+    }
+
+    for (label, geometry) in [
+        ("panel", shell_layout.panel),
+        ("activities", shell_layout.activities),
+        ("date-menu", shell_layout.date_menu),
+        ("quick-settings", shell_layout.quick_settings),
+    ] {
+        let window = app
+            .get_webview_window(label)
+            .ok_or_else(|| format!("{label} window is unavailable"))?;
+        apply_surface_geometry(&window, geometry)?;
+    }
+
+    #[cfg(windows)]
+    if let Some(hwnd) = panel_hwnd {
+        windows::appbar::reserve_top(hwnd)?;
+    }
+
+    Ok(())
+}
+
+#[cfg(windows)]
+fn start_display_topology_watcher(app: tauri::AppHandle) {
+    thread::spawn(move || {
+        let mut last = windows::display::topology_signature().ok();
+
+        loop {
+            thread::sleep(Duration::from_millis(900));
+
+            let next = match windows::display::topology_signature() {
+                Ok(signature) => signature,
+                Err(_) => continue,
+            };
+
+            if last.as_ref() == Some(&next) {
+                continue;
+            }
+
+            // Give Windows a short settle window so a dock/undock or orientation
+            // change can publish its complete monitor topology before we reflow.
+            thread::sleep(Duration::from_millis(180));
+            let _ = relayout_shell_surfaces(&app);
+            last = windows::display::topology_signature().ok().or(Some(next));
+        }
+    });
 }
 
 fn main() {
@@ -143,60 +213,29 @@ fn main() {
         ])
         .setup(move |app| {
             let display = windows::display::primary().map_err(std::io::Error::other)?;
-            let logical_width = display.logical_width();
-            let logical_height = display.logical_height();
-            let shell_height = (logical_height - PANEL_HEIGHT).max(1.0);
-            let panel_height_px = display.logical_to_physical(PANEL_HEIGHT);
-            let shell_top = display.bounds.top + panel_height_px;
+            let shell_layout = layout::for_display(&display);
 
-            let date_width = fit_surface(760.0, logical_width, 12.0);
-            let date_height = fit_surface(540.0, shell_height, 12.0);
-            let date_width_px = display.logical_to_physical(date_width);
-            let date_x =
-                display.bounds.left + ((display.bounds.width() - date_width_px) / 2).max(0);
-
-            let quick_width = fit_surface(408.0, logical_width, 8.0);
-            let quick_height = fit_surface(510.0, shell_height, 8.0);
-            let quick_width_px = display.logical_to_physical(quick_width);
-            let quick_margin_px = display.logical_to_physical(8.0);
-            let quick_x = display.bounds.left
-                + (display.bounds.width() - quick_width_px - quick_margin_px).max(0);
-
-            build_window(
-                app,
-                "panel",
-                "panel",
-                logical_width,
-                PANEL_HEIGHT,
-                true,
-                PhysicalPosition::new(display.bounds.left, display.bounds.top),
-            )?;
+            build_window(app, "panel", "panel", shell_layout.panel, true)?;
             build_window(
                 app,
                 "activities",
                 "activities",
-                logical_width,
-                shell_height,
+                shell_layout.activities,
                 false,
-                PhysicalPosition::new(display.bounds.left, shell_top),
             )?;
             build_window(
                 app,
                 "date-menu",
                 "date-menu",
-                date_width,
-                date_height,
+                shell_layout.date_menu,
                 false,
-                PhysicalPosition::new(date_x, shell_top),
             )?;
             build_window(
                 app,
                 "quick-settings",
                 "quick-settings",
-                quick_width,
-                quick_height,
+                shell_layout.quick_settings,
                 false,
-                PhysicalPosition::new(quick_x, shell_top),
             )?;
 
             #[cfg(windows)]
@@ -206,6 +245,7 @@ fn main() {
                     windows::appbar::reserve_top(hwnd.0 as isize)?;
                 }
                 windows::frame::start_frame_watcher(state.clone());
+                start_display_topology_watcher(app.handle().clone());
             }
 
             Ok(())

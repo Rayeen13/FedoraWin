@@ -77,6 +77,27 @@ impl DisplayInfo {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DisplaySignature {
+    id: String,
+    bounds: RectInfo,
+    dpi_x: u32,
+    dpi_y: u32,
+    primary: bool,
+}
+
+impl From<&DisplayInfo> for DisplaySignature {
+    fn from(display: &DisplayInfo) -> Self {
+        Self {
+            id: display.id.clone(),
+            bounds: display.bounds,
+            dpi_x: display.dpi_x,
+            dpi_y: display.dpi_y,
+            primary: display.primary,
+        }
+    }
+}
+
 #[link(name = "user32")]
 extern "system" {
     fn EnumDisplayMonitors(
@@ -167,9 +188,16 @@ pub fn primary() -> Result<DisplayInfo, String> {
         .ok_or_else(|| "primary display is unavailable".to_string())
 }
 
+pub fn topology_signature() -> Result<Vec<DisplaySignature>, String> {
+    Ok(enumerate()?
+        .iter()
+        .map(DisplaySignature::from)
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{DisplayInfo, RectInfo};
+    use super::{DisplayInfo, DisplaySignature, RectInfo};
 
     fn display(bounds: RectInfo, dpi: u32) -> DisplayInfo {
         DisplayInfo {
@@ -226,5 +254,26 @@ mod tests {
         );
         assert_eq!(monitor.logical_width(), 5120.0);
         assert_eq!(monitor.bounds.width(), 5120);
+    }
+
+    #[test]
+    fn topology_signature_ignores_our_appbar_work_area() {
+        let mut first = display(
+            RectInfo {
+                left: 0,
+                top: 0,
+                right: 1920,
+                bottom: 1080,
+            },
+            96,
+        );
+        let mut second = first.clone();
+        first.work_area.top = 32;
+        second.work_area.top = 64;
+
+        assert_eq!(
+            DisplaySignature::from(&first),
+            DisplaySignature::from(&second)
+        );
     }
 }
