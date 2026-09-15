@@ -11,9 +11,9 @@ pub mod hotkeys;
 #[cfg(windows)]
 pub mod thumbnails;
 #[cfg(windows)]
-pub mod window_events;
-#[cfg(windows)]
 pub mod wifi;
+#[cfg(windows)]
+pub mod window_events;
 #[cfg(windows)]
 pub mod windows_list;
 
@@ -167,12 +167,7 @@ pub mod thumbnails {
     pub struct ThumbnailManager;
 
     impl ThumbnailManager {
-        pub fn sync(
-            &self,
-            _: isize,
-            _: f64,
-            _: &[ThumbnailPlacement],
-        ) -> Result<usize, String> {
+        pub fn sync(&self, _: isize, _: f64, _: &[ThumbnailPlacement]) -> Result<usize, String> {
             Ok(0)
         }
 

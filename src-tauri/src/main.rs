@@ -103,7 +103,9 @@ fn sync_window_thumbnails(
             .get_webview_window("activities")
             .ok_or_else(|| "activities window is unavailable".to_string())?;
         let hwnd = activities.hwnd().map_err(|error| error.to_string())?;
-        let scale = activities.scale_factor().map_err(|error| error.to_string())?;
+        let scale = activities
+            .scale_factor()
+            .map_err(|error| error.to_string())?;
         return state.sync(hwnd.0 as isize, scale, &items);
     }
 

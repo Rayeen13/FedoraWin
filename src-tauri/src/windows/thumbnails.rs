@@ -79,8 +79,7 @@ fn fit_rect(placement: &ThumbnailPlacement, scale: f64, source: Size) -> Rect {
         };
     }
 
-    let factor = (max_width as f64 / source.cx as f64)
-        .min(max_height as f64 / source.cy as f64);
+    let factor = (max_width as f64 / source.cx as f64).min(max_height as f64 / source.cy as f64);
     let width = (source.cx as f64 * factor).round().max(1.0) as i32;
     let height = (source.cy as f64 * factor).round().max(1.0) as i32;
     let x = left + (max_width - width) / 2;
@@ -143,9 +142,7 @@ impl ThumbnailManager {
             let mut source_size = Size::default();
             let _ = unsafe { DwmQueryThumbnailSourceSize(thumbnail, &mut source_size) };
             let properties = ThumbnailProperties {
-                flags: DWM_TNP_RECTDESTINATION
-                    | DWM_TNP_VISIBLE
-                    | DWM_TNP_SOURCECLIENTAREAONLY,
+                flags: DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE | DWM_TNP_SOURCECLIENTAREAONLY,
                 destination: fit_rect(placement, scale, source_size),
                 source: Rect::default(),
                 opacity: 255,
