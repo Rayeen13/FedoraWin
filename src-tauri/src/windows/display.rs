@@ -189,10 +189,7 @@ pub fn primary() -> Result<DisplayInfo, String> {
 }
 
 pub fn topology_signature() -> Result<Vec<DisplaySignature>, String> {
-    Ok(enumerate()?
-        .iter()
-        .map(DisplaySignature::from)
-        .collect())
+    Ok(enumerate()?.iter().map(DisplaySignature::from).collect())
 }
 
 #[cfg(test)]

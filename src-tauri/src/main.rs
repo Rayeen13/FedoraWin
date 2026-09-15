@@ -8,9 +8,7 @@ use shell::{AppearanceState, ShellState};
 use std::sync::Arc;
 #[cfg(windows)]
 use std::{thread, time::Duration};
-use tauri::{
-    LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder,
-};
+use tauri::{LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 
 #[tauri::command]
 fn get_shell_state(state: tauri::State<'_, Arc<ShellState>>) -> shell::ShellSnapshot {
@@ -223,13 +221,7 @@ fn main() {
                 shell_layout.activities,
                 false,
             )?;
-            build_window(
-                app,
-                "date-menu",
-                "date-menu",
-                shell_layout.date_menu,
-                false,
-            )?;
+            build_window(app, "date-menu", "date-menu", shell_layout.date_menu, false)?;
             build_window(
                 app,
                 "quick-settings",
