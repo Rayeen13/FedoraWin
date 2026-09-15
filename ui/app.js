@@ -4,6 +4,7 @@ const app = document.querySelector('#app');
 const params = new URLSearchParams(location.search);
 const view = params.get('view') || 'panel';
 const captureMode = params.get('capture') || '';
+const captureEvidence = params.has('capture');
 const mockMode = params.get('mock') === '1' && !invoke;
 
 const ACCENTS = {
@@ -41,6 +42,10 @@ async function call(command, payload = {}) {
   if (!invoke) return null;
   try { return await invoke(command, payload); }
   catch (error) { console.error(`[FedoraWin] ${command}`, error); return null; }
+}
+
+function nextPaint() {
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 
 function escapeHtml(value = '') {
@@ -344,5 +349,11 @@ async function bootstrap() {
   else if (view === 'activities') await renderActivities();
   else if (view === 'quick-settings') renderQuickSettings(captureMode === 'appearance');
   else renderDateMenu();
+
+  if (captureEvidence && view !== 'panel') {
+    await nextPaint();
+    if (view === 'activities') await syncLiveThumbnails();
+    await call('mark_capture_ready', { label: view });
+  }
 }
 bootstrap();

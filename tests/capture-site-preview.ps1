@@ -120,6 +120,40 @@ function Save-WindowCapture {
     return $path
 }
 
+function Assert-VisualCapture {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Key
+    )
+
+    if ($Key -eq 'panel') { return }
+
+    $bitmap = [System.Drawing.Bitmap]::FromFile($Path)
+    try {
+        $samples = 0
+        $nearWhite = 0
+        $buckets = [System.Collections.Generic.HashSet[string]]::new()
+        $stepX = [Math]::Max(1, [Math]::Floor($bitmap.Width / 48))
+        $stepY = [Math]::Max(1, [Math]::Floor($bitmap.Height / 32))
+        for ($y = 0; $y -lt $bitmap.Height; $y += $stepY) {
+            for ($x = 0; $x -lt $bitmap.Width; $x += $stepX) {
+                $pixel = $bitmap.GetPixel($x, $y)
+                $samples++
+                if ($pixel.R -gt 245 -and $pixel.G -gt 245 -and $pixel.B -gt 245) { $nearWhite++ }
+                $bucket = "{0}-{1}-{2}" -f ([Math]::Floor($pixel.R / 32)), ([Math]::Floor($pixel.G / 32)), ([Math]::Floor($pixel.B / 32))
+                [void]$buckets.Add($bucket)
+            }
+        }
+        $whiteRatio = if ($samples) { $nearWhite / $samples } else { 1 }
+        Write-Host ("VISUAL {0}: sampled={1} buckets={2} nearWhite={3:P1}" -f $Key, $samples, $buckets.Count, $whiteRatio)
+        if ($buckets.Count -lt 6 -or $whiteRatio -gt 0.92) {
+            throw "Capture '$Key' looks blank or visually uninitialized."
+        }
+    } finally {
+        $bitmap.Dispose()
+    }
+}
+
 function Invoke-Capture {
     param(
         [Parameter(Mandatory)][string]$Key,
@@ -135,10 +169,12 @@ function Invoke-Capture {
     $env:FEDORAWIN_CAPTURE_THEME = $Theme
     $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
     try {
-        $hwnd = Wait-Window -ProcessId $process.Id -Title "FedoraWin — $WindowLabel"
+        $expectedTitle = if ($WindowLabel -eq 'panel') { "FedoraWin — $WindowLabel" } else { "FedoraWin — $WindowLabel — ready" }
+        $hwnd = Wait-Window -ProcessId $process.Id -Title $expectedTitle -TimeoutSeconds 35
         Start-Sleep -Milliseconds $SettleMilliseconds
         $fileName = "$Key.png"
-        [void](Save-WindowCapture -Hwnd $hwnd -FileName $fileName)
+        $capturePath = Save-WindowCapture -Hwnd $hwnd -FileName $fileName
+        Assert-VisualCapture -Path $capturePath -Key $Key
         $captures[$Key] = $fileName
     } finally {
         if ($process -and -not $process.HasExited) {

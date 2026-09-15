@@ -147,6 +147,19 @@ fn refresh_window_frames(state: tauri::State<'_, Arc<ShellState>>) -> Result<usi
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn mark_capture_ready(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    if !matches!(label.as_str(), "activities" | "date-menu" | "quick-settings") {
+        return Err("unsupported capture surface".into());
+    }
+    let window = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("{label} window is unavailable"))?;
+    window
+        .set_title(&format!("FedoraWin — {label} — ready"))
+        .map_err(|error| error.to_string())
+}
+
 fn build_window(
     app: &tauri::AppHandle,
     label: &str,
@@ -309,7 +322,8 @@ fn main() {
             sync_window_thumbnails,
             clear_window_thumbnails,
             set_wifi_enabled,
-            refresh_window_frames
+            refresh_window_frames,
+            mark_capture_ready
         ])
         .setup(move |app| {
             let display = windows::display::primary().map_err(std::io::Error::other)?;
