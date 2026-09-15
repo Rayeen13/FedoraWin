@@ -5,6 +5,10 @@ on:
     branches: [main, feat/gnome-shell-native, dev/gnome-native-20260914]
   pull_request:
 
+concurrency:
+  group: windows-ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   native-shell:
     runs-on: windows-latest
