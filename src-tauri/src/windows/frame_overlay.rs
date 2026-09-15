@@ -369,11 +369,7 @@ unsafe fn overlay_rect(target: isize) -> Option<Rect> {
 
     let width = buttons.right - buttons.left;
     let height = buttons.bottom - buttons.top;
-    if width <= 0
-        || height <= 0
-        || frame.right <= frame.left
-        || frame.bottom <= frame.top
-    {
+    if width <= 0 || height <= 0 || frame.right <= frame.left || frame.bottom <= frame.top {
         return None;
     }
 

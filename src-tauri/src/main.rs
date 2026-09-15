@@ -149,7 +149,10 @@ fn refresh_window_frames(state: tauri::State<'_, Arc<ShellState>>) -> Result<usi
 
 #[tauri::command]
 fn mark_capture_ready(app: tauri::AppHandle, label: String) -> Result<(), String> {
-    if !matches!(label.as_str(), "activities" | "date-menu" | "quick-settings") {
+    if !matches!(
+        label.as_str(),
+        "activities" | "date-menu" | "quick-settings"
+    ) {
         return Err("unsupported capture surface".into());
     }
     let window = app
