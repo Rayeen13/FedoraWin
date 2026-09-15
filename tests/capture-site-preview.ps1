@@ -223,8 +223,10 @@ $form.Controls.Add($label)
         [void](Wait-Window -ProcessId $shellProcess.Id -Title 'FedoraWin — panel')
         $probeProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-STA','-File', $probeFile) -PassThru
         $probeHwnd = Wait-Window -ProcessId $probeProcess.Id -Title 'FedoraWin Native Frame Probe'
-        Start-Sleep -Milliseconds 1800
-        [void](Save-WindowCapture -Hwnd $probeHwnd -FileName 'native_frame.png')
+        [void](Wait-Window -ProcessId $shellProcess.Id -Title 'FedoraWin Adwaita Controls' -TimeoutSeconds 12)
+        Start-Sleep -Milliseconds 350
+        $nativeFramePath = Save-WindowCapture -Hwnd $probeHwnd -FileName 'native_frame.png'
+        Assert-VisualCapture -Path $nativeFramePath -Key 'native_frame'
         $captures.native_frame = 'native_frame.png'
     } finally {
         if ($probeProcess -and -not $probeProcess.HasExited) { Stop-Process -Id $probeProcess.Id -Force -ErrorAction SilentlyContinue }
