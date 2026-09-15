@@ -103,10 +103,14 @@ fn build_window(
     view: &str,
     geometry: layout::SurfaceGeometry,
     visible: bool,
+    capture_mode: Option<&str>,
 ) -> tauri::Result<()> {
-    let url = WebviewUrl::App(format!("index.html?view={view}").into());
-    let window = WebviewWindowBuilder::new(app, label, url)
-        .title("FedoraWin")
+    let url = match capture_mode {
+        Some(mode) => format!("index.html?view={view}&capture={mode}"),
+        None => format!("index.html?view={view}"),
+    };
+    let window = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
+        .title(format!("FedoraWin — {label}"))
         .decorations(false)
         .resizable(false)
         .skip_taskbar(true)
@@ -193,6 +197,14 @@ fn start_display_topology_watcher(app: tauri::AppHandle) {
 
 fn main() {
     let state = Arc::new(ShellState::default());
+    let capture_view = std::env::var("FEDORAWIN_CAPTURE_VIEW").ok();
+    let capture_mode = std::env::var("FEDORAWIN_CAPTURE_MODE").ok();
+
+    if let Ok(theme) = std::env::var("FEDORAWIN_CAPTURE_THEME") {
+        if let Ok(appearance) = AppearanceState::parse(&theme, "blue") {
+            let _ = state.set_appearance(appearance);
+        }
+    }
 
     tauri::Builder::default()
         .manage(state.clone())
@@ -213,21 +225,35 @@ fn main() {
             let display = windows::display::primary().map_err(std::io::Error::other)?;
             let shell_layout = layout::for_display(&display);
 
-            build_window(app, "panel", "panel", shell_layout.panel, true)?;
+            let capture = capture_mode.as_deref();
+            let activities_visible = capture_view.as_deref() == Some("activities");
+            let date_visible = capture_view.as_deref() == Some("date-menu");
+            let quick_visible = capture_view.as_deref() == Some("quick-settings");
+
+            build_window(app, "panel", "panel", shell_layout.panel, true, capture)?;
             build_window(
                 app,
                 "activities",
                 "activities",
                 shell_layout.activities,
-                false,
+                activities_visible,
+                capture,
             )?;
-            build_window(app, "date-menu", "date-menu", shell_layout.date_menu, false)?;
+            build_window(
+                app,
+                "date-menu",
+                "date-menu",
+                shell_layout.date_menu,
+                date_visible,
+                capture,
+            )?;
             build_window(
                 app,
                 "quick-settings",
                 "quick-settings",
                 shell_layout.quick_settings,
-                false,
+                quick_visible,
+                capture,
             )?;
 
             #[cfg(windows)]

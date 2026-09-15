@@ -2,6 +2,7 @@ const invoke = window.__TAURI__?.core?.invoke;
 const app = document.querySelector('#app');
 const params = new URLSearchParams(location.search);
 const view = params.get('view') || 'panel';
+const captureMode = params.get('capture') || '';
 const mockMode = params.get('mock') === '1' && !invoke;
 
 const ACCENTS = {
@@ -151,7 +152,9 @@ async function renderActivities() {
     refreshActivitiesContent(search.value);
   }));
   await loadActivitiesData();
-  refreshActivitiesContent();
+  if (captureMode === 'apps') activitiesMode = 'apps';
+  if (captureMode === 'search-terminal') search.value = 'terminal';
+  refreshActivitiesContent(search.value);
   search.focus();
 }
 
@@ -278,7 +281,7 @@ async function bootstrap() {
   applyAppearance();
   if (view === 'panel') renderPanel();
   else if (view === 'activities') await renderActivities();
-  else if (view === 'quick-settings') renderQuickSettings();
+  else if (view === 'quick-settings') renderQuickSettings(captureMode === 'appearance');
   else renderDateMenu();
 }
 bootstrap();
