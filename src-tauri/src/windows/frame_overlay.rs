@@ -5,7 +5,7 @@ use std::mem::{size_of, zeroed};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
- 
+
 const GWL_EXSTYLE: i32 = -20;
 const GWLP_USERDATA: i32 = -21;
 const GW_OWNER: u32 = 4;
@@ -435,10 +435,7 @@ unsafe fn reconcile(
     let active: HashSet<isize> = targets.iter().copied().collect();
 
     overlays.retain(|target, overlay| {
-        if !active.contains(target)
-            || IsWindow(*target) == 0
-            || !sync_overlay(*overlay, *target)
-        {
+        if !active.contains(target) || IsWindow(*target) == 0 || !sync_overlay(*overlay, *target) {
             DestroyWindow(*overlay);
             false
         } else {
@@ -504,13 +501,17 @@ pub fn start(state: Arc<ShellState>) -> Result<(), String> {
 
                 if message.hwnd == 0
                     && (message.message == WM_APP_FRAME_SYNC
-                        || (message.message == WM_TIMER
-                            && message.wparam == TIMER_RECONCILE))
+                        || (message.message == WM_TIMER && message.wparam == TIMER_RECONCILE))
                 {
                     // Coalesce event bursts: one reconciliation is enough to move,
                     // create, destroy and repaint all caption overlays.
-                    while PeekMessageW(&mut message, 0, WM_APP_FRAME_SYNC, WM_APP_FRAME_SYNC, 0x0001)
-                        != 0
+                    while PeekMessageW(
+                        &mut message,
+                        0,
+                        WM_APP_FRAME_SYNC,
+                        WM_APP_FRAME_SYNC,
+                        0x0001,
+                    ) != 0
                     {}
                     reconcile(&mut overlays, class_name.as_ptr(), &state);
                     continue;
