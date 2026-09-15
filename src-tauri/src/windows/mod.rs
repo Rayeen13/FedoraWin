@@ -7,6 +7,8 @@ pub mod display;
 #[cfg(windows)]
 pub mod frame;
 #[cfg(windows)]
+pub mod hotkeys;
+#[cfg(windows)]
 pub mod wifi;
 #[cfg(windows)]
 pub mod windows_list;

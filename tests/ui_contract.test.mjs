@@ -6,6 +6,7 @@ const css = fs.readFileSync(new URL('../ui/styles.css', import.meta.url), 'utf8'
 const main = fs.readFileSync(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf8');
 const layout = fs.readFileSync(new URL('../src-tauri/src/layout.rs', import.meta.url), 'utf8');
 const frame = fs.readFileSync(new URL('../src-tauri/src/windows/frame.rs', import.meta.url), 'utf8');
+const hotkeys = fs.readFileSync(new URL('../src-tauri/src/windows/hotkeys.rs', import.meta.url), 'utf8');
 const wifi = fs.readFileSync(new URL('../src-tauri/src/windows/wifi.rs', import.meta.url), 'utf8');
 const apps = fs.readFileSync(new URL('../src-tauri/src/windows/apps.rs', import.meta.url), 'utf8');
 const appbar = fs.readFileSync(new URL('../src-tauri/src/windows/appbar.rs', import.meta.url), 'utf8');
@@ -27,6 +28,10 @@ assert.doesNotMatch(frame, /GnomeChromeForm|FormBorderStyle|ShowWithoutActivatio
 assert.match(frame, /DWMWA_CAPTION_COLOR/);
 assert.match(frame, /DWMWA_TEXT_COLOR/);
 assert.match(frame, /DWMWA_COLOR_NONE/);
+assert.match(hotkeys, /RegisterHotKey/);
+assert.match(hotkeys, /MOD_ALT \| MOD_NOREPEAT/);
+assert.match(hotkeys, /VK_F1/);
+assert.match(hotkeys, /toggle_activities/);
 assert.match(wifi, /WlanSetInterface/);
 assert.match(wifi, /WLAN_INTF_OPCODE_RADIO_STATE/);
 assert.match(apps, /Get-StartApps/);
