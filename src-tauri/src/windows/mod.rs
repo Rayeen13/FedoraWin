@@ -3,6 +3,8 @@ pub mod appbar;
 #[cfg(windows)]
 pub mod apps;
 #[cfg(windows)]
+pub mod display;
+#[cfg(windows)]
 pub mod frame;
 #[cfg(windows)]
 pub mod wifi;
@@ -19,6 +21,7 @@ pub mod appbar {
 #[cfg(not(windows))]
 pub mod apps {
     use serde::Serialize;
+
     #[derive(Clone, Debug, Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct AppEntry {
@@ -26,21 +29,83 @@ pub mod apps {
         pub app_id: String,
         pub aliases: Vec<String>,
     }
+
     pub fn list() -> Result<Vec<AppEntry>, String> {
         Ok(Vec::new())
     }
+
     pub fn launch(_: &str) -> Result<(), String> {
         Err("application launching is Windows-only".into())
+    }
+}
+#[cfg(not(windows))]
+pub mod display {
+    use serde::Serialize;
+
+    #[derive(Clone, Copy, Debug, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct RectInfo {
+        pub left: i32,
+        pub top: i32,
+        pub right: i32,
+        pub bottom: i32,
+    }
+
+    impl RectInfo {
+        pub fn width(&self) -> i32 {
+            self.right - self.left
+        }
+
+        pub fn height(&self) -> i32 {
+            self.bottom - self.top
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct DisplayInfo {
+        pub id: String,
+        pub bounds: RectInfo,
+        pub work_area: RectInfo,
+        pub dpi_x: u32,
+        pub dpi_y: u32,
+        pub scale_factor: f64,
+        pub primary: bool,
+    }
+
+    impl DisplayInfo {
+        pub fn logical_width(&self) -> f64 {
+            self.bounds.width() as f64 / self.scale_factor
+        }
+
+        pub fn logical_height(&self) -> f64 {
+            self.bounds.height() as f64 / self.scale_factor
+        }
+
+        pub fn logical_to_physical(&self, value: f64) -> i32 {
+            (value * self.scale_factor).round().max(1.0) as i32
+        }
+    }
+
+    pub fn enumerate() -> Result<Vec<DisplayInfo>, String> {
+        Ok(Vec::new())
+    }
+
+    pub fn primary() -> Result<DisplayInfo, String> {
+        Err("display enumeration is Windows-only".into())
     }
 }
 #[cfg(not(windows))]
 pub mod frame {
     use crate::shell::AppearanceState;
     use std::sync::Arc;
+
     pub fn apply_to_top_level_windows(_: &AppearanceState) -> Result<usize, String> {
         Ok(0)
     }
+
     pub fn reset_top_level_windows() {}
+
     pub fn start_frame_watcher<T>(_: Arc<T>)
     where
         T: Send + Sync + 'static,
@@ -56,6 +121,7 @@ pub mod wifi {
 #[cfg(not(windows))]
 pub mod windows_list {
     use serde::Serialize;
+
     #[derive(Clone, Debug, Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct WindowEntry {
@@ -63,9 +129,11 @@ pub mod windows_list {
         pub title: String,
         pub minimized: bool,
     }
+
     pub fn list() -> Result<Vec<WindowEntry>, String> {
         Ok(Vec::new())
     }
+
     pub fn activate(_: &str) -> Result<(), String> {
         Err("window activation is Windows-only".into())
     }

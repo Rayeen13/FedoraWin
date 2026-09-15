@@ -133,12 +133,7 @@ fn aliases_for(name: &str, app_id: &str) -> Vec<String> {
     if n.contains("task manager") {
         push_aliases(
             &mut aliases,
-            &[
-                "task manager",
-                "processes",
-                "system monitor",
-                "performance",
-            ],
+            &["task manager", "processes", "system monitor", "performance"],
         );
     }
 
@@ -230,10 +225,7 @@ mod tests {
     fn gnome_style_names_resolve_windows_equivalents() {
         let files = aliases_for("File Explorer", "explorer.exe");
         let monitor = aliases_for("Task Manager", "TaskManager");
-        let capture = aliases_for(
-            "Snipping Tool",
-            "Microsoft.ScreenSketch_8wekyb3d8bbwe!App",
-        );
+        let capture = aliases_for("Snipping Tool", "Microsoft.ScreenSketch_8wekyb3d8bbwe!App");
 
         assert!(files.iter().any(|alias| alias == "files"));
         assert!(monitor.iter().any(|alias| alias == "system monitor"));

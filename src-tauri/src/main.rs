@@ -5,7 +5,7 @@ mod windows;
 
 use shell::{AppearanceState, ShellState};
 use std::sync::Arc;
-use tauri::{LogicalPosition, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 
 const PANEL_HEIGHT: f64 = 32.0;
 
@@ -66,6 +66,11 @@ fn list_apps() -> Result<Vec<windows::apps::AppEntry>, String> {
 }
 
 #[tauri::command]
+fn list_displays() -> Result<Vec<windows::display::DisplayInfo>, String> {
+    windows::display::enumerate()
+}
+
+#[tauri::command]
 fn launch_app(app_id: String) -> Result<(), String> {
     windows::apps::launch(&app_id)
 }
@@ -91,6 +96,10 @@ fn refresh_window_frames(state: tauri::State<'_, Arc<ShellState>>) -> Result<usi
         .map_err(|e| e.to_string())
 }
 
+fn fit_surface(preferred: f64, available: f64, margin: f64) -> f64 {
+    preferred.min((available - margin * 2.0).max(1.0))
+}
+
 fn build_window(
     app: &tauri::App,
     label: &str,
@@ -98,7 +107,7 @@ fn build_window(
     width: f64,
     height: f64,
     visible: bool,
-    position: LogicalPosition<f64>,
+    position: PhysicalPosition<i32>,
 ) -> tauri::Result<()> {
     let url = WebviewUrl::App(format!("index.html?view={view}").into());
     let window = WebviewWindowBuilder::new(app, label, url)
@@ -125,6 +134,7 @@ fn main() {
             toggle_activities,
             toggle_surface,
             list_apps,
+            list_displays,
             launch_app,
             list_windows,
             activate_window,
@@ -132,13 +142,25 @@ fn main() {
             refresh_window_frames
         ])
         .setup(move |app| {
-            let monitor = app.primary_monitor()?.ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::NotFound, "primary monitor unavailable")
-            })?;
-            let size = monitor.size();
-            let scale = monitor.scale_factor();
-            let logical_width = size.width as f64 / scale;
-            let logical_height = size.height as f64 / scale;
+            let display = windows::display::primary().map_err(std::io::Error::other)?;
+            let logical_width = display.logical_width();
+            let logical_height = display.logical_height();
+            let shell_height = (logical_height - PANEL_HEIGHT).max(1.0);
+            let panel_height_px = display.logical_to_physical(PANEL_HEIGHT);
+            let shell_top = display.bounds.top + panel_height_px;
+
+            let date_width = fit_surface(760.0, logical_width, 12.0);
+            let date_height = fit_surface(540.0, shell_height, 12.0);
+            let date_width_px = display.logical_to_physical(date_width);
+            let date_x = display.bounds.left
+                + ((display.bounds.width() - date_width_px) / 2).max(0);
+
+            let quick_width = fit_surface(408.0, logical_width, 8.0);
+            let quick_height = fit_surface(510.0, shell_height, 8.0);
+            let quick_width_px = display.logical_to_physical(quick_width);
+            let quick_margin_px = display.logical_to_physical(8.0);
+            let quick_x = display.bounds.left
+                + (display.bounds.width() - quick_width_px - quick_margin_px).max(0);
 
             build_window(
                 app,
@@ -147,34 +169,34 @@ fn main() {
                 logical_width,
                 PANEL_HEIGHT,
                 true,
-                LogicalPosition::new(0.0, 0.0),
+                PhysicalPosition::new(display.bounds.left, display.bounds.top),
             )?;
             build_window(
                 app,
                 "activities",
                 "activities",
                 logical_width,
-                logical_height - PANEL_HEIGHT,
+                shell_height,
                 false,
-                LogicalPosition::new(0.0, PANEL_HEIGHT),
+                PhysicalPosition::new(display.bounds.left, shell_top),
             )?;
             build_window(
                 app,
                 "date-menu",
                 "date-menu",
-                760.0,
-                540.0,
+                date_width,
+                date_height,
                 false,
-                LogicalPosition::new(((logical_width - 760.0) / 2.0).max(0.0), PANEL_HEIGHT),
+                PhysicalPosition::new(date_x, shell_top),
             )?;
             build_window(
                 app,
                 "quick-settings",
                 "quick-settings",
-                408.0,
-                510.0,
+                quick_width,
+                quick_height,
                 false,
-                LogicalPosition::new((logical_width - 416.0).max(0.0), PANEL_HEIGHT),
+                PhysicalPosition::new(quick_x, shell_top),
             )?;
 
             #[cfg(windows)]

@@ -8,6 +8,7 @@ const frame = fs.readFileSync(new URL('../src-tauri/src/windows/frame.rs', impor
 const wifi = fs.readFileSync(new URL('../src-tauri/src/windows/wifi.rs', import.meta.url), 'utf8');
 const apps = fs.readFileSync(new URL('../src-tauri/src/windows/apps.rs', import.meta.url), 'utf8');
 const appbar = fs.readFileSync(new URL('../src-tauri/src/windows/appbar.rs', import.meta.url), 'utf8');
+const display = fs.readFileSync(new URL('../src-tauri/src/windows/display.rs', import.meta.url), 'utf8');
 
 assert.match(js, /toggle_activities/);
 assert.match(js, /toggle_surface/);
@@ -29,7 +30,15 @@ assert.match(wifi, /WlanSetInterface/);
 assert.match(wifi, /WLAN_INTF_OPCODE_RADIO_STATE/);
 assert.match(apps, /Get-StartApps/);
 assert.match(apps, /windowsterminal|terminal/);
-assert.match(appbar, /GetWindowRect/);
-assert.match(appbar, /rect\.bottom - rect\.top/);
-assert.match(main, /LogicalPosition/);
+assert.match(appbar, /MonitorFromWindow/);
+assert.match(appbar, /GetMonitorInfoW/);
+assert.match(appbar, /monitor_info\.monitor\.left/);
+assert.match(display, /EnumDisplayMonitors/);
+assert.match(display, /GetDpiForMonitor/);
+assert.match(display, /MONITORINFOF_PRIMARY/);
+assert.match(display, /keeps_negative_desktop_coordinates/);
+assert.match(display, /super_ultrawide_geometry_is_not_clamped/);
+assert.match(main, /PhysicalPosition/);
+assert.match(main, /list_displays/);
+assert.doesNotMatch(main, /PhysicalPosition::new\(0,\s*0\)/);
 console.log('UI/native contract checks passed');
