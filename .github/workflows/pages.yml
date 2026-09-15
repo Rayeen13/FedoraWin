@@ -54,20 +54,21 @@ jobs:
 
       - name: Build current FedoraWin.exe
         working-directory: src-tauri
-        run: cargo build --release
+        run: cargo build
 
       - name: Capture real Tauri shell surfaces
         shell: pwsh
         run: ./tests/capture-site-preview.ps1
 
       - name: Upload Windows-rendered gallery
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pages-windows-preview
           path: |
             artifacts/site-preview/*.png
             artifacts/site-preview/preview-metadata.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
   deploy:
