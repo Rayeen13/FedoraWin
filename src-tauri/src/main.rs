@@ -325,7 +325,7 @@ fn main() {
             let date_visible = capture_view.as_deref() == Some("date-menu");
             let quick_visible = capture_view.as_deref() == Some("quick-settings");
 
-            build_window(
+            let panel = build_window(
                 app.handle(),
                 "panel",
                 "panel",
@@ -334,6 +334,10 @@ fn main() {
                 capture,
             )
             .map_err(std::io::Error::other)?;
+
+            // The panel is always resident but very simple; WebView2's supported
+            // low-memory target keeps its browser process set as lean as possible.
+            let _ = performance::set_low_memory_target(&panel);
 
             // Keep idle FedoraWin feather-light: only the panel stays resident.
             // Auxiliary WebViews are created on demand and closed when dismissed.

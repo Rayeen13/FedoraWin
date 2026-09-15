@@ -155,3 +155,40 @@ mod tests {
         assert!(HARD_LIMIT_MB > TARGET_IDLE_MB);
     }
 }
+
+#[cfg(windows)]
+pub fn set_low_memory_target(window: &tauri::WebviewWindow) -> Result<(), String> {
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+    };
+    use windows_core::Interface;
+
+    let (sender, receiver) = mpsc::sync_channel(1);
+    window
+        .with_webview(move |webview| {
+            let result = unsafe {
+                let core = webview
+                    .controller()
+                    .CoreWebView2()
+                    .map_err(|error| error.to_string())?;
+                let memory: ICoreWebView2_19 =
+                    core.cast().map_err(|error| error.to_string())?;
+                memory
+                    .SetMemoryUsageTargetLevel(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW)
+                    .map_err(|error| error.to_string())
+            };
+            let _ = sender.send(result);
+        })
+        .map_err(|error| error.to_string())?;
+
+    receiver
+        .recv_timeout(Duration::from_secs(2))
+        .map_err(|_| "timed out setting WebView2 memory target".to_string())?
+}
+
+#[cfg(not(windows))]
+pub fn set_low_memory_target(_: &tauri::WebviewWindow) -> Result<(), String> {
+    Ok(())
+}
