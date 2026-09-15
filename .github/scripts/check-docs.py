@@ -99,7 +99,7 @@ for required in [
         errors.append(f"index.html: missing required content: {required}")
 
 gallery = (DOCS / "gallery.html").read_text(encoding="utf-8")
-for key in ["panel", "activities", "apps", "search_terminal", "quick_settings_dark", "quick_settings_light", "appearance", "date_menu"]:
+for key in ["panel", "activities", "apps", "search_terminal", "quick_settings_dark", "quick_settings_light", "appearance", "date_menu", "native_frame"]:
     if f'data-runtime-shot="{key}"' not in gallery:
         errors.append(f"gallery.html: missing runtime shot: {key}")
 
