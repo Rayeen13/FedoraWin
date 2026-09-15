@@ -16,6 +16,8 @@ const display = fs.readFileSync(new URL('../src-tauri/src/windows/display.rs', i
 const thumbnails = fs.readFileSync(new URL('../src-tauri/src/windows/thumbnails.rs', import.meta.url), 'utf8');
 const windowEvents = fs.readFileSync(new URL('../src-tauri/src/windows/window_events.rs', import.meta.url), 'utf8');
 const windowsList = fs.readFileSync(new URL('../src-tauri/src/windows/windows_list.rs', import.meta.url), 'utf8');
+const memorySmoke = fs.readFileSync(new URL('./check-memory-budget.ps1', import.meta.url), 'utf8');
+const windowsCi = fs.readFileSync(new URL('../.github/workflows/windows-ci.yml', import.meta.url), 'utf8');
 
 assert.match(js, /toggle_activities/);
 assert.match(js, /toggle_surface/);
@@ -96,5 +98,11 @@ assert.match(main, /FedoraWin — \{label\}/);
 assert.match(main, /start_display_topology_watcher/);
 assert.match(main, /relayout_shell_surfaces/);
 assert.match(main, /windows::appbar::release/);
+assert.match(memorySmoke, /HardLimitMb = 300/);
+assert.match(memorySmoke, /TargetIdleMb = 100/);
+assert.match(memorySmoke, /Get-CimInstance Win32_Process/);
+assert.match(memorySmoke, /WorkingSet64/);
+assert.match(windowsCi, /FedoraWin memory budget/);
+assert.match(windowsCi, /check-memory-budget\.ps1/);
 assert.doesNotMatch(main, /PhysicalPosition::new\(0,\s*0\)/);
 console.log('UI/native contract checks passed');
