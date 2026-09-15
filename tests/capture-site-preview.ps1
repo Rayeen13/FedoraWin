@@ -64,7 +64,7 @@ $output = if ([IO.Path]::IsPathRooted($OutputDirectory)) {
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 $sourceSha = (& git -C $repoRoot rev-parse HEAD).Trim()
-$sourceBranch = (& git -C $repoRoot rev-parse --abbrev-ref HEAD).Trim()
+$sourceBranch = if ($env:FEDORAWIN_SOURCE_BRANCH) { $env:FEDORAWIN_SOURCE_BRANCH } else { (& git -C $repoRoot rev-parse --abbrev-ref HEAD).Trim() }
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 $captures = [ordered]@{}
 
