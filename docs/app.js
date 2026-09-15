@@ -5,6 +5,21 @@
   const preferred=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
   root.dataset.theme=stored||preferred;
 
+  const ensureDocsLink=()=> {
+    const insert=(nav,mobile=false)=> {
+      if(!nav||nav.querySelector('a[href="./docs.html"]')) return;
+      const link=document.createElement('a');
+      link.href='./docs.html';
+      link.textContent='Docs';
+      if(location.pathname.endsWith('/docs.html')) link.setAttribute('aria-current','page');
+      const before=nav.querySelector('a[href="./getting-started.html"]');
+      if(before) nav.insertBefore(link,before); else nav.append(link);
+    };
+    insert(document.querySelector('.links'));
+    insert(document.querySelector('#mobileNav'),true);
+  };
+  ensureDocsLink();
+
   const theme=document.querySelector('#theme');
   const syncThemeLabel=()=> {
     if(!theme) return;
