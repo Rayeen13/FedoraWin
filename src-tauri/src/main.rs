@@ -279,7 +279,7 @@ fn main() {
         }
     }
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(state.clone())
         .manage(windows::thumbnails::ThumbnailManager::default())
         .manage(windows::virtual_desktop::WorkspaceMoveJournal::default())
@@ -367,6 +367,7 @@ fn main() {
             #[cfg(windows)]
             {
                 windows::frame::start_frame_watcher(state.clone());
+                let _ = windows::frame_overlay::start(state.clone());
                 let _ = windows::hotkeys::start_activities_hotkey(app.handle().clone());
                 let _ = windows::window_events::start(app.handle().clone());
                 start_display_topology_watcher(app.handle().clone());
@@ -374,6 +375,16 @@ fn main() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("FedoraWin runtime failed");
+
+    app.run(|_, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            #[cfg(windows)]
+            {
+                windows::frame_overlay::stop();
+                windows::frame::reset_top_level_windows();
+            }
+        }
+    });
 }

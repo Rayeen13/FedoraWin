@@ -7,6 +7,8 @@ pub mod display;
 #[cfg(windows)]
 pub mod frame;
 #[cfg(windows)]
+pub mod frame_overlay;
+#[cfg(windows)]
 pub mod hotkeys;
 #[cfg(windows)]
 pub mod panel;
@@ -122,6 +124,20 @@ pub mod frame {
     {
     }
 }
+#[cfg(not(windows))]
+pub mod frame_overlay {
+    use std::sync::Arc;
+
+    pub fn start<T>(_: Arc<T>) -> Result<(), String>
+    where
+        T: Send + Sync + 'static,
+    {
+        Ok(())
+    }
+
+    pub fn stop() {}
+}
+
 #[cfg(not(windows))]
 pub mod wifi {
     pub fn set_enabled(_: bool) -> Result<(), String> {
