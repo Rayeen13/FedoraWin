@@ -55,7 +55,12 @@ pub fn reserve_top(hwnd: isize) -> Result<(), String> {
         hwnd,
         callback_message: 0,
         edge: ABE_TOP,
-        rect: Rect { left: rect.left, top: rect.top, right: rect.right, bottom: rect.top + height_px },
+        rect: Rect {
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.top + height_px,
+        },
         lparam: 0,
     };
 
@@ -71,7 +76,9 @@ pub fn reserve_top(hwnd: isize) -> Result<(), String> {
 }
 
 pub fn release(hwnd: isize) {
-    if hwnd == 0 { return; }
+    if hwnd == 0 {
+        return;
+    }
     let mut data = AppBarData {
         cb_size: size_of::<AppBarData>() as u32,
         hwnd,
@@ -80,7 +87,9 @@ pub fn release(hwnd: isize) {
         rect: Rect::default(),
         lparam: 0,
     };
-    unsafe { SHAppBarMessage(ABM_REMOVE, &mut data); }
+    unsafe {
+        SHAppBarMessage(ABM_REMOVE, &mut data);
+    }
 }
 
 #[allow(dead_code)]
