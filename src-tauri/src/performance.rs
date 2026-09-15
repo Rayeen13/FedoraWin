@@ -168,17 +168,20 @@ pub fn set_low_memory_target(window: &tauri::WebviewWindow) -> Result<(), String
     let (sender, receiver) = mpsc::sync_channel(1);
     window
         .with_webview(move |webview| {
-            let result = unsafe {
-                let core = webview
-                    .controller()
-                    .CoreWebView2()
-                    .map_err(|error| error.to_string())?;
-                let memory: ICoreWebView2_19 =
-                    core.cast().map_err(|error| error.to_string())?;
-                memory
-                    .SetMemoryUsageTargetLevel(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW)
-                    .map_err(|error| error.to_string())
-            };
+            let result = (|| -> Result<(), String> {
+                unsafe {
+                    let core = webview
+                        .controller()
+                        .CoreWebView2()
+                        .map_err(|error| error.to_string())?;
+                    let memory: ICoreWebView2_19 =
+                        core.cast().map_err(|error| error.to_string())?;
+                    memory
+                        .SetMemoryUsageTargetLevel(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW)
+                        .map_err(|error| error.to_string())?;
+                }
+                Ok(())
+            })();
             let _ = sender.send(result);
         })
         .map_err(|error| error.to_string())?;
