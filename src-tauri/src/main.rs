@@ -237,8 +237,7 @@ fn main() {
                     windows::appbar::reserve_top(hwnd.0 as isize)?;
                 }
                 windows::frame::start_frame_watcher(state.clone());
-                windows::hotkeys::start_activities_hotkey(app.handle().clone())
-                    .map_err(std::io::Error::other)?;
+                let _ = windows::hotkeys::start_activities_hotkey(app.handle().clone());
                 start_display_topology_watcher(app.handle().clone());
             }
 

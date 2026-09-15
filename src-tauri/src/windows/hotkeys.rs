@@ -45,14 +45,9 @@ pub fn start_activities_hotkey(app: tauri::AppHandle) -> Result<(), String> {
     thread::Builder::new()
         .name("fedorawin-hotkeys".into())
         .spawn(move || {
-            let registered = unsafe {
-                RegisterHotKey(
-                    0,
-                    ACTIVITIES_HOTKEY_ID,
-                    MOD_ALT | MOD_NOREPEAT,
-                    VK_F1,
-                )
-            } != 0;
+            let registered =
+                unsafe { RegisterHotKey(0, ACTIVITIES_HOTKEY_ID, MOD_ALT | MOD_NOREPEAT, VK_F1) }
+                    != 0;
 
             let _ = status_tx.send(registered);
             if !registered {
