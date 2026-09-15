@@ -54,7 +54,9 @@ unsafe fn eligible(hwnd: isize) -> bool {
         DWMWA_CLOAKED,
         &mut cloaked as *mut i32 as *mut c_void,
         size_of::<i32>() as u32,
-    ) == 0 && cloaked != 0 {
+    ) == 0
+        && cloaked != 0
+    {
         return false;
     }
     GetWindowTextLengthW(hwnd) > 0
@@ -75,7 +77,9 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
         if written <= 0 {
             return 1;
         }
-        let title = String::from_utf16_lossy(&buffer[..written as usize]).trim().to_string();
+        let title = String::from_utf16_lossy(&buffer[..written as usize])
+            .trim()
+            .to_string();
         if title.is_empty() {
             return 1;
         }
@@ -90,7 +94,12 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
 
 pub fn list() -> Result<Vec<WindowEntry>, String> {
     let mut windows = Vec::new();
-    let ok = unsafe { EnumWindows(enum_callback, &mut windows as *mut Vec<WindowEntry> as isize) };
+    let ok = unsafe {
+        EnumWindows(
+            enum_callback,
+            &mut windows as *mut Vec<WindowEntry> as isize,
+        )
+    };
     if ok == 0 {
         return Err("EnumWindows failed".into());
     }
@@ -98,7 +107,9 @@ pub fn list() -> Result<Vec<WindowEntry>, String> {
 }
 
 pub fn activate(handle: &str) -> Result<(), String> {
-    let hwnd = handle.parse::<isize>().map_err(|_| "invalid window handle")?;
+    let hwnd = handle
+        .parse::<isize>()
+        .map_err(|_| "invalid window handle")?;
     unsafe {
         if hwnd == 0 || IsWindow(hwnd) == 0 {
             return Err("window is no longer available".into());
