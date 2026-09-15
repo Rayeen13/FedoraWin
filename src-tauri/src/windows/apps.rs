@@ -29,31 +29,63 @@ fn aliases_for(name: &str, app_id: &str) -> Vec<String> {
     if n.contains("windows terminal") || id.contains("windowsterminal") {
         push_aliases(
             &mut aliases,
-            &["terminal", "term", "console", "shell", "command line", "cli"],
+            &[
+                "terminal",
+                "term",
+                "console",
+                "shell",
+                "command line",
+                "cli",
+            ],
         );
     }
     if n.contains("powershell") {
         push_aliases(
             &mut aliases,
-            &["terminal", "shell", "pwsh", "powershell", "command line", "cli"],
+            &[
+                "terminal",
+                "shell",
+                "pwsh",
+                "powershell",
+                "command line",
+                "cli",
+            ],
         );
     }
     if n.contains("command prompt") || n == "cmd" || id.ends_with("cmd.exe") {
         push_aliases(
             &mut aliases,
-            &["terminal", "console", "cmd", "command prompt", "command line", "cli"],
+            &[
+                "terminal",
+                "console",
+                "cmd",
+                "command prompt",
+                "command line",
+                "cli",
+            ],
         );
     }
     if n.contains("file explorer") || n == "explorer" || id.contains("explorer.exe") {
         push_aliases(
             &mut aliases,
-            &["files", "file manager", "explorer", "folders", "home folder"],
+            &[
+                "files",
+                "file manager",
+                "explorer",
+                "folders",
+                "home folder",
+            ],
         );
     }
     if n.contains("settings") || id.contains("immersivecontrolpanel") {
         push_aliases(
             &mut aliases,
-            &["settings", "preferences", "control panel", "system settings"],
+            &[
+                "settings",
+                "preferences",
+                "control panel",
+                "system settings",
+            ],
         );
     }
     if ["edge", "chrome", "firefox", "opera", "brave", "vivaldi"]
@@ -71,11 +103,20 @@ fn aliases_for(name: &str, app_id: &str) -> Vec<String> {
     if n.contains("snipping tool") || n.contains("snip & sketch") {
         push_aliases(
             &mut aliases,
-            &["screenshot", "screen capture", "snipping", "snip", "capture"],
+            &[
+                "screenshot",
+                "screen capture",
+                "snipping",
+                "snip",
+                "capture",
+            ],
         );
     }
     if n.contains("photos") {
-        push_aliases(&mut aliases, &["photos", "images", "pictures", "image viewer"]);
+        push_aliases(
+            &mut aliases,
+            &["photos", "images", "pictures", "image viewer"],
+        );
     }
     if n.contains("camera") {
         push_aliases(&mut aliases, &["camera", "webcam", "photo"]);
@@ -92,7 +133,12 @@ fn aliases_for(name: &str, app_id: &str) -> Vec<String> {
     if n.contains("task manager") {
         push_aliases(
             &mut aliases,
-            &["task manager", "processes", "system monitor", "performance"],
+            &[
+                "task manager",
+                "processes",
+                "system monitor",
+                "performance",
+            ],
         );
     }
 
@@ -141,7 +187,11 @@ pub fn list() -> Result<Vec<AppEntry>, String> {
         })
         .collect();
 
-    apps.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    apps.sort_by(|a, b| {
+        a.name
+            .to_ascii_lowercase()
+            .cmp(&b.name.to_ascii_lowercase())
+    });
     apps.dedup_by(|a, b| a.app_id.eq_ignore_ascii_case(&b.app_id));
     Ok(apps)
 }
@@ -180,7 +230,10 @@ mod tests {
     fn gnome_style_names_resolve_windows_equivalents() {
         let files = aliases_for("File Explorer", "explorer.exe");
         let monitor = aliases_for("Task Manager", "TaskManager");
-        let capture = aliases_for("Snipping Tool", "Microsoft.ScreenSketch_8wekyb3d8bbwe!App");
+        let capture = aliases_for(
+            "Snipping Tool",
+            "Microsoft.ScreenSketch_8wekyb3d8bbwe!App",
+        );
 
         assert!(files.iter().any(|alias| alias == "files"));
         assert!(monitor.iter().any(|alias| alias == "system monitor"));
