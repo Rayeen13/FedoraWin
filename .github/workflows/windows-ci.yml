@@ -28,7 +28,7 @@ jobs:
         run: cargo check
       - name: Build memory smoke binary
         working-directory: src-tauri
-        run: cargo build
+        run: cargo build --release
       - name: FedoraWin memory budget
         shell: pwsh
         run: ./tests/check-memory-budget.ps1

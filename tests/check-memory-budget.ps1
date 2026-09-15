@@ -1,5 +1,5 @@
 param(
-    [string]$Executable = 'src-tauri\target\debug\fedorawin.exe',
+    [string]$Executable = 'src-tauri\target\release\fedorawin.exe',
     [int]$TargetIdleMb = 100,
     [int]$HardLimitMb = 300
 )
@@ -56,6 +56,7 @@ function Get-TreeWorkingSetMb {
     [pscustomobject]@{
         Megabytes = [Math]::Ceiling($bytes / 1MB)
         ProcessCount = $alive
+        ProcessIds = $ids
     }
 }
 
@@ -75,6 +76,14 @@ try {
         $sample = Get-TreeWorkingSetMb -RootProcessId $process.Id
         $samples += $sample
         Write-Host ("MEMORY sample {0}: {1} MB across {2} processes" -f $_, $sample.Megabytes, $sample.ProcessCount)
+        if ($_ -eq 1) {
+            foreach ($id in $sample.ProcessIds) {
+                try {
+                    $item = Get-Process -Id $id -ErrorAction Stop
+                    Write-Host ("MEMORY process: {0} pid={1} workingSet={2} MB" -f $item.ProcessName, $id, [Math]::Ceiling($item.WorkingSet64 / 1MB))
+                } catch {}
+            }
+        }
         Start-Sleep -Milliseconds 350
     }
 
