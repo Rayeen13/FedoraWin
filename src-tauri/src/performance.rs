@@ -174,8 +174,7 @@ pub fn set_low_memory_target(window: &tauri::WebviewWindow) -> Result<(), String
                         .controller()
                         .CoreWebView2()
                         .map_err(|error| error.to_string())?;
-                    let memory: ICoreWebView2_19 =
-                        core.cast().map_err(|error| error.to_string())?;
+                    let memory: ICoreWebView2_19 = core.cast().map_err(|error| error.to_string())?;
                     memory
                         .SetMemoryUsageTargetLevel(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW)
                         .map_err(|error| error.to_string())?;
