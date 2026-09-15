@@ -337,6 +337,9 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
 }
 
 unsafe fn overlay_rect(target: isize) -> Option<Rect> {
+    // DWM documents caption-button bounds in window-relative coordinates.
+    // Use the real window origin for screen placement; extended-frame bounds
+    // are queried as a visibility/sanity check but have a different origin.
     let mut frame = Rect::default();
     if DwmGetWindowAttribute(
         target,
@@ -345,6 +348,11 @@ unsafe fn overlay_rect(target: isize) -> Option<Rect> {
         size_of::<Rect>() as u32,
     ) != 0
     {
+        return None;
+    }
+
+    let mut window = Rect::default();
+    if GetWindowRect(target, &mut window) == 0 {
         return None;
     }
 
@@ -361,15 +369,19 @@ unsafe fn overlay_rect(target: isize) -> Option<Rect> {
 
     let width = buttons.right - buttons.left;
     let height = buttons.bottom - buttons.top;
-    if width <= 0 || height <= 0 {
+    if width <= 0
+        || height <= 0
+        || frame.right <= frame.left
+        || frame.bottom <= frame.top
+    {
         return None;
     }
 
     Some(Rect {
-        left: frame.left + buttons.left,
-        top: frame.top + buttons.top,
-        right: frame.left + buttons.right,
-        bottom: frame.top + buttons.bottom,
+        left: window.left + buttons.left,
+        top: window.top + buttons.top,
+        right: window.left + buttons.right,
+        bottom: window.top + buttons.bottom,
     })
 }
 
@@ -589,6 +601,7 @@ extern "system" {
         flags: u32,
     ) -> i32;
     fn GetClientRect(hwnd: isize, rect: *mut Rect) -> i32;
+    fn GetWindowRect(hwnd: isize, rect: *mut Rect) -> i32;
     fn SendMessageW(hwnd: isize, message: u32, wparam: usize, lparam: isize) -> isize;
     fn BeginPaint(hwnd: isize, paint: *mut PaintStruct) -> isize;
     fn EndPaint(hwnd: isize, paint: *const PaintStruct) -> i32;
