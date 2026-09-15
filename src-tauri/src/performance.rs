@@ -60,11 +60,7 @@ extern "system" {
 
 #[link(name = "psapi")]
 extern "system" {
-    fn GetProcessMemoryInfo(
-        process: isize,
-        counters: *mut ProcessMemoryCounters,
-        cb: u32,
-    ) -> i32;
+    fn GetProcessMemoryInfo(process: isize, counters: *mut ProcessMemoryCounters, cb: u32) -> i32;
 }
 
 fn process_tree(root: u32) -> Result<HashSet<u32>, String> {
@@ -105,13 +101,8 @@ fn process_tree(root: u32) -> Result<HashSet<u32>, String> {
 }
 
 fn working_set(process_id: u32) -> Option<u64> {
-    let process = unsafe {
-        OpenProcess(
-            PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-            0,
-            process_id,
-        )
-    };
+    let process =
+        unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, process_id) };
     if process == 0 {
         return None;
     }

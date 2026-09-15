@@ -325,8 +325,15 @@ fn main() {
             let date_visible = capture_view.as_deref() == Some("date-menu");
             let quick_visible = capture_view.as_deref() == Some("quick-settings");
 
-            build_window(app.handle(), "panel", "panel", shell_layout.panel, true, capture)
-                .map_err(std::io::Error::other)?;
+            build_window(
+                app.handle(),
+                "panel",
+                "panel",
+                shell_layout.panel,
+                true,
+                capture,
+            )
+            .map_err(std::io::Error::other)?;
 
             // Keep idle FedoraWin feather-light: only the panel stays resident.
             // Auxiliary WebViews are created on demand and closed when dismissed.
