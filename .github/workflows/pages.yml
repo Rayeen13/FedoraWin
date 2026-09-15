@@ -20,53 +20,47 @@ concurrency:
 
 jobs:
   windows-preview:
-    name: Windows shell evidence
+    name: Current FedoraWin.exe gallery evidence
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    env:
+      FEDORAWIN_SOURCE_BRANCH: dev/gnome-native-20260914
     steps:
-      - name: Checkout current FedoraWin development source
+      - name: Checkout current native FedoraWin source
         uses: actions/checkout@v5
         with:
-          ref: develop
+          ref: dev/gnome-native-20260914
 
-      - uses: actions/setup-python@v6
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
         with:
-          python-version: '3.12'
+          workspaces: src-tauri
 
-      - name: Install Python test dependency
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: UI/native contracts
+        run: node --test tests/ui_contract.test.mjs
+
+      - name: Rust unit tests
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Rust format gate
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: Build current FedoraWin.exe
+        working-directory: src-tauri
+        run: cargo build --release
+
+      - name: Capture real Tauri shell surfaces
         shell: pwsh
-        run: python -m pip install --disable-pip-version-check pytest
+        run: ./tests/capture-site-preview.ps1
 
-      - name: Safety, structure and regression suite
-        shell: pwsh
-        run: python -m pytest -q
-
-      - name: Compile repo-native bridge
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Add-Type -Path 'native/FedoraWinNativeUi.cs'
-          if (-not ('FedoraWinDwmFrameManager' -as [type])) { throw 'DWM frame manager type missing' }
-          if (-not ('FedoraWinAppBar' -as [type])) { throw 'AppBar type missing' }
-          if (-not ('FedoraWinPowerMode' -as [type])) { throw 'Power mode type missing' }
-
-      - name: Installed-app catalog smoke
-        shell: powershell
-        run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tests\app-catalog-smoke.ps1
-
-      - name: Windows PowerShell 5.1 and WPF smoke
-        shell: powershell
-        run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File tests\windows-smoke.ps1
-
-      - name: Build FedoraWin executable package
-        shell: powershell
-        run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tests\build-exe.ps1
-
-      - name: Capture real FedoraWin.exe UI surfaces
-        shell: powershell
-        run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File tests\capture-site-preview.ps1
-
-      - name: Upload Windows-rendered site evidence
+      - name: Upload Windows-rendered gallery
         uses: actions/upload-artifact@v4
         with:
           name: pages-windows-preview
@@ -81,7 +75,7 @@ jobs:
     needs: windows-preview
     environment:
       name: github-pages
-      url: \${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout website
@@ -96,15 +90,19 @@ jobs:
       - name: Validate static docs
         run: python .github/scripts/check-docs.py
 
-      - name: Verify Windows evidence payload
+      - name: Verify runtime gallery payload
         shell: bash
         run: |
           set -euo pipefail
           test -s docs/assets/runtime/preview-metadata.json
-          test -s docs/assets/runtime/activities-overview.png
-          test -s docs/assets/runtime/applications-grid.png
-          test -s docs/assets/runtime/quick-settings-dark.png
-          test -s docs/assets/runtime/quick-settings-light.png
+          test -s docs/assets/runtime/panel.png
+          test -s docs/assets/runtime/activities.png
+          test -s docs/assets/runtime/apps.png
+          test -s docs/assets/runtime/search_terminal.png
+          test -s docs/assets/runtime/quick_settings_dark.png
+          test -s docs/assets/runtime/quick_settings_light.png
+          test -s docs/assets/runtime/appearance.png
+          test -s docs/assets/runtime/date_menu.png
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
-PUBLIC_PAGES = {"index.html", "getting-started.html", "architecture.html", "status.html"}
+PUBLIC_PAGES = {"index.html", "gallery.html", "getting-started.html", "architecture.html", "status.html"}
 
 class Collector(HTMLParser):
     def __init__(self):
@@ -38,18 +38,13 @@ class Collector(HTMLParser):
 
 errors = []
 html_files = sorted(DOCS.glob("*.html"))
-if not html_files:
-    errors.append("No documentation HTML files found.")
-
 parsed = {}
 for html_file in html_files:
     parser = Collector()
     parser.feed(html_file.read_text(encoding="utf-8"))
     parsed[html_file.name] = parser
-
     if parser.images_without_alt:
         errors.append(f"{html_file.name}: images missing alt: {parser.images_without_alt}")
-
     if html_file.name in PUBLIC_PAGES:
         if not parser.meta_description:
             errors.append(f"{html_file.name}: missing meta description")
@@ -63,17 +58,13 @@ for html_file in html_files:
     for _, ref in parser.refs:
         if not ref or ref.startswith(("mailto:", "javascript:")):
             continue
-
         if ref.startswith("#"):
-            anchor = ref[1:]
-            if anchor and anchor not in parser.ids:
+            if ref[1:] and ref[1:] not in parser.ids:
                 errors.append(f"{html_file.name}: missing local anchor: {ref}")
             continue
-
         parsed_ref = urlparse(ref)
         if parsed_ref.scheme in {"http", "https"}:
             continue
-
         local_path = parsed_ref.path
         if local_path == "/FedoraWin" or local_path == "/FedoraWin/":
             local_path = "index.html"
@@ -82,18 +73,15 @@ for html_file in html_files:
         elif local_path.startswith("/"):
             errors.append(f"{html_file.name}: unexpected site-root reference: {ref}")
             continue
-
-        target = (DOCS / local_path).resolve() if parsed_ref.path.startswith("/") else (html_file.parent / local_path).resolve()
+        target = (html_file.parent / local_path).resolve()
         try:
             target.relative_to(DOCS.resolve())
         except ValueError:
             errors.append(f"{html_file.name}: local reference escapes docs/: {ref}")
             continue
-
         if parsed_ref.path and not target.exists():
             errors.append(f"{html_file.name}: missing local target: {ref}")
             continue
-
         if parsed_ref.fragment and target.suffix.lower() == ".html" and target.exists():
             target_parser = parsed.get(target.name)
             if target_parser and parsed_ref.fragment not in target_parser.ids:
@@ -101,27 +89,24 @@ for html_file in html_files:
 
 index = (DOCS / "index.html").read_text(encoding="utf-8")
 for required in [
-    "Pre-beta shell development",
-    "The shell is becoming coherent. Runtime breadth still matters.",
-    "Real FedoraWin.exe CI",
-    "Native HWND + DWM integration",
-    "assets/screenshots/quick-settings-dark.webp",
-    "./status.html",
+    "Rust + Tauri/WebView2",
+    "Display topology",
+    "Alt+F1",
+    "./gallery.html",
+    "data-runtime-shot=\"activities\"",
 ]:
     if required not in index:
         errors.append(f"index.html: missing required content: {required}")
 
-for required_file in [
-    ".nojekyll",
-    "status.html",
-    "assets/favicon.svg",
-    "robots.txt",
-    "sitemap.xml",
-]:
+gallery = (DOCS / "gallery.html").read_text(encoding="utf-8")
+for key in ["panel", "activities", "apps", "search_terminal", "quick_settings_dark", "quick_settings_light", "appearance", "date_menu"]:
+    if f'data-runtime-shot="{key}"' not in gallery:
+        errors.append(f"gallery.html: missing runtime shot: {key}")
+
+for required_file in [".nojekyll", "gallery.html", "status.html", "assets/favicon.svg", "robots.txt", "sitemap.xml"]:
     if not (DOCS / required_file).exists():
         errors.append(f"docs/{required_file} is missing")
 
 if errors:
     raise SystemExit("\n".join(f"ERROR: {error}" for error in errors))
-
-print(f"Docs validation passed: {len(html_files)} HTML pages, links and metadata verified")
+print(f"Docs validation passed: {len(html_files)} HTML pages, links, metadata and gallery verified")

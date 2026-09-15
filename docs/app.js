@@ -100,9 +100,10 @@
         ? metadata.screen.width+'×'+metadata.screen.height
         : 'runner desktop';
       const image=String(metadata.runner_image||'Windows runner');
+      const runtime=String(metadata.runtime||'FedoraWin.exe');
 
       document.querySelectorAll('[data-ci-provenance]').forEach(el=>{
-        el.textContent='Rendered from '+metadata.source_branch+' @ '+shortSha+' · '+capturedLabel+' · '+image+' · '+resolution;
+        el.textContent=runtime+' · '+metadata.source_branch+' @ '+shortSha+' · '+capturedLabel+' · '+image+' · '+resolution;
         if(runId){
           el.append(' · ');
           const link=document.createElement('a');
