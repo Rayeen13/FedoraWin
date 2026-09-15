@@ -157,11 +157,53 @@ Invoke-Capture -Key 'quick_settings_light' -View 'quick-settings' -WindowLabel '
 Invoke-Capture -Key 'appearance' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'appearance' -Theme 'dark'
 Invoke-Capture -Key 'date_menu' -View 'date-menu' -WindowLabel 'date-menu' -Theme 'dark'
 
+function Invoke-NativeFrameCapture {
+    $env:FEDORAWIN_CAPTURE_VIEW = 'panel'
+    $env:FEDORAWIN_CAPTURE_MODE = ''
+    $env:FEDORAWIN_CAPTURE_THEME = 'dark'
+    $shellProcess = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
+    $probeProcess = $null
+    $probeFile = Join-Path $output 'native-frame-probe.ps1'
+    @'
+Add-Type -AssemblyName System.Windows.Forms
+$form = New-Object System.Windows.Forms.Form
+$form.Text = 'FedoraWin Native Frame Probe'
+$form.Width = 820
+$form.Height = 520
+$form.StartPosition = 'CenterScreen'
+$label = New-Object System.Windows.Forms.Label
+$label.Dock = 'Fill'
+$label.TextAlign = 'MiddleCenter'
+$label.Font = New-Object System.Drawing.Font('Segoe UI', 20)
+$label.Text = 'Real Windows HWND styled by FedoraWin / DWM'
+$form.Controls.Add($label)
+[void]$form.ShowDialog()
+'@ | Set-Content -LiteralPath $probeFile -Encoding UTF8
+
+    try {
+        [void](Wait-Window -ProcessId $shellProcess.Id -Title 'FedoraWin — panel')
+        $probeProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-STA','-File', $probeFile) -PassThru
+        $probeHwnd = Wait-Window -ProcessId $probeProcess.Id -Title 'FedoraWin Native Frame Probe'
+        Start-Sleep -Milliseconds 1800
+        [void](Save-WindowCapture -Hwnd $probeHwnd -FileName 'native_frame.png')
+        $captures.native_frame = 'native_frame.png'
+    } finally {
+        if ($probeProcess -and -not $probeProcess.HasExited) { Stop-Process -Id $probeProcess.Id -Force -ErrorAction SilentlyContinue }
+        if ($shellProcess -and -not $shellProcess.HasExited) { Stop-Process -Id $shellProcess.Id -Force -ErrorAction SilentlyContinue }
+        Remove-Item Env:FEDORAWIN_CAPTURE_VIEW -ErrorAction SilentlyContinue
+        Remove-Item Env:FEDORAWIN_CAPTURE_MODE -ErrorAction SilentlyContinue
+        Remove-Item Env:FEDORAWIN_CAPTURE_THEME -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $probeFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Invoke-NativeFrameCapture
+
 $hashes = [ordered]@{}
 foreach ($entry in $captures.GetEnumerator()) {
     $hashes[$entry.Key] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $output $entry.Value)).Hash.ToLowerInvariant()
 }
-if (($hashes.Values | Select-Object -Unique).Count -lt 7) {
+if (($hashes.Values | Select-Object -Unique).Count -lt 8) {
     throw 'Runtime gallery captures are not sufficiently distinct.'
 }
 if ($hashes.quick_settings_dark -eq $hashes.quick_settings_light) {
