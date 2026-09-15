@@ -40,31 +40,7 @@ fn get_memory_snapshot() -> Result<performance::MemorySnapshot, String> {
 
 #[tauri::command]
 fn toggle_surface(app: tauri::AppHandle, label: String) -> Result<(), String> {
-    if !matches!(label.as_str(), "date-menu" | "quick-settings") {
-        return Err("unsupported shell surface".into());
-    }
-    if let Some(window) = app.get_webview_window(&label) {
-        if window.is_visible().map_err(|e| e.to_string())? {
-            window.close().map_err(|e| e.to_string())?;
-            return Ok(());
-        }
-    }
-
-    shell::hide_activities(&app)?;
-    for other in ["date-menu", "quick-settings"] {
-        if other != label {
-            if let Some(window) = app.get_webview_window(other) {
-                let _ = window.close();
-            }
-        }
-    }
-
-    let window = ensure_shell_surface(&app, &label, &label, true, None)?;
-    if let Err(error) = window.set_focus() {
-        let _ = window.close();
-        return Err(error.to_string());
-    }
-    Ok(())
+    shell::toggle_surface(&app, &label)
 }
 
 #[tauri::command]
@@ -208,7 +184,6 @@ fn surface_geometry(label: &str) -> Result<layout::SurfaceGeometry, String> {
     let display = windows::display::primary()?;
     let shell_layout = layout::for_display(&display);
     match label {
-        "panel" => Ok(shell_layout.panel),
         "activities" => Ok(shell_layout.activities),
         "date-menu" => Ok(shell_layout.date_menu),
         "quick-settings" => Ok(shell_layout.quick_settings),
@@ -253,18 +228,9 @@ fn relayout_shell_surfaces(app: &tauri::AppHandle) -> Result<(), String> {
     let shell_layout = layout::for_display(&display);
 
     #[cfg(windows)]
-    let panel_hwnd = app
-        .get_webview_window("panel")
-        .and_then(|panel| panel.hwnd().ok())
-        .map(|hwnd| hwnd.0 as isize);
-
-    #[cfg(windows)]
-    if let Some(hwnd) = panel_hwnd {
-        windows::appbar::release(hwnd);
-    }
+    windows::panel::relayout(&display)?;
 
     for (label, geometry) in [
-        ("panel", shell_layout.panel),
         ("activities", shell_layout.activities),
         ("date-menu", shell_layout.date_menu),
         ("quick-settings", shell_layout.quick_settings),
@@ -272,11 +238,6 @@ fn relayout_shell_surfaces(app: &tauri::AppHandle) -> Result<(), String> {
         if let Some(window) = app.get_webview_window(label) {
             apply_surface_geometry(&window, geometry)?;
         }
-    }
-
-    #[cfg(windows)]
-    if let Some(hwnd) = panel_hwnd {
-        windows::appbar::reserve_top(hwnd)?;
     }
 
     Ok(())
@@ -352,7 +313,14 @@ fn main() {
             let date_visible = capture_view.as_deref() == Some("date-menu");
             let quick_visible = capture_view.as_deref() == Some("quick-settings");
 
-            let panel = build_window(
+            // Keep idle FedoraWin feather-light: the always-resident panel is
+            // native Win32/Rust. Rich GNOME surfaces use WebView2 only on demand.
+            #[cfg(windows)]
+            windows::panel::start(app.handle().clone(), display.clone())
+                .map_err(std::io::Error::other)?;
+
+            #[cfg(not(windows))]
+            build_window(
                 app.handle(),
                 "panel",
                 "panel",
@@ -362,11 +330,6 @@ fn main() {
             )
             .map_err(std::io::Error::other)?;
 
-            // The panel is always resident but very simple; WebView2's supported
-            // low-memory target keeps its browser process set as lean as possible.
-            let _ = performance::set_low_memory_target(&panel);
-
-            // Keep idle FedoraWin feather-light: only the panel stays resident.
             // Auxiliary WebViews are created on demand and closed when dismissed.
             if activities_visible {
                 build_window(
@@ -404,10 +367,6 @@ fn main() {
 
             #[cfg(windows)]
             {
-                if let Some(panel) = app.get_webview_window("panel") {
-                    let hwnd = panel.hwnd()?;
-                    windows::appbar::reserve_top(hwnd.0 as isize)?;
-                }
                 windows::frame::start_frame_watcher(state.clone());
                 let _ = windows::hotkeys::start_activities_hotkey(app.handle().clone());
                 let _ = windows::window_events::start(app.handle().clone());

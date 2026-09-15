@@ -123,6 +123,35 @@ pub fn hide_activities(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+pub fn toggle_surface(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
+    if !matches!(label, "date-menu" | "quick-settings") {
+        return Err("unsupported shell surface".into());
+    }
+
+    if let Some(window) = app.get_webview_window(label) {
+        if window.is_visible().map_err(|error| error.to_string())? {
+            window.close().map_err(|error| error.to_string())?;
+            return Ok(());
+        }
+    }
+
+    hide_activities(app)?;
+    for other in ["date-menu", "quick-settings"] {
+        if other != label {
+            if let Some(window) = app.get_webview_window(other) {
+                let _ = window.close();
+            }
+        }
+    }
+
+    let window = crate::ensure_shell_surface(app, label, label, true, None)?;
+    if let Err(error) = window.set_focus() {
+        let _ = window.close();
+        return Err(error.to_string());
+    }
+    Ok(())
+}
+
 pub fn toggle_activities(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<std::sync::Arc<ShellState>>();
     let window = crate::ensure_activities_window(app)?;

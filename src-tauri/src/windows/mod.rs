@@ -9,6 +9,8 @@ pub mod frame;
 #[cfg(windows)]
 pub mod hotkeys;
 #[cfg(windows)]
+pub mod panel;
+#[cfg(windows)]
 pub mod thumbnails;
 #[cfg(windows)]
 pub mod virtual_desktop;
@@ -220,5 +222,22 @@ pub mod virtual_desktop {
         pub fn pending_count(&self) -> usize {
             0
         }
+    }
+}
+
+#[cfg(not(windows))]
+pub mod panel {
+    use crate::windows::display::DisplayInfo;
+
+    pub fn start(_: tauri::AppHandle, _: DisplayInfo) -> Result<isize, String> {
+        Ok(0)
+    }
+
+    pub fn relayout(_: &DisplayInfo) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn hwnd() -> Option<isize> {
+        None
     }
 }

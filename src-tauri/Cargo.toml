@@ -20,6 +20,3 @@ parking_lot = "0.12"
 [features]
 default = []
 
-[target.'cfg(windows)'.dependencies]
-webview2-com = "0.38"
-windows-core = "0.61"
