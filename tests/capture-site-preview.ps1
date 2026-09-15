@@ -113,8 +113,9 @@ function Save-WindowCapture {
     }
 
     $file = Get-Item -LiteralPath $path
-    if ($file.Length -lt 2048) {
-        throw "Capture '$FileName' is unexpectedly small ($($file.Length) bytes)."
+    $minimumBytes = if ($height -le 64) { 512 } else { 2048 }
+    if ($file.Length -lt $minimumBytes) {
+        throw "Capture '$FileName' is unexpectedly small ($($file.Length) bytes; minimum $minimumBytes for $($width)x$($height))."
     }
     return $path
 }
