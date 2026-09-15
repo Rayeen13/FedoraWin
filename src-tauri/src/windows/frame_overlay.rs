@@ -188,10 +188,38 @@ unsafe fn paint_controls(hwnd: isize) {
     );
 
     let second_x = segment + segment / 2;
-    draw_line(hdc, second_x - 4, center_y - 4, second_x + 4, center_y - 4, foreground);
-    draw_line(hdc, second_x + 4, center_y - 4, second_x + 4, center_y + 4, foreground);
-    draw_line(hdc, second_x + 4, center_y + 4, second_x - 4, center_y + 4, foreground);
-    draw_line(hdc, second_x - 4, center_y + 4, second_x - 4, center_y - 4, foreground);
+    draw_line(
+        hdc,
+        second_x - 4,
+        center_y - 4,
+        second_x + 4,
+        center_y - 4,
+        foreground,
+    );
+    draw_line(
+        hdc,
+        second_x + 4,
+        center_y - 4,
+        second_x + 4,
+        center_y + 4,
+        foreground,
+    );
+    draw_line(
+        hdc,
+        second_x + 4,
+        center_y + 4,
+        second_x - 4,
+        center_y + 4,
+        foreground,
+    );
+    draw_line(
+        hdc,
+        second_x - 4,
+        center_y + 4,
+        second_x - 4,
+        center_y - 4,
+        foreground,
+    );
 
     let third_x = segment * 2 + segment / 2;
     draw_line(
@@ -403,10 +431,7 @@ unsafe fn reconcile(
     );
 
     let mut targets = Vec::new();
-    EnumWindows(
-        enum_callback,
-        &mut targets as *mut Vec<isize> as isize,
-    );
+    EnumWindows(enum_callback, &mut targets as *mut Vec<isize> as isize);
     let active: HashSet<isize> = targets.iter().copied().collect();
 
     overlays.retain(|target, overlay| {
