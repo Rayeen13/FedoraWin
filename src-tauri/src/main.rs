@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod layout;
+mod performance;
 mod shell;
 mod windows;
 
@@ -33,30 +34,35 @@ fn toggle_activities(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_memory_snapshot() -> Result<performance::MemorySnapshot, String> {
+    performance::snapshot()
+}
+
+#[tauri::command]
 fn toggle_surface(app: tauri::AppHandle, label: String) -> Result<(), String> {
     if !matches!(label.as_str(), "date-menu" | "quick-settings") {
         return Err("unsupported shell surface".into());
     }
-    let window = app
-        .get_webview_window(&label)
-        .ok_or_else(|| format!("{label} window is unavailable"))?;
-    let visible = window.is_visible().map_err(|e| e.to_string())?;
-    if visible {
-        window.hide().map_err(|e| e.to_string())?;
-    } else {
-        shell::hide_activities(&app)?;
-        for other in ["date-menu", "quick-settings"] {
-            if other != label {
-                if let Some(w) = app.get_webview_window(other) {
-                    let _ = w.hide();
-                }
+    if let Some(window) = app.get_webview_window(&label) {
+        if window.is_visible().map_err(|e| e.to_string())? {
+            window.close().map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+    }
+
+    shell::hide_activities(&app)?;
+    for other in ["date-menu", "quick-settings"] {
+        if other != label {
+            if let Some(window) = app.get_webview_window(other) {
+                let _ = window.close();
             }
         }
-        window.show().map_err(|e| e.to_string())?;
-        if let Err(error) = window.set_focus() {
-            let _ = window.hide();
-            return Err(error.to_string());
-        }
+    }
+
+    let window = ensure_shell_surface(&app, &label, &label, true, None)?;
+    if let Err(error) = window.set_focus() {
+        let _ = window.close();
+        return Err(error.to_string());
     }
     Ok(())
 }
@@ -136,13 +142,13 @@ fn refresh_window_frames(state: tauri::State<'_, Arc<ShellState>>) -> Result<usi
 }
 
 fn build_window(
-    app: &tauri::App,
+    app: &tauri::AppHandle,
     label: &str,
     view: &str,
     geometry: layout::SurfaceGeometry,
     visible: bool,
     capture_mode: Option<&str>,
-) -> tauri::Result<()> {
+) -> Result<tauri::WebviewWindow, String> {
     let url = match capture_mode {
         Some(mode) => format!("index.html?view={view}&capture={mode}"),
         None => format!("index.html?view={view}"),
@@ -155,9 +161,12 @@ fn build_window(
         .always_on_top(true)
         .visible(visible)
         .inner_size(geometry.width, geometry.height)
-        .build()?;
-    window.set_position(PhysicalPosition::new(geometry.x, geometry.y))?;
-    Ok(())
+        .build()
+        .map_err(|error| error.to_string())?;
+    window
+        .set_position(PhysicalPosition::new(geometry.x, geometry.y))
+        .map_err(|error| error.to_string())?;
+    Ok(window)
 }
 
 fn apply_surface_geometry(
@@ -171,6 +180,50 @@ fn apply_surface_geometry(
         .set_position(PhysicalPosition::new(geometry.x, geometry.y))
         .map_err(|error| error.to_string())
 }
+
+fn surface_geometry(label: &str) -> Result<layout::SurfaceGeometry, String> {
+    let display = windows::display::primary()?;
+    let shell_layout = layout::for_display(&display);
+    match label {
+        "panel" => Ok(shell_layout.panel),
+        "activities" => Ok(shell_layout.activities),
+        "date-menu" => Ok(shell_layout.date_menu),
+        "quick-settings" => Ok(shell_layout.quick_settings),
+        _ => Err(format!("unsupported shell surface: {label}")),
+    }
+}
+
+fn ensure_shell_surface(
+    app: &tauri::AppHandle,
+    label: &str,
+    view: &str,
+    visible: bool,
+    capture_mode: Option<&str>,
+) -> Result<tauri::WebviewWindow, String> {
+    if let Some(window) = app.get_webview_window(label) {
+        apply_surface_geometry(&window, surface_geometry(label)?)?;
+        if visible {
+            window.show().map_err(|error| error.to_string())?;
+        }
+        return Ok(window);
+    }
+
+    build_window(
+        app,
+        label,
+        view,
+        surface_geometry(label)?,
+        visible,
+        capture_mode,
+    )
+}
+
+pub(crate) fn ensure_activities_window(
+    app: &tauri::AppHandle,
+) -> Result<tauri::WebviewWindow, String> {
+    ensure_shell_surface(app, "activities", "activities", false, None)
+}
+
 
 fn relayout_shell_surfaces(app: &tauri::AppHandle) -> Result<(), String> {
     let display = windows::display::primary()?;
@@ -193,10 +246,9 @@ fn relayout_shell_surfaces(app: &tauri::AppHandle) -> Result<(), String> {
         ("date-menu", shell_layout.date_menu),
         ("quick-settings", shell_layout.quick_settings),
     ] {
-        let window = app
-            .get_webview_window(label)
-            .ok_or_else(|| format!("{label} window is unavailable"))?;
-        apply_surface_geometry(&window, geometry)?;
+        if let Some(window) = app.get_webview_window(label) {
+            apply_surface_geometry(&window, geometry)?;
+        }
     }
 
     #[cfg(windows)]
@@ -252,6 +304,7 @@ fn main() {
             set_appearance,
             toggle_activities,
             toggle_surface,
+            get_memory_snapshot,
             list_apps,
             list_displays,
             launch_app,
@@ -272,31 +325,44 @@ fn main() {
             let date_visible = capture_view.as_deref() == Some("date-menu");
             let quick_visible = capture_view.as_deref() == Some("quick-settings");
 
-            build_window(app, "panel", "panel", shell_layout.panel, true, capture)?;
-            build_window(
-                app,
-                "activities",
-                "activities",
-                shell_layout.activities,
-                activities_visible,
-                capture,
-            )?;
-            build_window(
-                app,
-                "date-menu",
-                "date-menu",
-                shell_layout.date_menu,
-                date_visible,
-                capture,
-            )?;
-            build_window(
-                app,
-                "quick-settings",
-                "quick-settings",
-                shell_layout.quick_settings,
-                quick_visible,
-                capture,
-            )?;
+            build_window(app.handle(), "panel", "panel", shell_layout.panel, true, capture)
+                .map_err(std::io::Error::other)?;
+
+            // Keep idle FedoraWin feather-light: only the panel stays resident.
+            // Auxiliary WebViews are created on demand and closed when dismissed.
+            if activities_visible {
+                build_window(
+                    app.handle(),
+                    "activities",
+                    "activities",
+                    shell_layout.activities,
+                    true,
+                    capture,
+                )
+                .map_err(std::io::Error::other)?;
+            }
+            if date_visible {
+                build_window(
+                    app.handle(),
+                    "date-menu",
+                    "date-menu",
+                    shell_layout.date_menu,
+                    true,
+                    capture,
+                )
+                .map_err(std::io::Error::other)?;
+            }
+            if quick_visible {
+                build_window(
+                    app.handle(),
+                    "quick-settings",
+                    "quick-settings",
+                    shell_layout.quick_settings,
+                    true,
+                    capture,
+                )
+                .map_err(std::io::Error::other)?;
+            }
 
             #[cfg(windows)]
             {

@@ -107,19 +107,17 @@ impl ShellState {
 fn hide_popovers(app: &tauri::AppHandle) {
     for label in ["date-menu", "quick-settings"] {
         if let Some(window) = app.get_webview_window(label) {
-            let _ = window.hide();
+            let _ = window.close();
         }
     }
 }
 
 pub fn hide_activities(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<std::sync::Arc<ShellState>>();
-    let window = app
-        .get_webview_window("activities")
-        .ok_or_else(|| "activities window is unavailable".to_string())?;
-
-    if window.is_visible().map_err(|e| e.to_string())? {
-        window.hide().map_err(|e| e.to_string())?;
+    if let Some(window) = app.get_webview_window("activities") {
+        app.state::<crate::windows::thumbnails::ThumbnailManager>()
+            .clear();
+        window.close().map_err(|e| e.to_string())?;
     }
     state.set_activities_open(false);
     Ok(())
@@ -127,13 +125,13 @@ pub fn hide_activities(app: &tauri::AppHandle) -> Result<(), String> {
 
 pub fn toggle_activities(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<std::sync::Arc<ShellState>>();
-    let window = app
-        .get_webview_window("activities")
-        .ok_or_else(|| "activities window is unavailable".to_string())?;
+    let window = crate::ensure_activities_window(app)?;
     let currently_visible = window.is_visible().map_err(|e| e.to_string())?;
 
     if currently_visible {
-        window.hide().map_err(|e| e.to_string())?;
+        app.state::<crate::windows::thumbnails::ThumbnailManager>()
+            .clear();
+        window.close().map_err(|e| e.to_string())?;
         state.set_activities_open(false);
         return Ok(());
     }
@@ -141,7 +139,7 @@ pub fn toggle_activities(app: &tauri::AppHandle) -> Result<(), String> {
     hide_popovers(app);
     window.show().map_err(|e| e.to_string())?;
     if let Err(error) = window.set_focus() {
-        let _ = window.hide();
+        let _ = window.close();
         state.set_activities_open(false);
         return Err(error.to_string());
     }
