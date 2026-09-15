@@ -262,7 +262,7 @@ if ($hashes.quick_settings_dark -eq $hashes.quick_settings_light) {
     source_branch = $sourceBranch
     source_sha = $sourceSha
     captured_utc = [DateTime]::UtcNow.ToString('o')
-    runtime = 'Tauri + Rust + WebView2'
+    runtime = 'Native Rust/Win32 panel + lazy Tauri/WebView2'
     launch_executable = 'fedorawin.exe'
     runner_os = $env:RUNNER_OS
     runner_name = $env:RUNNER_NAME
