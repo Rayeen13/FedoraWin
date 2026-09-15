@@ -98,6 +98,29 @@ fn close_window(handle: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn move_window_to_workspace(
+    state: tauri::State<'_, windows::virtual_desktop::WorkspaceMoveJournal>,
+    handle: String,
+    desktop_id: String,
+) -> Result<(), String> {
+    state.move_window(&handle, &desktop_id)
+}
+
+#[tauri::command]
+fn undo_workspace_move(
+    state: tauri::State<'_, windows::virtual_desktop::WorkspaceMoveJournal>,
+) -> Result<Option<String>, String> {
+    state.undo_last()
+}
+
+#[tauri::command]
+fn workspace_move_status(
+    state: tauri::State<'_, windows::virtual_desktop::WorkspaceMoveJournal>,
+) -> usize {
+    state.pending_count()
+}
+
+#[tauri::command]
 fn sync_window_thumbnails(
     app: tauri::AppHandle,
     state: tauri::State<'_, windows::thumbnails::ThumbnailManager>,
@@ -299,6 +322,7 @@ fn main() {
     tauri::Builder::default()
         .manage(state.clone())
         .manage(windows::thumbnails::ThumbnailManager::default())
+        .manage(windows::virtual_desktop::WorkspaceMoveJournal::default())
         .invoke_handler(tauri::generate_handler![
             get_shell_state,
             set_appearance,
@@ -311,6 +335,9 @@ fn main() {
             list_windows,
             activate_window,
             close_window,
+            move_window_to_workspace,
+            undo_workspace_move,
+            workspace_move_status,
             sync_window_thumbnails,
             clear_window_thumbnails,
             set_wifi_enabled,

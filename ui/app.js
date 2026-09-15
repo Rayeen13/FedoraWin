@@ -86,7 +86,9 @@ async function loadActivitiesData() {
 }
 
 function renderWindowOverview() {
-  const cards = windows.length ? windows.map(w => `
+  const currentWindows = windows.filter(w => w.onCurrentWorkspace !== false);
+  const workspaceIds = [...new Set(windows.map(w => w.desktopId).filter(Boolean))];
+  const cards = currentWindows.length ? currentWindows.map(w => `
     <article class="window-card" title="${escapeHtml(w.title)}">
       <div class="window-card__preview">
         <div class="window-card__bar">
@@ -97,7 +99,8 @@ function renderWindowOverview() {
       </div>
       <button class="window-card__title-button" data-window="${escapeHtml(w.handle)}">${escapeHtml(w.title)}</button>
     </article>`).join('') : '<div class="overview-empty">No open windows on this desktop</div>';
-  return `<div class="workspace-strip"><button class="workspace-peek" aria-label="Previous workspace"></button><div class="workspace-main"><div class="window-grid">${cards}</div></div><button class="workspace-peek" aria-label="Next workspace"></button></div>`;
+  const count = Math.max(workspaceIds.length, 1);
+  return `<div class="workspace-strip workspace-strip--native"><div class="workspace-current"><span>Current workspace</span><small>${count} detected workspace${count === 1 ? '' : 's'}</small></div><div class="workspace-main"><div class="window-grid">${cards}</div></div></div>`;
 }
 
 async function syncLiveThumbnails() {
@@ -320,9 +323,9 @@ async function bootstrap() {
       { name: 'Weather', appId: 'mock.weather', aliases: ['weather'] },
     ];
     windows = [
-      { handle: '1', title: 'FedoraWin — GitHub', minimized: false },
-      { handle: '2', title: 'README.md — Text Editor', minimized: false },
-      { handle: '3', title: 'Windows Terminal', minimized: false },
+      { handle: '1', title: 'FedoraWin — GitHub', minimized: false, desktopId: 'mock-1', onCurrentWorkspace: true },
+      { handle: '2', title: 'README.md — Text Editor', minimized: false, desktopId: 'mock-1', onCurrentWorkspace: true },
+      { handle: '3', title: 'Windows Terminal', minimized: false, desktopId: 'mock-1', onCurrentWorkspace: true },
     ];
   }
   applyAppearance();

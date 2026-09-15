@@ -11,6 +11,8 @@ pub mod hotkeys;
 #[cfg(windows)]
 pub mod thumbnails;
 #[cfg(windows)]
+pub mod virtual_desktop;
+#[cfg(windows)]
 pub mod wifi;
 #[cfg(windows)]
 pub mod window_events;
@@ -134,6 +136,8 @@ pub mod windows_list {
         pub handle: String,
         pub title: String,
         pub minimized: bool,
+        pub desktop_id: Option<String>,
+        pub on_current_workspace: bool,
     }
 
     pub fn list() -> Result<Vec<WindowEntry>, String> {
@@ -179,5 +183,42 @@ pub mod thumbnails {
 pub mod window_events {
     pub fn start(_: tauri::AppHandle) -> Result<(), String> {
         Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+pub mod virtual_desktop {
+    use serde::Serialize;
+
+    #[derive(Clone, Debug, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct WindowWorkspaceInfo {
+        pub desktop_id: String,
+        pub on_current_workspace: bool,
+    }
+
+    #[derive(Default)]
+    pub struct WorkspaceMoveJournal;
+
+    pub fn window_info(_: isize) -> Result<WindowWorkspaceInfo, String> {
+        Err("virtual desktops are Windows-only".into())
+    }
+
+    pub fn navigate(_: i32) -> Result<(), String> {
+        Err("virtual desktops are Windows-only".into())
+    }
+
+    impl WorkspaceMoveJournal {
+        pub fn move_window(&self, _: &str, _: &str) -> Result<(), String> {
+            Err("virtual desktops are Windows-only".into())
+        }
+
+        pub fn undo_last(&self) -> Result<Option<String>, String> {
+            Ok(None)
+        }
+
+        pub fn pending_count(&self) -> usize {
+            0
+        }
     }
 }

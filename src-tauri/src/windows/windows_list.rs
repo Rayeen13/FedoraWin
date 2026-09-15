@@ -6,6 +6,7 @@ const GWL_EXSTYLE: i32 = -20;
 const WS_EX_TOOLWINDOW: isize = 0x00000080;
 const GW_OWNER: u32 = 4;
 const DWMWA_CLOAKED: u32 = 14;
+const DWM_CLOAKED_SHELL: i32 = 0x2;
 const SW_RESTORE: i32 = 9;
 const WM_CLOSE: u32 = 0x0010;
 
@@ -15,6 +16,8 @@ pub struct WindowEntry {
     pub handle: String,
     pub title: String,
     pub minimized: bool,
+    pub desktop_id: Option<String>,
+    pub on_current_workspace: bool,
 }
 
 #[link(name = "user32")]
@@ -58,6 +61,7 @@ unsafe fn eligible(hwnd: isize) -> bool {
         size_of::<i32>() as u32,
     ) == 0
         && cloaked != 0
+        && cloaked & DWM_CLOAKED_SHELL == 0
     {
         return false;
     }
@@ -89,6 +93,8 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
             handle: hwnd.to_string(),
             title,
             minimized: IsIconic(hwnd) != 0,
+            desktop_id: None,
+            on_current_workspace: true,
         });
     }
     1
@@ -105,6 +111,17 @@ pub fn list() -> Result<Vec<WindowEntry>, String> {
     if ok == 0 {
         return Err("EnumWindows failed".into());
     }
+
+    for window in &mut windows {
+        let Ok(hwnd) = window.handle.parse::<isize>() else {
+            continue;
+        };
+        if let Ok(workspace) = super::virtual_desktop::window_info(hwnd) {
+            window.desktop_id = Some(workspace.desktop_id);
+            window.on_current_workspace = workspace.on_current_workspace;
+        }
+    }
+
     Ok(windows)
 }
 
