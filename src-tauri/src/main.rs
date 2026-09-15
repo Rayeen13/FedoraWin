@@ -25,6 +25,7 @@ fn set_appearance(
     state.set_appearance(AppearanceState::parse(&theme, &accent)?)?;
     let snapshot = state.snapshot();
     windows::frame::apply_to_top_level_windows(&snapshot.appearance).map_err(|e| e.to_string())?;
+    windows::frame_overlay::notify();
     Ok(snapshot)
 }
 

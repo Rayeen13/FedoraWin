@@ -2,11 +2,10 @@ use crate::shell::{ShellState, ThemeMode};
 use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
 use std::mem::{size_of, zeroed};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
-
+ 
 const GWL_EXSTYLE: i32 = -20;
 const GWLP_USERDATA: i32 = -21;
 const GW_OWNER: u32 = 4;
@@ -33,7 +32,11 @@ const SC_MAXIMIZE: usize = 0xF030;
 const SC_CLOSE: usize = 0xF060;
 const SC_RESTORE: usize = 0xF120;
 
-const PM_REMOVE: u32 = 0x0001;
+const PM_NOREMOVE: u32 = 0x0000;
+const WM_APP_FRAME_SYNC: u32 = 0x804F;
+const WM_QUIT: u32 = 0x0012;
+const WM_TIMER: u32 = 0x0113;
+const TIMER_RECONCILE: usize = 1;
 const PS_SOLID: i32 = 0;
 const TRANSPARENT: i32 = 1;
 
@@ -41,8 +44,8 @@ const DWMWA_CAPTION_BUTTON_BOUNDS: u32 = 5;
 const DWMWA_EXTENDED_FRAME_BOUNDS: u32 = 9;
 const DWMWA_CLOAKED: u32 = 14;
 
-static STOP: AtomicBool = AtomicBool::new(false);
-static DARK: AtomicBool = AtomicBool::new(true);
+static THREAD_ID: AtomicU32 = AtomicU32::new(0);
+static DARK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -389,8 +392,54 @@ unsafe fn sync_overlay(overlay: isize, target: isize) -> bool {
     ) != 0
 }
 
+unsafe fn reconcile(
+    overlays: &mut HashMap<isize, isize>,
+    class_name: *const u16,
+    state: &ShellState,
+) {
+    DARK.store(
+        !matches!(state.snapshot().appearance.theme, ThemeMode::Light),
+        Ordering::Relaxed,
+    );
+
+    let mut targets = Vec::new();
+    EnumWindows(
+        enum_callback,
+        &mut targets as *mut Vec<isize> as isize,
+    );
+    let active: HashSet<isize> = targets.iter().copied().collect();
+
+    overlays.retain(|target, overlay| {
+        if !active.contains(target)
+            || IsWindow(*target) == 0
+            || !sync_overlay(*overlay, *target)
+        {
+            DestroyWindow(*overlay);
+            false
+        } else {
+            InvalidateRect(*overlay, std::ptr::null(), 0);
+            true
+        }
+    });
+
+    for target in targets {
+        overlays
+            .entry(target)
+            .or_insert_with(|| create_overlay(class_name, target).unwrap_or(0));
+    }
+    overlays.retain(|_, overlay| *overlay != 0);
+}
+
+pub fn notify() {
+    let thread_id = THREAD_ID.load(Ordering::SeqCst);
+    if thread_id != 0 {
+        unsafe {
+            PostThreadMessageW(thread_id, WM_APP_FRAME_SYNC, 0, 0);
+        }
+    }
+}
+
 pub fn start(state: Arc<ShellState>) -> Result<(), String> {
-    STOP.store(false, Ordering::SeqCst);
     thread::Builder::new()
         .name("fedorawin-adwaita-frame-overlay".into())
         .spawn(move || unsafe {
@@ -412,64 +461,63 @@ pub fn start(state: Arc<ShellState>) -> Result<(), String> {
             };
             RegisterClassExW(&class);
 
+            // Force this thread's message queue into existence before publishing
+            // the thread id used by WinEvent callbacks.
+            let mut message: Msg = zeroed();
+            PeekMessageW(&mut message, 0, 0, 0, PM_NOREMOVE);
+            THREAD_ID.store(GetCurrentThreadId(), Ordering::SeqCst);
+
             let mut overlays: HashMap<isize, isize> = HashMap::new();
-            while !STOP.load(Ordering::SeqCst) {
-                DARK.store(
-                    !matches!(state.snapshot().appearance.theme, ThemeMode::Light),
-                    Ordering::Relaxed,
-                );
+            reconcile(&mut overlays, class_name.as_ptr(), &state);
+            SetTimer(0, TIMER_RECONCILE, 2_000, None);
 
-                let mut targets = Vec::new();
-                EnumWindows(
-                    enum_callback,
-                    &mut targets as *mut Vec<isize> as isize,
-                );
-                let active: HashSet<isize> = targets.iter().copied().collect();
-
-                overlays.retain(|target, overlay| {
-                    if !active.contains(target)
-                        || IsWindow(*target) == 0
-                        || !sync_overlay(*overlay, *target)
-                    {
-                        DestroyWindow(*overlay);
-                        false
-                    } else {
-                        InvalidateRect(*overlay, std::ptr::null(), 0);
-                        true
-                    }
-                });
-
-                for target in targets {
-                    overlays.entry(target).or_insert_with(|| {
-                        create_overlay(class_name.as_ptr(), target).unwrap_or(0)
-                    });
-                }
-                overlays.retain(|_, overlay| *overlay != 0);
-
-                let mut message: Msg = zeroed();
-                while PeekMessageW(&mut message, 0, 0, 0, PM_REMOVE) != 0 {
-                    TranslateMessage(&message);
-                    DispatchMessageW(&message);
+            loop {
+                let result = GetMessageW(&mut message, 0, 0, 0);
+                if result <= 0 || message.message == WM_QUIT {
+                    break;
                 }
 
-                thread::sleep(Duration::from_millis(120));
+                if message.hwnd == 0
+                    && (message.message == WM_APP_FRAME_SYNC
+                        || (message.message == WM_TIMER
+                            && message.wparam == TIMER_RECONCILE))
+                {
+                    // Coalesce event bursts: one reconciliation is enough to move,
+                    // create, destroy and repaint all caption overlays.
+                    while PeekMessageW(&mut message, 0, WM_APP_FRAME_SYNC, WM_APP_FRAME_SYNC, 0x0001)
+                        != 0
+                    {}
+                    reconcile(&mut overlays, class_name.as_ptr(), &state);
+                    continue;
+                }
+
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
             }
 
+            KillTimer(0, TIMER_RECONCILE);
             for (_, overlay) in overlays.drain() {
                 DestroyWindow(overlay);
             }
+            THREAD_ID.store(0, Ordering::SeqCst);
         })
         .map_err(|error| format!("failed to start Adwaita frame overlay: {error}"))?;
     Ok(())
 }
 
 pub fn stop() {
-    STOP.store(true, Ordering::SeqCst);
+    let thread_id = THREAD_ID.load(Ordering::SeqCst);
+    if thread_id != 0 {
+        unsafe {
+            PostThreadMessageW(thread_id, WM_QUIT, 0, 0);
+        }
+    }
 }
 
 #[link(name = "kernel32")]
 extern "system" {
     fn GetModuleHandleW(module_name: *const u16) -> isize;
+    fn GetCurrentThreadId() -> u32;
 }
 
 #[link(name = "dwmapi")]
@@ -521,6 +569,15 @@ extern "system" {
     fn FillRect(hdc: isize, rect: *const Rect, brush: isize) -> i32;
     fn InvalidateRect(hwnd: isize, rect: *const Rect, erase: i32) -> i32;
     fn PeekMessageW(message: *mut Msg, hwnd: isize, min: u32, max: u32, remove: u32) -> i32;
+    fn GetMessageW(message: *mut Msg, hwnd: isize, min: u32, max: u32) -> i32;
+    fn PostThreadMessageW(thread_id: u32, message: u32, wparam: usize, lparam: isize) -> i32;
+    fn SetTimer(
+        hwnd: isize,
+        id: usize,
+        interval: u32,
+        callback: Option<unsafe extern "system" fn(isize, u32, usize, u32)>,
+    ) -> usize;
+    fn KillTimer(hwnd: isize, id: usize) -> i32;
     fn TranslateMessage(message: *const Msg) -> i32;
     fn DispatchMessageW(message: *const Msg) -> isize;
     fn SetBkMode(hdc: isize, mode: i32) -> i32;
