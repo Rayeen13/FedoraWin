@@ -88,8 +88,7 @@ const IID_VIRTUAL_DESKTOP_MANAGER: Guid = Guid {
 
 #[repr(C)]
 struct VirtualDesktopManagerVTable {
-    query_interface:
-        unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
+    query_interface: unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
     add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
     release: unsafe extern "system" fn(*mut c_void) -> u32,
     is_window_on_current_virtual_desktop:

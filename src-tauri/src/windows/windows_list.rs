@@ -101,7 +101,7 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
 }
 
 pub fn list() -> Result<Vec<WindowEntry>, String> {
-    let mut windows = Vec::new();
+    let mut windows: Vec<WindowEntry> = Vec::new();
     let ok = unsafe {
         EnumWindows(
             enum_callback,
