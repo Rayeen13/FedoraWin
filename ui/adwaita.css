@@ -1,0 +1,338 @@
+/* FedoraWin Adwaita compatibility layer.
+   Mirrors libadwaita's current color roles and interaction semantics without
+   pretending that WebView widgets are GTK widgets. */
+
+:root{
+  --adw-window-bg:#222226;
+  --adw-window-fg:#fff;
+  --adw-view-bg:#1d1d20;
+  --adw-view-fg:#fff;
+  --adw-headerbar-bg:#2e2e32;
+  --adw-headerbar-fg:#fff;
+  --adw-headerbar-shade:rgba(0,0,6,.36);
+  --adw-card-bg:rgba(255,255,255,.08);
+  --adw-card-fg:#fff;
+  --adw-card-shade:rgba(0,0,6,.36);
+  --adw-overview-bg:#28282c;
+  --adw-overview-fg:#fff;
+  --adw-thumbnail-bg:#39393d;
+  --adw-active-toggle-bg:rgba(255,255,255,.20);
+  --adw-dim:rgba(255,255,255,.62);
+  --adw-hover:rgba(255,255,255,.08);
+  --adw-active:rgba(255,255,255,.14);
+  --adw-focus:color-mix(in srgb,var(--accent) 76%,white);
+  --adw-radius:12px;
+  --adw-radius-lg:18px;
+  --adw-circle:36px;
+  --adw-ease:cubic-bezier(.2,0,0,1);
+}
+
+:root[data-theme="light"]{
+  --adw-window-bg:#fafafb;
+  --adw-window-fg:rgb(0 0 6 / 80%);
+  --adw-view-bg:#fff;
+  --adw-view-fg:rgb(0 0 6 / 80%);
+  --adw-headerbar-bg:#fff;
+  --adw-headerbar-fg:rgb(0 0 6 / 80%);
+  --adw-headerbar-shade:rgb(0 0 6 / 12%);
+  --adw-card-bg:#fff;
+  --adw-card-fg:rgb(0 0 6 / 80%);
+  --adw-card-shade:rgb(0 0 6 / 7%);
+  --adw-overview-bg:#f3f3f5;
+  --adw-overview-fg:rgb(0 0 6 / 80%);
+  --adw-thumbnail-bg:#fff;
+  --adw-active-toggle-bg:#fff;
+  --adw-dim:rgb(0 0 6 / 58%);
+  --adw-hover:rgb(0 0 6 / 6%);
+  --adw-active:rgb(0 0 6 / 10%);
+}
+
+/* Re-map the older FedoraWin tokens onto Adwaita roles. */
+:root{
+  --overview:var(--adw-overview-bg);
+  --surface:var(--adw-window-bg);
+  --surface-2:var(--adw-card-bg);
+  --surface-3:var(--adw-thumbnail-bg);
+  --text:var(--adw-window-fg);
+  --muted:var(--adw-dim);
+  --border:var(--adw-card-shade);
+  --shadow:0 14px 36px rgba(0,0,0,.34),0 2px 6px rgba(0,0,0,.18);
+  --radius-sm:10px;
+  --radius:var(--adw-radius);
+  --radius-lg:var(--adw-radius-lg);
+}
+:root[data-theme="light"]{
+  --shadow:0 14px 38px rgba(30,30,40,.16),0 2px 7px rgba(30,30,40,.09);
+}
+
+/* GNOME Shell top bar: compact, quiet, pill-on-hover controls. */
+.panel{
+  background:#1d1d20;
+  color:#fff;
+  border-bottom:1px solid rgba(255,255,255,.035);
+}
+.panel-button{
+  border-radius:999px;
+  transition:background-color 120ms var(--adw-ease),transform 120ms var(--adw-ease);
+}
+.panel-button:hover,.panel-button:focus-visible{background:rgba(255,255,255,.12)}
+.panel-button:active{background:rgba(255,255,255,.18);transform:scale(.97)}
+.panel-button:focus-visible{box-shadow:0 0 0 2px var(--adw-focus)}
+.activities-button{min-width:38px}
+.status{padding-inline:9px;gap:8px}
+
+/* Activities should read like GNOME overview, not a framed Windows dashboard. */
+.activities{
+  background:
+    radial-gradient(circle at 50% 112%,color-mix(in srgb,var(--accent) 8%,transparent),transparent 38%),
+    var(--adw-overview-bg);
+  color:var(--adw-overview-fg);
+  animation:adw-overview-in 180ms var(--adw-ease) both;
+}
+.search-shell{width:min(560px,56vw)}
+.search{
+  height:42px;
+  background:color-mix(in srgb,var(--adw-thumbnail-bg) 88%,transparent);
+  border:1px solid color-mix(in srgb,var(--adw-window-fg) 10%,transparent);
+  border-radius:999px;
+  box-shadow:0 1px 0 rgba(255,255,255,.03),0 6px 18px rgba(0,0,0,.08);
+  transition:box-shadow 140ms var(--adw-ease),background-color 140ms var(--adw-ease),transform 140ms var(--adw-ease);
+}
+.search:hover{background:color-mix(in srgb,var(--adw-thumbnail-bg) 94%,transparent)}
+.search:focus{
+  background:var(--adw-thumbnail-bg);
+  box-shadow:0 0 0 2px var(--adw-focus),0 8px 22px rgba(0,0,0,.12);
+}
+.workspace-peek{
+  border:1px solid color-mix(in srgb,var(--adw-window-fg) 9%,transparent);
+  border-radius:20px;
+  background:color-mix(in srgb,var(--adw-thumbnail-bg) 75%,transparent);
+  box-shadow:0 8px 30px rgba(0,0,0,.10);
+  transition:opacity 160ms var(--adw-ease),transform 160ms var(--adw-ease);
+}
+.workspace-peek:hover{opacity:.8;transform:scale(1.015)}
+.workspace-main{
+  border-radius:22px;
+  background:color-mix(in srgb,var(--adw-view-bg) 78%,#000 22%);
+  border:1px solid color-mix(in srgb,var(--adw-window-fg) 8%,transparent);
+  box-shadow:0 20px 54px rgba(0,0,0,.18);
+}
+
+/* Window cards visually borrow AdwHeaderBar and circular control language.
+   These are overview cards only. External app caption controls remain native. */
+.window-card{
+  transition:transform 160ms var(--adw-ease);
+}
+.window-card:hover{transform:translateY(-3px)}
+.window-card__preview{
+  border-radius:16px;
+  border:1px solid color-mix(in srgb,var(--adw-window-fg) 10%,transparent);
+  background:var(--adw-view-bg);
+  box-shadow:0 10px 30px rgba(0,0,0,.24);
+  transition:box-shadow 160ms var(--adw-ease),outline-color 160ms var(--adw-ease);
+}
+.window-card__bar{
+  height:34px;
+  padding:0 8px 0 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  background:var(--adw-headerbar-bg);
+  color:var(--adw-headerbar-fg);
+  border-bottom:1px solid var(--adw-headerbar-shade);
+}
+.window-card__bar-title{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:10px;
+  font-weight:650;
+  opacity:.78;
+}
+.window-card__controls{display:flex;align-items:center;gap:5px}
+.window-card__control{
+  width:22px;height:22px;border-radius:50%;
+  display:grid;place-items:center;
+  background:color-mix(in srgb,var(--adw-headerbar-fg) 9%,transparent);
+  font-size:12px;font-weight:600;line-height:1;
+}
+.window-card:hover .window-card__preview{
+  outline:2px solid color-mix(in srgb,var(--accent) 82%,white);
+  outline-offset:3px;
+  box-shadow:0 14px 40px rgba(0,0,0,.28);
+}
+
+/* Application grid: GNOME's low-chrome activatable tiles. */
+.app-tile{
+  border-radius:18px;
+  transition:background-color 130ms var(--adw-ease),transform 130ms var(--adw-ease);
+}
+.app-tile:hover,.app-tile:focus-visible{background:var(--adw-hover)}
+.app-tile:active{background:var(--adw-active);transform:scale(.97)}
+.app-tile:focus-visible{box-shadow:inset 0 0 0 2px var(--adw-focus)}
+.app-icon{
+  width:60px;height:60px;border-radius:16px;
+  box-shadow:0 5px 14px rgba(0,0,0,.22);
+}
+.app-name{font-size:12px;font-weight:560}
+
+/* Dash: floating GNOME shelf, not a taskbar. */
+.dash{
+  height:72px;
+  padding:8px 10px;
+  gap:6px;
+  border-radius:24px;
+  background:color-mix(in srgb,#343438 91%,transparent);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 16px 42px rgba(0,0,0,.35);
+  backdrop-filter:blur(18px);
+}
+:root[data-theme="light"] .dash{background:color-mix(in srgb,#fff 90%,transparent);border-color:rgba(0,0,0,.09)}
+.dash-button{
+  width:56px;height:56px;border-radius:16px;
+  transition:background-color 130ms var(--adw-ease),transform 130ms var(--adw-ease);
+}
+.dash-button:hover{background:var(--adw-hover);transform:translateY(-3px) scale(1.045)}
+.dash-button:active{transform:translateY(-1px) scale(.98)}
+.dash-button.is-active{background:var(--adw-active-toggle-bg)}
+.dash-icon{width:44px;height:44px;border-radius:13px}
+.dash-separator{height:38px;background:color-mix(in srgb,var(--adw-window-fg) 18%,transparent)}
+
+/* Popovers get Adwaita window/card treatment. */
+.popover{padding:10px}
+.popover-card{
+  border:1px solid color-mix(in srgb,var(--adw-window-fg) 9%,transparent);
+  border-radius:22px;
+  background:var(--adw-window-bg);
+  color:var(--adw-window-fg);
+  box-shadow:var(--shadow);
+  animation:adw-popover-in 150ms var(--adw-ease) both;
+}
+.quick-card{padding:14px;gap:12px}
+.quick-header{height:38px}
+.battery-summary{padding-left:4px}
+
+/* Libadwaita's .circular toolbar behavior. */
+.icon-button{
+  width:var(--adw-circle);
+  height:var(--adw-circle);
+  border-radius:50%;
+  background:transparent;
+  color:var(--adw-window-fg);
+  transition:background-color 120ms var(--adw-ease),transform 120ms var(--adw-ease),box-shadow 120ms var(--adw-ease);
+}
+.icon-button:hover{background:var(--adw-hover)}
+.icon-button:active{background:var(--adw-active);transform:scale(.94)}
+.icon-button:focus-visible{outline:none;box-shadow:0 0 0 2px var(--adw-focus)}
+.header-actions{gap:4px}
+
+/* Adwaita sliders and pill rows. */
+.slider-row{
+  height:44px;
+  border-radius:999px;
+  background:var(--adw-card-bg);
+  border:1px solid color-mix(in srgb,var(--adw-window-fg) 5%,transparent);
+}
+input[type=range]{height:4px;background:linear-gradient(to right,var(--accent) 0 var(--value),color-mix(in srgb,var(--adw-window-fg) 16%,transparent) var(--value) 100%)}
+input[type=range]::-webkit-slider-thumb{
+  width:18px;height:18px;
+  border:3px solid var(--accent);
+  background:#fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.32);
+}
+.quick-grid{gap:9px}
+.quick-item{
+  min-height:50px;
+  border-radius:999px;
+  background:var(--adw-card-bg);
+  border:1px solid color-mix(in srgb,var(--adw-window-fg) 5%,transparent);
+  transition:background-color 120ms var(--adw-ease),transform 120ms var(--adw-ease);
+}
+.quick-item:hover{background:color-mix(in srgb,var(--adw-card-bg) 86%,var(--adw-window-fg) 6%)}
+.quick-tile,.quick-more{height:50px}
+.quick-icon{
+  width:32px;height:32px;
+  background:color-mix(in srgb,var(--adw-window-fg) 10%,transparent);
+}
+.quick-tile:active,.quick-more:active{transform:scale(.985)}
+.quick-tile[aria-pressed=true]{
+  background:var(--accent);
+  color:var(--accent-contrast);
+}
+.quick-tile[aria-pressed=true] .quick-icon{background:rgba(255,255,255,.20)}
+.quick-more{border-left-color:color-mix(in srgb,var(--adw-window-fg) 12%,transparent)}
+.background-apps{height:42px;border-radius:12px}
+.background-apps:hover{background:var(--adw-hover)}
+
+/* Round AdwToggleGroup-like appearance switcher. */
+.segmented{
+  gap:3px;
+  padding:3px;
+  border-radius:14px;
+  background:var(--adw-card-bg);
+  border:1px solid color-mix(in srgb,var(--adw-window-fg) 5%,transparent);
+}
+.segmented button{
+  height:36px;
+  border-radius:11px;
+  transition:background-color 120ms var(--adw-ease),transform 120ms var(--adw-ease);
+}
+.segmented button:hover{background:var(--adw-hover)}
+.segmented button:active{transform:scale(.98)}
+.segmented button[aria-pressed=true]{
+  background:var(--adw-active-toggle-bg);
+  color:var(--adw-window-fg);
+  box-shadow:0 1px 3px rgba(0,0,0,.15);
+}
+.accent{
+  width:40px;height:40px;
+  transition:transform 130ms var(--adw-ease),box-shadow 130ms var(--adw-ease);
+}
+.accent:hover{transform:scale(1.08)}
+.accent[aria-pressed=true]{
+  outline:0;
+  box-shadow:0 0 0 3px var(--adw-window-bg),0 0 0 6px color-mix(in srgb,var(--swatch) 78%,var(--adw-window-fg));
+}
+
+/* Date menu: boxed-list/card rhythm and circular navigation. */
+.date-card{background:var(--adw-window-bg)}
+.notifications-pane{border-right-color:var(--adw-card-shade)}
+.date-title{font-weight:700;letter-spacing:-.01em}
+.notification-placeholder{padding:26px;border-radius:18px;background:color-mix(in srgb,var(--adw-card-bg) 64%,transparent)}
+.calendar-pane{padding:20px}
+.calendar-day{
+  width:34px;height:34px;
+  justify-self:center;
+  border-radius:50%;
+  transition:background-color 110ms var(--adw-ease),transform 110ms var(--adw-ease);
+}
+.calendar-day:hover{background:var(--adw-hover)}
+.calendar-day:active{transform:scale(.92)}
+.calendar-day.is-today{
+  background:var(--accent);
+  color:var(--accent-contrast);
+  box-shadow:0 2px 7px color-mix(in srgb,var(--accent) 40%,transparent);
+}
+.calendar-footer{border-top-color:var(--adw-card-shade)}
+.calendar-footer button{padding:6px 8px;border-radius:9px}
+.calendar-footer button:hover{background:var(--adw-hover);color:var(--adw-window-fg)}
+
+@keyframes adw-overview-in{
+  from{opacity:0;transform:scale(.992)}
+  to{opacity:1;transform:scale(1)}
+}
+@keyframes adw-popover-in{
+  from{opacity:0;transform:translateY(-5px) scale(.985)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+@media (prefers-contrast:more){
+  :root{--border:color-mix(in srgb,var(--adw-window-fg) 34%,transparent)}
+  .popover-card,.window-card__preview,.quick-item,.slider-row{border-width:2px}
+  .panel-button:focus-visible,.icon-button:focus-visible{box-shadow:0 0 0 3px var(--adw-focus)}
+}

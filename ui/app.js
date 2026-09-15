@@ -86,7 +86,12 @@ async function loadActivitiesData() {
 function renderWindowOverview() {
   const cards = windows.length ? windows.map(w => `
     <button class="window-card" data-window="${escapeHtml(w.handle)}" title="${escapeHtml(w.title)}">
-      <span class="window-card__preview"><span class="window-card__bar"></span></span>
+      <span class="window-card__preview">
+        <span class="window-card__bar">
+          <span class="window-card__bar-title">${escapeHtml(w.title)}</span>
+          <span class="window-card__controls" aria-hidden="true"><span class="window-card__control">×</span></span>
+        </span>
+      </span>
       <span class="window-card__title">${escapeHtml(w.title)}</span>
     </button>`).join('') : '<div class="overview-empty">No open windows on this desktop</div>';
   return `<div class="workspace-strip"><button class="workspace-peek" aria-label="Previous workspace"></button><div class="workspace-main"><div class="window-grid">${cards}</div></div><button class="workspace-peek" aria-label="Next workspace"></button></div>`;

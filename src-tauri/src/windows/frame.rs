@@ -47,15 +47,18 @@ fn colorref(r: u8, g: u8, b: u8) -> u32 {
 
 fn palette(appearance: &AppearanceState) -> FramePalette {
     let dark = !matches!(appearance.theme, ThemeMode::Light);
+    // Current libadwaita header bar roles: #2e2e32 in dark style and
+    // white in light style. Windows owns the real caption buttons, so we
+    // theme the supported non-client surface without replacing hit-testing.
     let caption = if dark {
-        colorref(48, 48, 48)
+        colorref(46, 46, 50)
     } else {
-        colorref(246, 245, 244)
+        colorref(255, 255, 255)
     };
     let text = if dark {
         colorref(255, 255, 255)
     } else {
-        colorref(32, 32, 32)
+        colorref(32, 32, 34)
     };
     FramePalette {
         dark: if dark { 1 } else { 0 },
