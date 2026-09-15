@@ -39,9 +39,25 @@ struct WlanPhyRadioState {
 
 #[link(name = "wlanapi")]
 extern "system" {
-    fn WlanOpenHandle(client_version: u32, reserved: *const c_void, negotiated_version: *mut u32, handle: *mut isize) -> u32;
-    fn WlanEnumInterfaces(handle: isize, reserved: *const c_void, list: *mut *mut WlanInterfaceInfoList) -> u32;
-    fn WlanSetInterface(handle: isize, guid: *const Guid, opcode: u32, data_size: u32, data: *const c_void, reserved: *const c_void) -> u32;
+    fn WlanOpenHandle(
+        client_version: u32,
+        reserved: *const c_void,
+        negotiated_version: *mut u32,
+        handle: *mut isize,
+    ) -> u32;
+    fn WlanEnumInterfaces(
+        handle: isize,
+        reserved: *const c_void,
+        list: *mut *mut WlanInterfaceInfoList,
+    ) -> u32;
+    fn WlanSetInterface(
+        handle: isize,
+        guid: *const Guid,
+        opcode: u32,
+        data_size: u32,
+        data: *const c_void,
+        reserved: *const c_void,
+    ) -> u32;
     fn WlanFreeMemory(memory: *mut c_void);
     fn WlanCloseHandle(handle: isize, reserved: *const c_void) -> u32;
 }
@@ -49,7 +65,9 @@ extern "system" {
 struct Client(isize);
 impl Drop for Client {
     fn drop(&mut self) {
-        unsafe { WlanCloseHandle(self.0, null()); }
+        unsafe {
+            WlanCloseHandle(self.0, null());
+        }
     }
 }
 
@@ -57,7 +75,12 @@ pub fn set_enabled(enabled: bool) -> Result<(), String> {
     unsafe {
         let mut negotiated = 0u32;
         let mut handle = 0isize;
-        let result = WlanOpenHandle(WLAN_CLIENT_VERSION_LONGHORN, null(), &mut negotiated, &mut handle);
+        let result = WlanOpenHandle(
+            WLAN_CLIENT_VERSION_LONGHORN,
+            null(),
+            &mut negotiated,
+            &mut handle,
+        );
         if result != ERROR_SUCCESS {
             return Err(format!("WlanOpenHandle failed with {result}"));
         }
@@ -77,7 +100,11 @@ pub fn set_enabled(enabled: bool) -> Result<(), String> {
             // 0xFFFF_FFFF asks the WLAN service to apply the software state across all PHYs.
             let state = WlanPhyRadioState {
                 phy_index: 0xFFFF_FFFF,
-                software_state: if enabled { DOT11_RADIO_STATE_ON } else { DOT11_RADIO_STATE_OFF },
+                software_state: if enabled {
+                    DOT11_RADIO_STATE_ON
+                } else {
+                    DOT11_RADIO_STATE_OFF
+                },
                 hardware_state: DOT11_RADIO_STATE_ON,
             };
             let result = WlanSetInterface(
@@ -88,10 +115,14 @@ pub fn set_enabled(enabled: bool) -> Result<(), String> {
                 &state as *const WlanPhyRadioState as *const c_void,
                 null(),
             );
-            if result == ERROR_SUCCESS { changed += 1; }
+            if result == ERROR_SUCCESS {
+                changed += 1;
+            }
         }
         WlanFreeMemory(list_ptr as *mut c_void);
-        if changed == 0 { return Err("no Wi-Fi interface accepted the radio-state change".into()); }
+        if changed == 0 {
+            return Err("no Wi-Fi interface accepted the radio-state change".into());
+        }
         Ok(())
     }
 }
