@@ -97,6 +97,12 @@ fn workspace_move_status(
 }
 
 #[tauri::command]
+fn navigate_workspace(app: tauri::AppHandle, direction: i32) -> Result<(), String> {
+    shell::hide_activities(&app)?;
+    windows::virtual_desktop::navigate(direction)
+}
+
+#[tauri::command]
 fn sync_window_thumbnails(
     app: tauri::AppHandle,
     state: tauri::State<'_, windows::thumbnails::ThumbnailManager>,
@@ -298,6 +304,7 @@ fn main() {
             move_window_to_workspace,
             undo_workspace_move,
             workspace_move_status,
+            navigate_workspace,
             sync_window_thumbnails,
             clear_window_thumbnails,
             set_wifi_enabled,

@@ -390,3 +390,41 @@ input[type=range]::-webkit-slider-thumb{
 }
 .window-card__title-button:hover{background:var(--adw-hover)}
 .window-card__title-button:focus-visible{outline:2px solid var(--adw-focus);outline-offset:1px}
+
+/* Real Windows virtual-desktop navigation inside the GNOME overview. */
+.workspace-strip--native{
+  position:relative;
+}
+.workspace-current{
+  display:flex;
+  align-items:baseline;
+  justify-content:center;
+  gap:8px;
+  margin:0 auto 10px;
+  color:var(--adw-overview-fg);
+}
+.workspace-current span{font-size:13px;font-weight:700}
+.workspace-current small{font-size:11px;color:var(--adw-dim)}
+.workspace-nav{
+  position:absolute;
+  z-index:3;
+  top:50%;
+  width:42px;
+  height:42px;
+  margin-top:-21px;
+  border:0;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:color-mix(in srgb,var(--adw-thumbnail-bg) 82%,transparent);
+  color:var(--adw-overview-fg);
+  font-size:30px;
+  line-height:1;
+  box-shadow:0 6px 18px rgba(0,0,0,.18);
+  transition:background-color 120ms var(--adw-ease),transform 120ms var(--adw-ease);
+}
+.workspace-nav:hover{background:var(--adw-active-toggle-bg);transform:scale(1.05)}
+.workspace-nav:active{transform:scale(.94)}
+.workspace-nav:focus-visible{outline:2px solid var(--adw-focus);outline-offset:3px}
+.workspace-nav--previous{left:12px}
+.workspace-nav--next{right:12px}

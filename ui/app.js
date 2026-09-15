@@ -100,7 +100,12 @@ function renderWindowOverview() {
       <button class="window-card__title-button" data-window="${escapeHtml(w.handle)}">${escapeHtml(w.title)}</button>
     </article>`).join('') : '<div class="overview-empty">No open windows on this desktop</div>';
   const count = Math.max(workspaceIds.length, 1);
-  return `<div class="workspace-strip workspace-strip--native"><div class="workspace-current"><span>Current workspace</span><small>${count} detected workspace${count === 1 ? '' : 's'}</small></div><div class="workspace-main"><div class="window-grid">${cards}</div></div></div>`;
+  return `<div class="workspace-strip workspace-strip--native">
+    <button class="workspace-nav workspace-nav--previous" data-workspace-direction="-1" aria-label="Previous workspace">‹</button>
+    <div class="workspace-current"><span>Current workspace</span><small>${count} detected workspace${count === 1 ? '' : 's'}</small></div>
+    <div class="workspace-main"><div class="window-grid">${cards}</div></div>
+    <button class="workspace-nav workspace-nav--next" data-workspace-direction="1" aria-label="Next workspace">›</button>
+  </div>`;
 }
 
 async function syncLiveThumbnails() {
@@ -150,6 +155,12 @@ function bindActivitiesContent() {
     event.stopPropagation();
     await call('close_window', { handle: button.dataset.closeWindow });
     setTimeout(refreshNativeWindows, 120);
+  }));
+  document.querySelectorAll('[data-workspace-direction]').forEach(button => button.addEventListener('click', async () => {
+    const direction = Number(button.dataset.workspaceDirection);
+    if (direction !== -1 && direction !== 1) return;
+    await call('clear_window_thumbnails');
+    await call('navigate_workspace', { direction });
   }));
   document.querySelectorAll('[data-app-id]').forEach(button => button.addEventListener('click', async () => {
     await call('launch_app', { appId: button.dataset.appId });
