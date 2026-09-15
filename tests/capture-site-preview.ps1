@@ -51,9 +51,11 @@ public static class FedoraWinCaptureNative {
 '@
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$exe = Join-Path $repoRoot 'src-tauri\target\release\fedorawin.exe'
-if (-not (Test-Path -LiteralPath $exe)) {
-    throw "FedoraWin executable not found at $exe. Build release first."
+$releaseExe = Join-Path $repoRoot 'src-tauri\target\release\fedorawin.exe'
+$debugExe = Join-Path $repoRoot 'src-tauri\target\debug\fedorawin.exe'
+$exe = if (Test-Path -LiteralPath $releaseExe) { $releaseExe } elseif (Test-Path -LiteralPath $debugExe) { $debugExe } else { $null }
+if (-not $exe) {
+    throw 'FedoraWin executable not found. Build the Tauri binary first.'
 }
 
 $output = if ([IO.Path]::IsPathRooted($OutputDirectory)) {
@@ -201,9 +203,18 @@ Invoke-NativeFrameCapture
 
 $hashes = [ordered]@{}
 foreach ($entry in $captures.GetEnumerator()) {
-    $hashes[$entry.Key] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $output $entry.Value)).Hash.ToLowerInvariant()
+    $capturePath = Join-Path $output $entry.Value
+    $hashes[$entry.Key] = (Get-FileHash -Algorithm SHA256 -LiteralPath $capturePath).Hash.ToLowerInvariant()
+    $image = [System.Drawing.Image]::FromFile($capturePath)
+    try {
+        Write-Host ("CAPTURE {0}: {1}x{2} bytes={3} sha256={4}" -f $entry.Key, $image.Width, $image.Height, (Get-Item $capturePath).Length, $hashes[$entry.Key])
+    } finally {
+        $image.Dispose()
+    }
 }
-if (($hashes.Values | Select-Object -Unique).Count -lt 8) {
+$uniqueCaptureCount = ($hashes.Values | Select-Object -Unique).Count
+Write-Host "Unique runtime gallery captures: $uniqueCaptureCount / $($captures.Count)"
+if ($uniqueCaptureCount -lt 8) {
     throw 'Runtime gallery captures are not sufficiently distinct.'
 }
 if ($hashes.quick_settings_dark -eq $hashes.quick_settings_light) {
