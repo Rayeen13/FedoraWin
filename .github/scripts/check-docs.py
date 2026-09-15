@@ -90,7 +90,7 @@ for html_file in html_files:
 index = (DOCS / "index.html").read_text(encoding="utf-8")
 for required in [
     "Native panel + lazy Tauri/WebView2 surfaces",
-    "15 MB measured idle",
+    "17 MB measured idle",
     "Alt+F1",
     "./gallery.html",
     "data-runtime-shot=\"activities\"",
@@ -100,7 +100,7 @@ for required in [
 
 docs_hub = (DOCS / "docs.html").read_text(encoding="utf-8")
 for required in [
-    "15 MB verified idle",
+    "17 MB verified idle",
     "Safety & reversibility",
     "Workspace foundation",
     "./architecture.html",
