@@ -9,6 +9,10 @@ pub mod frame;
 #[cfg(windows)]
 pub mod hotkeys;
 #[cfg(windows)]
+pub mod thumbnails;
+#[cfg(windows)]
+pub mod window_events;
+#[cfg(windows)]
 pub mod wifi;
 #[cfg(windows)]
 pub mod windows_list;
@@ -138,5 +142,47 @@ pub mod windows_list {
 
     pub fn activate(_: &str) -> Result<(), String> {
         Err("window activation is Windows-only".into())
+    }
+
+    pub fn close(_: &str) -> Result<(), String> {
+        Err("window closing is Windows-only".into())
+    }
+}
+
+#[cfg(not(windows))]
+pub mod thumbnails {
+    use serde::Deserialize;
+
+    #[derive(Clone, Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct ThumbnailPlacement {
+        pub handle: String,
+        pub left: f64,
+        pub top: f64,
+        pub width: f64,
+        pub height: f64,
+    }
+
+    #[derive(Default)]
+    pub struct ThumbnailManager;
+
+    impl ThumbnailManager {
+        pub fn sync(
+            &self,
+            _: isize,
+            _: f64,
+            _: &[ThumbnailPlacement],
+        ) -> Result<usize, String> {
+            Ok(0)
+        }
+
+        pub fn clear(&self) {}
+    }
+}
+
+#[cfg(not(windows))]
+pub mod window_events {
+    pub fn start(_: tauri::AppHandle) -> Result<(), String> {
+        Ok(())
     }
 }

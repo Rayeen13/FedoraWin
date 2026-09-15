@@ -7,6 +7,7 @@ const WS_EX_TOOLWINDOW: isize = 0x00000080;
 const GW_OWNER: u32 = 4;
 const DWMWA_CLOAKED: u32 = 14;
 const SW_RESTORE: i32 = 9;
+const WM_CLOSE: u32 = 0x0010;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +30,7 @@ extern "system" {
     fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
     fn ShowWindow(hwnd: isize, command: i32) -> i32;
     fn SetForegroundWindow(hwnd: isize) -> i32;
+    fn PostMessageW(hwnd: isize, message: u32, wparam: usize, lparam: isize) -> i32;
 }
 
 #[link(name = "dwmapi")]
@@ -119,6 +121,21 @@ pub fn activate(handle: &str) -> Result<(), String> {
         }
         if SetForegroundWindow(hwnd) == 0 {
             return Err("Windows refused to foreground the requested window".into());
+        }
+    }
+    Ok(())
+}
+
+pub fn close(handle: &str) -> Result<(), String> {
+    let hwnd = handle
+        .parse::<isize>()
+        .map_err(|_| "invalid window handle")?;
+    unsafe {
+        if hwnd == 0 || IsWindow(hwnd) == 0 || !eligible(hwnd) {
+            return Err("window is no longer available".into());
+        }
+        if PostMessageW(hwnd, WM_CLOSE, 0, 0) == 0 {
+            return Err("Windows refused to close the requested window".into());
         }
     }
     Ok(())

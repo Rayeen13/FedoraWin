@@ -87,6 +87,42 @@ fn activate_window(handle: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn close_window(handle: String) -> Result<(), String> {
+    windows::windows_list::close(&handle)
+}
+
+#[tauri::command]
+fn sync_window_thumbnails(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, windows::thumbnails::ThumbnailManager>,
+    items: Vec<windows::thumbnails::ThumbnailPlacement>,
+) -> Result<usize, String> {
+    #[cfg(windows)]
+    {
+        let activities = app
+            .get_webview_window("activities")
+            .ok_or_else(|| "activities window is unavailable".to_string())?;
+        let hwnd = activities.hwnd().map_err(|error| error.to_string())?;
+        let scale = activities.scale_factor().map_err(|error| error.to_string())?;
+        return state.sync(hwnd.0 as isize, scale, &items);
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = (app, state, items);
+        Ok(0)
+    }
+}
+
+#[tauri::command]
+fn clear_window_thumbnails(
+    state: tauri::State<'_, windows::thumbnails::ThumbnailManager>,
+) -> Result<(), String> {
+    state.clear();
+    Ok(())
+}
+
+#[tauri::command]
 fn set_wifi_enabled(enabled: bool) -> Result<(), String> {
     windows::wifi::set_enabled(enabled).map_err(|e| e.to_string())
 }
@@ -208,6 +244,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(state.clone())
+        .manage(windows::thumbnails::ThumbnailManager::default())
         .invoke_handler(tauri::generate_handler![
             get_shell_state,
             set_appearance,
@@ -218,6 +255,9 @@ fn main() {
             launch_app,
             list_windows,
             activate_window,
+            close_window,
+            sync_window_thumbnails,
+            clear_window_thumbnails,
             set_wifi_enabled,
             refresh_window_frames
         ])
@@ -264,6 +304,7 @@ fn main() {
                 }
                 windows::frame::start_frame_watcher(state.clone());
                 let _ = windows::hotkeys::start_activities_hotkey(app.handle().clone());
+                let _ = windows::window_events::start(app.handle().clone());
                 start_display_topology_watcher(app.handle().clone());
             }
 

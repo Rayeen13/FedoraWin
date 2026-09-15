@@ -1,4 +1,5 @@
 const invoke = window.__TAURI__?.core?.invoke;
+const listen = window.__TAURI__?.event?.listen;
 const app = document.querySelector('#app');
 const params = new URLSearchParams(location.search);
 const view = params.get('view') || 'panel';
@@ -26,6 +27,7 @@ let apps = [];
 let windows = [];
 let activitiesMode = 'windows';
 let calendarCursor = new Date();
+let windowEventsBound = false;
 
 function applyAppearance() {
   const { theme, accent } = shell.appearance;
@@ -85,16 +87,46 @@ async function loadActivitiesData() {
 
 function renderWindowOverview() {
   const cards = windows.length ? windows.map(w => `
-    <button class="window-card" data-window="${escapeHtml(w.handle)}" title="${escapeHtml(w.title)}">
-      <span class="window-card__preview">
-        <span class="window-card__bar">
+    <article class="window-card" title="${escapeHtml(w.title)}">
+      <div class="window-card__preview">
+        <div class="window-card__bar">
           <span class="window-card__bar-title">${escapeHtml(w.title)}</span>
-          <span class="window-card__controls" aria-hidden="true"><span class="window-card__control">×</span></span>
-        </span>
-      </span>
-      <span class="window-card__title">${escapeHtml(w.title)}</span>
-    </button>`).join('') : '<div class="overview-empty">No open windows on this desktop</div>';
+          <button class="window-card__close" data-close-window="${escapeHtml(w.handle)}" aria-label="Close ${escapeHtml(w.title)}">×</button>
+        </div>
+        <button class="window-card__live-preview" data-window="${escapeHtml(w.handle)}" data-thumbnail-window="${escapeHtml(w.handle)}" aria-label="Open ${escapeHtml(w.title)}"></button>
+      </div>
+      <button class="window-card__title-button" data-window="${escapeHtml(w.handle)}">${escapeHtml(w.title)}</button>
+    </article>`).join('') : '<div class="overview-empty">No open windows on this desktop</div>';
   return `<div class="workspace-strip"><button class="workspace-peek" aria-label="Previous workspace"></button><div class="workspace-main"><div class="window-grid">${cards}</div></div><button class="workspace-peek" aria-label="Next workspace"></button></div>`;
+}
+
+async function syncLiveThumbnails() {
+  if (!invoke) return;
+  const search = document.querySelector('#search');
+  if (activitiesMode !== 'windows' || search?.value.trim()) {
+    await call('clear_window_thumbnails');
+    return;
+  }
+
+  const items = [...document.querySelectorAll('[data-thumbnail-window]')].map(element => {
+    const rect = element.getBoundingClientRect();
+    return {
+      handle: element.dataset.thumbnailWindow,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height
+    };
+  });
+  await call('sync_window_thumbnails', { items });
+}
+
+async function refreshNativeWindows() {
+  const windowList = await call('list_windows');
+  if (!Array.isArray(windowList)) return;
+  windows = windowList;
+  const search = document.querySelector('#search');
+  if (!search?.value.trim() && activitiesMode === 'windows') refreshActivitiesContent();
 }
 
 function renderAppGrid(list = apps) {
@@ -110,6 +142,11 @@ function bindActivitiesContent() {
   document.querySelectorAll('[data-window]').forEach(button => button.addEventListener('click', async () => {
     await call('activate_window', { handle: button.dataset.window });
     await call('toggle_activities');
+  }));
+  document.querySelectorAll('[data-close-window]').forEach(button => button.addEventListener('click', async event => {
+    event.stopPropagation();
+    await call('close_window', { handle: button.dataset.closeWindow });
+    setTimeout(refreshNativeWindows, 120);
   }));
   document.querySelectorAll('[data-app-id]').forEach(button => button.addEventListener('click', async () => {
     await call('launch_app', { appId: button.dataset.appId });
@@ -129,6 +166,7 @@ function refreshActivitiesContent(query = '') {
   }
   document.querySelector('#show-apps')?.classList.toggle('is-active', activitiesMode === 'apps' && !q);
   bindActivitiesContent();
+  requestAnimationFrame(() => requestAnimationFrame(syncLiveThumbnails));
 }
 
 async function renderActivities() {
@@ -157,6 +195,10 @@ async function renderActivities() {
     refreshActivitiesContent(search.value);
   }));
   await loadActivitiesData();
+  if (listen && !windowEventsBound) {
+    windowEventsBound = true;
+    await listen('fedorawin://windows-changed', refreshNativeWindows);
+  }
   if (captureMode === 'apps') activitiesMode = 'apps';
   if (captureMode === 'search-terminal') search.value = 'terminal';
   refreshActivitiesContent(search.value);
