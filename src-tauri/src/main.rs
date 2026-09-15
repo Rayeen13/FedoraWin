@@ -132,9 +132,9 @@ fn main() {
             refresh_window_frames
         ])
         .setup(move |app| {
-            let monitor = app
-                .primary_monitor()?
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "primary monitor unavailable"))?;
+            let monitor = app.primary_monitor()?.ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "primary monitor unavailable")
+            })?;
             let size = monitor.size();
             let scale = monitor.scale_factor();
             let logical_width = size.width as f64 / scale;
