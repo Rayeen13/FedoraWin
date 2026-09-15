@@ -103,6 +103,7 @@ jobs:
           test -s docs/assets/runtime/quick_settings_light.png
           test -s docs/assets/runtime/appearance.png
           test -s docs/assets/runtime/date_menu.png
+          test -s docs/assets/runtime/native_frame.png
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
