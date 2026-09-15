@@ -1,4 +1,4 @@
-use crate::shell::{Accent, AppearanceState, ThemeMode};
+use crate::shell::{AppearanceState, ThemeMode};
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::sync::Arc;

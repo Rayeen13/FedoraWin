@@ -152,8 +152,8 @@ fn main() {
             let date_width = fit_surface(760.0, logical_width, 12.0);
             let date_height = fit_surface(540.0, shell_height, 12.0);
             let date_width_px = display.logical_to_physical(date_width);
-            let date_x = display.bounds.left
-                + ((display.bounds.width() - date_width_px) / 2).max(0);
+            let date_x =
+                display.bounds.left + ((display.bounds.width() - date_width_px) / 2).max(0);
 
             let quick_width = fit_surface(408.0, logical_width, 8.0);
             let quick_height = fit_surface(510.0, shell_height, 8.0);

@@ -90,20 +90,10 @@ extern "system" {
 
 #[link(name = "Shcore")]
 extern "system" {
-    fn GetDpiForMonitor(
-        monitor: isize,
-        dpi_type: u32,
-        dpi_x: *mut u32,
-        dpi_y: *mut u32,
-    ) -> i32;
+    fn GetDpiForMonitor(monitor: isize, dpi_type: u32, dpi_x: *mut u32, dpi_y: *mut u32) -> i32;
 }
 
-extern "system" fn enum_monitor(
-    monitor: isize,
-    _: isize,
-    _: *mut Rect,
-    data: isize,
-) -> i32 {
+extern "system" fn enum_monitor(monitor: isize, _: isize, _: *mut Rect, data: isize) -> i32 {
     let displays = unsafe { &mut *(data as *mut Vec<DisplayInfo>) };
     let mut info: MonitorInfoExW = unsafe { zeroed() };
     info.cb_size = size_of::<MonitorInfoExW>() as u32;
@@ -121,14 +111,8 @@ extern "system" fn enum_monitor(
 
     let mut dpi_x = DEFAULT_DPI;
     let mut dpi_y = DEFAULT_DPI;
-    let dpi_result = unsafe {
-        GetDpiForMonitor(
-            monitor,
-            MDT_EFFECTIVE_DPI,
-            &mut dpi_x,
-            &mut dpi_y,
-        )
-    };
+    let dpi_result =
+        unsafe { GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y) };
     if dpi_result != 0 || dpi_x == 0 || dpi_y == 0 {
         dpi_x = DEFAULT_DPI;
         dpi_y = DEFAULT_DPI;
@@ -148,7 +132,7 @@ extern "system" fn enum_monitor(
 }
 
 pub fn enumerate() -> Result<Vec<DisplayInfo>, String> {
-    let mut displays = Vec::new();
+    let mut displays: Vec<DisplayInfo> = Vec::new();
     let ok = unsafe {
         EnumDisplayMonitors(
             0,
