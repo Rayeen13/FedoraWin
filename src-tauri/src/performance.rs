@@ -155,4 +155,3 @@ mod tests {
         assert!(HARD_LIMIT_MB > TARGET_IDLE_MB);
     }
 }
-

@@ -222,7 +222,6 @@ pub(crate) fn ensure_activities_window(
     ensure_shell_surface(app, "activities", "activities", false, None)
 }
 
-
 fn relayout_shell_surfaces(app: &tauri::AppHandle) -> Result<(), String> {
     let display = windows::display::primary()?;
     let shell_layout = layout::for_display(&display);
