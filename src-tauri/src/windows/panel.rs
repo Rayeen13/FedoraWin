@@ -274,12 +274,8 @@ unsafe extern "system" fn wnd_proc(
                 DT_CENTER,
             );
 
-            let icon_font = create_font(
-                "Segoe Fluent Icons",
-                14,
-                client.bottom,
-                FONT_WEIGHT_NORMAL,
-            );
+            let icon_font =
+                create_font("Segoe Fluent Icons", 14, client.bottom, FONT_WEIGHT_NORMAL);
             let mut status_icons = String::from("\u{E701}  \u{E767}");
             let battery = crate::windows::power::panel_label();
             if !battery.is_empty() {

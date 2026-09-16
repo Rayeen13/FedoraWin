@@ -49,6 +49,14 @@ async function call(command, payload = {}) {
   catch (error) { console.error(`[FedoraWin] ${command}`, error); return null; }
 }
 
+function withTimeout(promise, timeoutMs, fallback = null) {
+  let timer;
+  const timeout = new Promise(resolve => {
+    timer = setTimeout(() => resolve(fallback), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function nextPaint() {
   return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
@@ -126,7 +134,10 @@ function renderPanel() {
 
 async function loadActivitiesData() {
   if (mockMode) return;
-  const [appList, windowList] = await Promise.all([call('list_apps'), call('list_windows')]);
+  const [appList, windowList] = await Promise.all([
+    withTimeout(call('list_apps'), 7000, []),
+    withTimeout(call('list_windows'), 3000, [])
+  ]);
   if (Array.isArray(appList)) apps = appList;
   if (Array.isArray(windowList)) windows = windowList;
 }

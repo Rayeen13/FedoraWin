@@ -85,9 +85,7 @@ extern "system" {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        battery_glyph, PowerStatus, BATTERY_FLAG_CHARGING, BATTERY_FLAG_NO_BATTERY,
-    };
+    use super::{battery_glyph, PowerStatus, BATTERY_FLAG_CHARGING, BATTERY_FLAG_NO_BATTERY};
 
     #[test]
     fn battery_flags_match_win32_values() {

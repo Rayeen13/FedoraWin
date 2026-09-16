@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
+use std::io::Read;
 use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -142,9 +145,15 @@ fn aliases_for(name: &str, app_id: &str) -> Vec<String> {
     aliases
 }
 
-pub fn list() -> Result<Vec<AppEntry>, String> {
+fn read_pipe(mut pipe: impl Read) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    let _ = pipe.read_to_end(&mut bytes);
+    bytes
+}
+
+fn get_start_apps_json(timeout: Duration) -> Result<Vec<u8>, String> {
     let script = "$ErrorActionPreference='Stop'; ConvertTo-Json -Compress -InputObject @(Get-StartApps | Select-Object Name,AppID)";
-    let output = Command::new("powershell.exe")
+    let mut child = Command::new("powershell.exe")
         .args([
             "-NoLogo",
             "-NoProfile",
@@ -153,17 +162,62 @@ pub fn list() -> Result<Vec<AppEntry>, String> {
             script,
         ])
         .stdin(Stdio::null())
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| format!("failed to start PowerShell app discovery: {e}"))?;
 
-    if !output.status.success() {
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "failed to capture Get-StartApps stdout".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "failed to capture Get-StartApps stderr".to_string())?;
+    let stdout_reader = thread::spawn(move || read_pipe(stdout));
+    let stderr_reader = thread::spawn(move || read_pipe(stderr));
+    let deadline = Instant::now() + timeout;
+
+    let status = loop {
+        match child
+            .try_wait()
+            .map_err(|e| format!("failed while waiting for Get-StartApps: {e}"))?
+        {
+            Some(status) => break status,
+            None if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
+                return Err(format!(
+                    "Get-StartApps timed out after {} ms",
+                    timeout.as_millis()
+                ));
+            }
+            None => thread::sleep(Duration::from_millis(50)),
+        }
+    };
+
+    let stdout = stdout_reader
+        .join()
+        .map_err(|_| "Get-StartApps stdout reader panicked".to_string())?;
+    let stderr = stderr_reader
+        .join()
+        .map_err(|_| "Get-StartApps stderr reader panicked".to_string())?;
+
+    if !status.success() {
         return Err(format!(
             "Get-StartApps failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
+            String::from_utf8_lossy(&stderr).trim()
         ));
     }
+    Ok(stdout)
+}
 
-    let raws: Vec<StartAppRaw> = serde_json::from_slice(&output.stdout)
+pub fn list() -> Result<Vec<AppEntry>, String> {
+    let output = get_start_apps_json(Duration::from_secs(8))?;
+    let raws: Vec<StartAppRaw> = serde_json::from_slice(&output)
         .map_err(|e| format!("invalid Get-StartApps JSON: {e}"))?;
 
     let mut apps: Vec<AppEntry> = raws
@@ -209,7 +263,12 @@ pub fn launch(app_id: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::aliases_for;
+    use super::{aliases_for, read_pipe};
+
+    #[test]
+    fn pipe_reader_collects_all_bytes() {
+        assert_eq!(read_pipe(&b"apps-json"[..]), b"apps-json");
+    }
 
     #[test]
     fn terminal_alias_resolves_windows_terminal() {
