@@ -29,6 +29,8 @@ let windows = [];
 let activitiesMode = 'windows';
 let calendarCursor = new Date();
 let windowEventsBound = false;
+let appPage = 0;
+const APPS_PER_PAGE = 24;
 
 function applyAppearance() {
   const { theme, accent } = shell.appearance;
@@ -62,6 +64,42 @@ function appInitials(name) {
 
 function appHaystack(entry) {
   return [entry.name, entry.appId, ...(entry.aliases || [])].join(' ').toLowerCase();
+}
+
+function appSearchScore(entry, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return 0;
+  const name = entry.name.toLowerCase();
+  const id = entry.appId.toLowerCase();
+  const aliases = (entry.aliases || []).map(alias => alias.toLowerCase());
+  if (name === q) return 0;
+  if (name.startsWith(q)) return 1;
+  if (aliases.includes(q)) return 2;
+  if (aliases.some(alias => alias.startsWith(q))) return 3;
+  if (name.includes(q)) return 4;
+  if (aliases.some(alias => alias.includes(q))) return 5;
+  if (id.includes(q)) return 6;
+  return Number.POSITIVE_INFINITY;
+}
+
+function searchApps(query) {
+  return apps
+    .map(entry => ({ entry, score: appSearchScore(entry, query) }))
+    .filter(result => Number.isFinite(result.score))
+    .sort((a, b) => a.score - b.score || a.entry.name.localeCompare(b.entry.name))
+    .map(result => result.entry);
+}
+
+function findFavorite(query) {
+  return searchApps(query)[0] || null;
+}
+
+function appLooksRunning(entry) {
+  const name = entry.name.toLowerCase();
+  return windows.some(window => {
+    const title = (window.title || '').toLowerCase();
+    return title.includes(name) || name.split(/\s+/).some(part => part.length >= 5 && title.includes(part));
+  });
 }
 
 function renderPanel() {
@@ -151,6 +189,56 @@ function renderAppGrid(list = apps) {
   return `<div class="applications-grid">${items || '<div class="overview-empty">No matching applications</div>'}</div>`;
 }
 
+function renderAppDrawer() {
+  const pageCount = Math.max(1, Math.ceil(apps.length / APPS_PER_PAGE));
+  appPage = Math.min(Math.max(appPage, 0), pageCount - 1);
+  const pageApps = apps.slice(appPage * APPS_PER_PAGE, (appPage + 1) * APPS_PER_PAGE);
+  const pages = Array.from({ length: pageCount }, (_, index) =>
+    `<button class="app-page-dot${index === appPage ? ' is-active' : ''}" data-app-page="${index}" aria-label="Applications page ${index + 1}" aria-current="${index === appPage ? 'page' : 'false'}"></button>`
+  ).join('');
+  return `<div class="applications-overview">${renderAppGrid(pageApps)}<div class="app-pages">${pages}</div></div>`;
+}
+
+function renderDash() {
+  const favorites = [
+    ['files', 'Files', 'F'],
+    ['terminal', 'Terminal', 'T'],
+    ['browser', 'Web Browser', 'W']
+  ].map(([query, label, fallback]) => {
+    const entry = findFavorite(query);
+    const target = entry
+      ? `data-app-id="${escapeHtml(entry.appId)}"`
+      : `data-search="${escapeHtml(query)}"`;
+    const running = entry && appLooksRunning(entry) ? ' is-running' : '';
+    return `<button class="dash-button dash-favorite${running}" ${target} title="${escapeHtml(entry?.name || label)}"><span class="dash-icon">${escapeHtml(entry ? appInitials(entry.name) : fallback)}</span></button>`;
+  }).join('');
+  return `${favorites}<span class="dash-separator"></span><button id="show-apps" class="dash-button" title="Show Applications">${iconGrid()}</button>`;
+}
+
+function refreshDash() {
+  const dash = document.querySelector('#dash');
+  if (!dash) return;
+  dash.innerHTML = renderDash();
+  bindDash();
+}
+
+function bindDash() {
+  document.querySelector('#show-apps')?.addEventListener('click', () => {
+    activitiesMode = activitiesMode === 'apps' ? 'windows' : 'apps';
+    appPage = 0;
+    const search = document.querySelector('#search');
+    if (search) search.value = '';
+    refreshActivitiesContent();
+  });
+  document.querySelectorAll('[data-search]').forEach(button => button.addEventListener('click', () => {
+    const search = document.querySelector('#search');
+    if (!search) return;
+    search.value = button.dataset.search;
+    search.focus();
+    refreshActivitiesContent(search.value);
+  }));
+}
+
 function bindActivitiesContent() {
   document.querySelectorAll('[data-window]').forEach(button => button.addEventListener('click', async () => {
     await call('activate_window', { handle: button.dataset.window });
@@ -171,6 +259,10 @@ function bindActivitiesContent() {
     await call('launch_app', { appId: button.dataset.appId });
     await call('toggle_activities');
   }));
+  document.querySelectorAll('[data-app-page]').forEach(button => button.addEventListener('click', () => {
+    appPage = Number(button.dataset.appPage) || 0;
+    refreshActivitiesContent();
+  }));
 }
 
 function refreshActivitiesContent(query = '') {
@@ -178,10 +270,10 @@ function refreshActivitiesContent(query = '') {
   if (!content) return;
   const q = query.trim().toLowerCase();
   if (q) {
-    const filtered = apps.filter(entry => appHaystack(entry).includes(q));
+    const filtered = searchApps(q);
     content.innerHTML = `<div class="search-results"><div class="results-label">Applications</div>${renderAppGrid(filtered)}</div>`;
   } else {
-    content.innerHTML = activitiesMode === 'apps' ? renderAppGrid() : renderWindowOverview();
+    content.innerHTML = activitiesMode === 'apps' ? renderAppDrawer() : renderWindowOverview();
   }
   document.querySelector('#show-apps')?.classList.toggle('is-active', activitiesMode === 'apps' && !q);
   bindActivitiesContent();
@@ -193,27 +285,35 @@ async function renderActivities() {
     <section class="activities">
       <div class="search-shell"><span class="search-icon">${ICONS.search}</span><input id="search" class="search" placeholder="Type to search" autocomplete="off" spellcheck="false" /></div>
       <div id="activities-content" class="activities-content"><div class="loading">Loading workspace…</div></div>
-      <div class="dash-wrap"><div class="dash">
-        <button class="dash-button" data-search="files" title="Files"><span class="dash-icon">F</span></button>
-        <button class="dash-button" data-search="terminal" title="Terminal"><span class="dash-icon">T</span></button>
-        <button class="dash-button" data-search="browser" title="Web Browser"><span class="dash-icon">W</span></button>
-        <span class="dash-separator"></span>
-        <button id="show-apps" class="dash-button" title="Show Applications">${iconGrid()}</button>
-      </div></div>
+      <div class="dash-wrap"><div id="dash" class="dash"></div></div>
     </section>`;
   const search = document.querySelector('#search');
-  search.addEventListener('input', () => refreshActivitiesContent(search.value));
-  document.querySelector('#show-apps').addEventListener('click', () => {
-    activitiesMode = activitiesMode === 'apps' ? 'windows' : 'apps';
-    search.value = '';
-    refreshActivitiesContent();
-  });
-  document.querySelectorAll('[data-search]').forEach(button => button.addEventListener('click', () => {
-    search.value = button.dataset.search;
-    search.focus();
+  search.addEventListener('input', () => {
+    appPage = 0;
     refreshActivitiesContent(search.value);
-  }));
+  });
+  search.addEventListener('keydown', async event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      await call('toggle_activities');
+      return;
+    }
+    if (event.key === 'Enter' && search.value.trim()) {
+      const first = searchApps(search.value)[0];
+      if (!first) return;
+      event.preventDefault();
+      await call('launch_app', { appId: first.appId });
+      await call('toggle_activities');
+      return;
+    }
+    if (!search.value.trim() && activitiesMode === 'apps' && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault();
+      appPage += event.key === 'ArrowRight' ? 1 : -1;
+      refreshActivitiesContent();
+    }
+  });
   await loadActivitiesData();
+  refreshDash();
   if (listen && !windowEventsBound) {
     windowEventsBound = true;
     await listen('fedorawin://windows-changed', refreshNativeWindows);
