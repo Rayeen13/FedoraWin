@@ -66,7 +66,6 @@ extern "system" fn window_event_callback(
     if let Some(sender) = EVENT_SENDER.get() {
         let _ = sender.send(());
     }
-    crate::windows::frame_overlay::notify();
 }
 
 pub fn start(app: tauri::AppHandle) -> Result<(), String> {
