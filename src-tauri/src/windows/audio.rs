@@ -2,8 +2,7 @@ use std::thread;
 
 use windows::Win32::{
     Media::Audio::{
-        eConsole, eRender, Endpoints::IAudioEndpointVolume, IMMDeviceEnumerator,
-        MMDeviceEnumerator,
+        eConsole, eRender, Endpoints::IAudioEndpointVolume, IMMDeviceEnumerator, MMDeviceEnumerator,
     },
     System::Com::{
         CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED,
