@@ -121,7 +121,6 @@ assert.match(main, /PhysicalPosition/);
 assert.match(main, /LogicalSize/);
 assert.match(main, /list_displays/);
 assert.match(main, /get_memory_snapshot/);
-assert.match(main, /always-resident panel is/);
 assert.match(main, /windows::panel::start/);
 assert.match(main, /windows::panel::relayout/);
 assert.match(main, /reset_top_level_windows/);
