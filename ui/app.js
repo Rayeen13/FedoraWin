@@ -1,7 +1,10 @@
 const invoke = window.__TAURI__?.core?.invoke;
+const listen = window.__TAURI__?.event?.listen;
 const app = document.querySelector('#app');
 const params = new URLSearchParams(location.search);
 const view = params.get('view') || 'panel';
+const captureMode = params.get('capture') || '';
+const captureEvidence = params.has('capture');
 const mockMode = params.get('mock') === '1' && !invoke;
 
 const ACCENTS = {
@@ -25,6 +28,7 @@ let apps = [];
 let windows = [];
 let activitiesMode = 'windows';
 let calendarCursor = new Date();
+let windowEventsBound = false;
 
 function applyAppearance() {
   const { theme, accent } = shell.appearance;
@@ -38,6 +42,10 @@ async function call(command, payload = {}) {
   if (!invoke) return null;
   try { return await invoke(command, payload); }
   catch (error) { console.error(`[FedoraWin] ${command}`, error); return null; }
+}
+
+function nextPaint() {
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 
 function escapeHtml(value = '') {
@@ -83,12 +91,55 @@ async function loadActivitiesData() {
 }
 
 function renderWindowOverview() {
-  const cards = windows.length ? windows.map(w => `
-    <button class="window-card" data-window="${escapeHtml(w.handle)}" title="${escapeHtml(w.title)}">
-      <span class="window-card__preview"><span class="window-card__bar"></span></span>
-      <span class="window-card__title">${escapeHtml(w.title)}</span>
-    </button>`).join('') : '<div class="overview-empty">No open windows on this desktop</div>';
-  return `<div class="workspace-strip"><button class="workspace-peek" aria-label="Previous workspace"></button><div class="workspace-main"><div class="window-grid">${cards}</div></div><button class="workspace-peek" aria-label="Next workspace"></button></div>`;
+  const currentWindows = windows.filter(w => w.onCurrentWorkspace !== false);
+  const workspaceIds = [...new Set(windows.map(w => w.desktopId).filter(Boolean))];
+  const cards = currentWindows.length ? currentWindows.map(w => `
+    <article class="window-card" title="${escapeHtml(w.title)}">
+      <div class="window-card__preview">
+        <div class="window-card__bar">
+          <span class="window-card__bar-title">${escapeHtml(w.title)}</span>
+          <button class="window-card__close" data-close-window="${escapeHtml(w.handle)}" aria-label="Close ${escapeHtml(w.title)}">×</button>
+        </div>
+        <button class="window-card__live-preview" data-window="${escapeHtml(w.handle)}" data-thumbnail-window="${escapeHtml(w.handle)}" aria-label="Open ${escapeHtml(w.title)}"></button>
+      </div>
+      <button class="window-card__title-button" data-window="${escapeHtml(w.handle)}">${escapeHtml(w.title)}</button>
+    </article>`).join('') : '<div class="overview-empty">No open windows on this desktop</div>';
+  const count = Math.max(workspaceIds.length, 1);
+  return `<div class="workspace-strip workspace-strip--native">
+    <button class="workspace-nav workspace-nav--previous" data-workspace-direction="-1" aria-label="Previous workspace">‹</button>
+    <div class="workspace-current"><span>Current workspace</span><small>${count} detected workspace${count === 1 ? '' : 's'}</small></div>
+    <div class="workspace-main"><div class="window-grid">${cards}</div></div>
+    <button class="workspace-nav workspace-nav--next" data-workspace-direction="1" aria-label="Next workspace">›</button>
+  </div>`;
+}
+
+async function syncLiveThumbnails() {
+  if (!invoke) return;
+  const search = document.querySelector('#search');
+  if (activitiesMode !== 'windows' || search?.value.trim()) {
+    await call('clear_window_thumbnails');
+    return;
+  }
+
+  const items = [...document.querySelectorAll('[data-thumbnail-window]')].map(element => {
+    const rect = element.getBoundingClientRect();
+    return {
+      handle: element.dataset.thumbnailWindow,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height
+    };
+  });
+  await call('sync_window_thumbnails', { items });
+}
+
+async function refreshNativeWindows() {
+  const windowList = await call('list_windows');
+  if (!Array.isArray(windowList)) return;
+  windows = windowList;
+  const search = document.querySelector('#search');
+  if (!search?.value.trim() && activitiesMode === 'windows') refreshActivitiesContent();
 }
 
 function renderAppGrid(list = apps) {
@@ -104,6 +155,17 @@ function bindActivitiesContent() {
   document.querySelectorAll('[data-window]').forEach(button => button.addEventListener('click', async () => {
     await call('activate_window', { handle: button.dataset.window });
     await call('toggle_activities');
+  }));
+  document.querySelectorAll('[data-close-window]').forEach(button => button.addEventListener('click', async event => {
+    event.stopPropagation();
+    await call('close_window', { handle: button.dataset.closeWindow });
+    setTimeout(refreshNativeWindows, 120);
+  }));
+  document.querySelectorAll('[data-workspace-direction]').forEach(button => button.addEventListener('click', async () => {
+    const direction = Number(button.dataset.workspaceDirection);
+    if (direction !== -1 && direction !== 1) return;
+    await call('clear_window_thumbnails');
+    await call('navigate_workspace', { direction });
   }));
   document.querySelectorAll('[data-app-id]').forEach(button => button.addEventListener('click', async () => {
     await call('launch_app', { appId: button.dataset.appId });
@@ -123,6 +185,7 @@ function refreshActivitiesContent(query = '') {
   }
   document.querySelector('#show-apps')?.classList.toggle('is-active', activitiesMode === 'apps' && !q);
   bindActivitiesContent();
+  requestAnimationFrame(() => requestAnimationFrame(syncLiveThumbnails));
 }
 
 async function renderActivities() {
@@ -151,7 +214,13 @@ async function renderActivities() {
     refreshActivitiesContent(search.value);
   }));
   await loadActivitiesData();
-  refreshActivitiesContent();
+  if (listen && !windowEventsBound) {
+    windowEventsBound = true;
+    await listen('fedorawin://windows-changed', refreshNativeWindows);
+  }
+  if (captureMode === 'apps') activitiesMode = 'apps';
+  if (captureMode === 'search-terminal') search.value = 'terminal';
+  refreshActivitiesContent(search.value);
   search.focus();
 }
 
@@ -270,15 +339,21 @@ async function bootstrap() {
       { name: 'Weather', appId: 'mock.weather', aliases: ['weather'] },
     ];
     windows = [
-      { handle: '1', title: 'FedoraWin — GitHub', minimized: false },
-      { handle: '2', title: 'README.md — Text Editor', minimized: false },
-      { handle: '3', title: 'Windows Terminal', minimized: false },
+      { handle: '1', title: 'FedoraWin — GitHub', minimized: false, desktopId: 'mock-1', onCurrentWorkspace: true },
+      { handle: '2', title: 'README.md — Text Editor', minimized: false, desktopId: 'mock-1', onCurrentWorkspace: true },
+      { handle: '3', title: 'Windows Terminal', minimized: false, desktopId: 'mock-1', onCurrentWorkspace: true },
     ];
   }
   applyAppearance();
   if (view === 'panel') renderPanel();
   else if (view === 'activities') await renderActivities();
-  else if (view === 'quick-settings') renderQuickSettings();
+  else if (view === 'quick-settings') renderQuickSettings(captureMode === 'appearance');
   else renderDateMenu();
+
+  if (captureEvidence && view !== 'panel') {
+    await nextPaint();
+    if (view === 'activities') await syncLiveThumbnails();
+    await call('mark_capture_ready', { label: view });
+  }
 }
 bootstrap();

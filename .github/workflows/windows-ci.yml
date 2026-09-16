@@ -2,13 +2,17 @@ name: Windows CI
 
 on:
   push:
-    branches: [main, feat/gnome-shell-native]
+    branches: [main, feat/gnome-shell-native, dev/gnome-native-20260914]
   pull_request:
+
+concurrency:
+  group: windows-ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   native-shell:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -20,9 +24,26 @@ jobs:
           node-version: 22
       - name: UI contract tests
         run: node --test tests/ui_contract.test.mjs
+      - name: Rust unit tests
+        working-directory: src-tauri
+        run: cargo test
       - name: Rust compile check
         working-directory: src-tauri
         run: cargo check
+      - name: Build memory smoke binary
+        working-directory: src-tauri
+        run: cargo build --release
+      - name: FedoraWin memory budget
+        shell: pwsh
+        run: ./tests/check-memory-budget.ps1
+      - name: Upload memory budget
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedorawin-memory-budget
+          path: memory-budget.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Rust format check
         if: always()
         working-directory: src-tauri

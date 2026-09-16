@@ -1,4 +1,4 @@
-use crate::shell::{Accent, AppearanceState, ThemeMode};
+use crate::shell::{AppearanceState, ThemeMode};
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::sync::Arc;
@@ -47,9 +47,24 @@ fn colorref(r: u8, g: u8, b: u8) -> u32 {
 
 fn palette(appearance: &AppearanceState) -> FramePalette {
     let dark = !matches!(appearance.theme, ThemeMode::Light);
-    let caption = if dark { colorref(48, 48, 48) } else { colorref(246, 245, 244) };
-    let text = if dark { colorref(255, 255, 255) } else { colorref(32, 32, 32) };
-    FramePalette { dark: if dark { 1 } else { 0 }, caption, text }
+    // Current libadwaita header bar roles: #2e2e32 in dark style and
+    // white in light style. Windows owns the real caption buttons, so we
+    // theme the supported non-client surface without replacing hit-testing.
+    let caption = if dark {
+        colorref(46, 46, 50)
+    } else {
+        colorref(255, 255, 255)
+    };
+    let text = if dark {
+        colorref(255, 255, 255)
+    } else {
+        colorref(32, 32, 34)
+    };
+    FramePalette {
+        dark: if dark { 1 } else { 0 },
+        caption,
+        text,
+    }
 }
 
 unsafe fn set_attr<T>(hwnd: isize, attribute: u32, value: &T) {
@@ -62,7 +77,11 @@ unsafe fn set_attr<T>(hwnd: isize, attribute: u32, value: &T) {
 }
 
 unsafe fn eligible(hwnd: isize) -> bool {
-    if hwnd == 0 || IsWindowVisible(hwnd) == 0 || IsIconic(hwnd) != 0 || GetWindow(hwnd, GW_OWNER) != 0 {
+    if hwnd == 0
+        || IsWindowVisible(hwnd) == 0
+        || IsIconic(hwnd) != 0
+        || GetWindow(hwnd, GW_OWNER) != 0
+    {
         return false;
     }
     let exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
@@ -80,7 +99,9 @@ unsafe fn eligible(hwnd: isize) -> bool {
         DWMWA_CLOAKED,
         &mut cloaked as *mut i32 as *mut c_void,
         size_of::<i32>() as u32,
-    ) == 0 && cloaked != 0 {
+    ) == 0
+        && cloaked != 0
+    {
         return false;
     }
     true
@@ -110,7 +131,10 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
 }
 
 pub fn apply_to_top_level_windows(appearance: &AppearanceState) -> Result<usize, String> {
-    let mut ctx = EnumContext { palette: palette(appearance), count: 0 };
+    let mut ctx = EnumContext {
+        palette: palette(appearance),
+        count: 0,
+    };
     let ok = unsafe { EnumWindows(apply_callback, &mut ctx as *mut EnumContext as isize) };
     if ok == 0 {
         return Err("EnumWindows failed".into());
@@ -135,7 +159,9 @@ pub fn reset_top_level_windows() {
         }
         1
     }
-    unsafe { EnumWindows(reset_callback, 0); }
+    unsafe {
+        EnumWindows(reset_callback, 0);
+    }
     let _ = ResetContext;
     let _ = DWMWA_COLOR_NONE;
 }
