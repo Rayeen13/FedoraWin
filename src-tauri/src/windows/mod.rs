@@ -1,9 +1,9 @@
 #[cfg(windows)]
 pub mod appbar;
 #[cfg(windows)]
-pub mod audio;
-#[cfg(windows)]
 pub mod apps;
+#[cfg(windows)]
+pub mod audio;
 #[cfg(windows)]
 pub mod display;
 #[cfg(windows)]
