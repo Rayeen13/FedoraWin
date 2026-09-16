@@ -47,6 +47,20 @@ public static class FedoraWinCaptureNative {
         }, IntPtr.Zero);
         return found;
     }
+
+    public static string[] GetVisibleWindowTitles(int processId) {
+        var titles = new System.Collections.Generic.List<string>();
+        EnumWindows((hwnd, _) => {
+            uint pid;
+            GetWindowThreadProcessId(hwnd, out pid);
+            if (pid != (uint)processId || !IsWindowVisible(hwnd)) return true;
+            var title = new StringBuilder(256);
+            GetWindowText(hwnd, title, title.Capacity);
+            titles.Add(title.ToString());
+            return true;
+        }, IntPtr.Zero);
+        return titles.ToArray();
+    }
 }
 '@
 
@@ -82,7 +96,11 @@ function Wait-Window {
         if ($hwnd -ne [IntPtr]::Zero) { return $hwnd }
         Start-Sleep -Milliseconds 200
     } while ([DateTime]::UtcNow -lt $deadline)
-    throw "Timed out waiting for window '$Title' in process $ProcessId."
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    $processState = if ($process) { "running" } else { "exited" }
+    $visibleTitles = [FedoraWinCaptureNative]::GetVisibleWindowTitles($ProcessId)
+    $titleSummary = if ($visibleTitles.Count) { $visibleTitles -join ' | ' } else { '<none>' }
+    throw "Timed out waiting for window '$Title' in process $ProcessId (process=$processState; visibleTitles=$titleSummary)."
 }
 
 function Save-WindowCapture {

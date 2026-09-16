@@ -169,7 +169,7 @@ async function syncLiveThumbnails() {
   if (!invoke) return;
   const search = document.querySelector('#search');
   if (activitiesMode !== 'windows' || search?.value.trim()) {
-    await call('clear_window_thumbnails');
+    await withTimeout(call('clear_window_thumbnails'), 2000, null);
     return;
   }
 
@@ -183,7 +183,7 @@ async function syncLiveThumbnails() {
       height: rect.height
     };
   });
-  await call('sync_window_thumbnails', { items });
+  await withTimeout(call('sync_window_thumbnails', { items }), 3000, null);
 }
 
 async function refreshNativeWindows() {
@@ -337,7 +337,11 @@ async function renderActivities() {
   refreshDash();
   if (listen && !windowEventsBound) {
     windowEventsBound = true;
-    await listen('fedorawin://windows-changed', refreshNativeWindows);
+    try {
+      await withTimeout(listen('fedorawin://windows-changed', refreshNativeWindows), 2500, null);
+    } catch {
+      windowEventsBound = false;
+    }
   }
   if (captureMode === 'apps') activitiesMode = 'apps';
   if (captureMode === 'search-terminal') search.value = 'terminal';
@@ -500,7 +504,7 @@ function renderDateMenu() {
 }
 
 async function bootstrap() {
-  shell = await call('get_shell_state') || shell;
+  shell = await withTimeout(call('get_shell_state'), 3000, null) || shell;
   if (mockMode) {
     apps = [
       { name: 'Files', appId: 'mock.files', aliases: ['files','file manager'] },
@@ -527,9 +531,9 @@ async function bootstrap() {
   else renderDateMenu();
 
   if (captureEvidence && view !== 'panel') {
-    await nextPaint();
-    if (view === 'activities') await syncLiveThumbnails();
-    await call('mark_capture_ready', { label: view });
+    await withTimeout(nextPaint(), 2000, null);
+    if (view === 'activities') await withTimeout(syncLiveThumbnails(), 3500, null);
+    void call('mark_capture_ready', { label: view });
   }
 }
 bootstrap();
