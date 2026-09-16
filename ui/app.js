@@ -30,6 +30,9 @@ let activitiesMode = 'windows';
 let calendarCursor = new Date();
 let windowEventsBound = false;
 let appPage = 0;
+let volumeCommitTimer = null;
+let volumeRevision = 0;
+const quickState = { volume: 68, brightness: 70 };
 const APPS_PER_PAGE = 24;
 
 function applyAppearance() {
@@ -350,6 +353,36 @@ function bindRangeFill(input) {
   input.addEventListener('input', sync); sync();
 }
 
+function syncVolumeInput(input, value) {
+  const normalized = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  quickState.volume = normalized;
+  input.value = String(normalized);
+  input.style.setProperty('--value', `${normalized}%`);
+}
+
+async function hydrateMasterVolume(input) {
+  const revision = volumeRevision;
+  const value = await call('get_master_volume');
+  if (revision === volumeRevision && Number.isFinite(value)) syncVolumeInput(input, value);
+}
+
+function bindMasterVolume() {
+  const input = document.querySelector('#volume');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    const requested = Math.max(0, Math.min(100, Math.round(Number(input.value) || 0)));
+    quickState.volume = requested;
+    volumeRevision += 1;
+    const revision = volumeRevision;
+    clearTimeout(volumeCommitTimer);
+    volumeCommitTimer = setTimeout(async () => {
+      const actual = await call('set_master_volume', { value: requested });
+      if (revision === volumeRevision && Number.isFinite(actual)) syncVolumeInput(input, actual);
+    }, 80);
+  });
+  hydrateMasterVolume(input);
+}
+
 function bindAppearance() {
   document.querySelectorAll('[data-theme]').forEach(button => button.addEventListener('click', async () => {
     shell = await call('set_appearance', { theme: button.dataset.theme, accent: shell.appearance.accent }) || shell;
@@ -365,7 +398,7 @@ function renderQuickSettings(appearanceOpen = false) {
   app.innerHTML = `<section class="popover quick-popover"><div class="popover-card quick-card">
     ${appearanceOpen ? renderAppearanceSheet() : `
       <div class="quick-header"><span class="battery-summary"><span class="battery-mark"><i></i></span><strong>100%</strong></span><span class="header-actions"><button class="icon-button" title="Screenshot">${ICONS.screenshot}</button><button id="appearance-open" class="icon-button" title="Appearance">${ICONS.settings}</button><button class="icon-button" title="Power">${ICONS.power}</button></span></div>
-      <div class="sliders">${slider(ICONS.volume,'volume',68,'Volume')}${slider(ICONS.brightness,'brightness',70,'Brightness')}</div>
+      <div class="sliders">${slider(ICONS.volume,'volume',quickState.volume,'Volume')}${slider(ICONS.brightness,'brightness',quickState.brightness,'Brightness')}</div>
       <div class="quick-grid">
         ${quickTile('wifi',ICONS.wifi,'Wi-Fi','Connected',true,true)}
         ${quickTile('bluetooth',ICONS.bluetooth,'Bluetooth','On',false,true)}
@@ -383,6 +416,7 @@ function renderQuickSettings(appearanceOpen = false) {
     return;
   }
   document.querySelectorAll('input[type="range"]').forEach(bindRangeFill);
+  bindMasterVolume();
   document.querySelector('#appearance-open').addEventListener('click', () => renderQuickSettings(true));
   document.querySelector('#wifi').addEventListener('click', async event => {
     const next = event.currentTarget.getAttribute('aria-pressed') !== 'true';

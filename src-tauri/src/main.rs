@@ -116,6 +116,14 @@ fn clear_window_thumbnails(
     Ok(())
 }
 #[tauri::command]
+fn get_master_volume() -> Result<u8, String> {
+    windows::audio::get_master_volume()
+}
+#[tauri::command]
+fn set_master_volume(value: u8) -> Result<u8, String> {
+    windows::audio::set_master_volume(value)
+}
+#[tauri::command]
 fn set_wifi_enabled(enabled: bool) -> Result<(), String> {
     windows::wifi::set_enabled(enabled).map_err(|e| e.to_string())
 }
@@ -283,6 +291,8 @@ fn main() {
             navigate_workspace,
             sync_window_thumbnails,
             clear_window_thumbnails,
+            get_master_volume,
+            set_master_volume,
             set_wifi_enabled,
             refresh_window_frames,
             mark_capture_ready

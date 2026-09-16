@@ -1,6 +1,8 @@
 #[cfg(windows)]
 pub mod appbar;
 #[cfg(windows)]
+pub mod audio;
+#[cfg(windows)]
 pub mod apps;
 #[cfg(windows)]
 pub mod display;
@@ -21,6 +23,15 @@ pub mod window_events;
 #[cfg(windows)]
 pub mod windows_list;
 
+#[cfg(not(windows))]
+pub mod audio {
+    pub fn get_master_volume() -> Result<u8, String> {
+        Err("audio control is Windows-only".into())
+    }
+    pub fn set_master_volume(_: u8) -> Result<u8, String> {
+        Err("audio control is Windows-only".into())
+    }
+}
 #[cfg(not(windows))]
 pub mod appbar {
     pub fn reserve_top(_: isize) -> Result<(), String> {
