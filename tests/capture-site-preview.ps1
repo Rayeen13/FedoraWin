@@ -223,8 +223,9 @@ $form.Controls.Add($label)
         [void](Wait-Window -ProcessId $shellProcess.Id -Title 'FedoraWin — panel')
         $probeProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-STA','-File', $probeFile) -PassThru
         $probeHwnd = Wait-Window -ProcessId $probeProcess.Id -Title 'FedoraWin Native Frame Probe'
-        [void](Wait-Window -ProcessId $shellProcess.Id -Title 'FedoraWin Adwaita Controls' -TimeoutSeconds 12)
-        Start-Sleep -Milliseconds 350
+        # DWM now owns the real caption buttons; there is no FedoraWin overlay window.
+        # Allow the frame watcher to observe and style the probe HWND before capture.
+        Start-Sleep -Milliseconds 1200
         $nativeFramePath = Save-WindowCapture -Hwnd $probeHwnd -FileName 'native_frame.png'
         Assert-VisualCapture -Path $nativeFramePath -Key 'native_frame'
         $captures.native_frame = 'native_frame.png'

@@ -169,6 +169,8 @@ const captureScript = fs.readFileSync(new URL('./capture-site-preview.ps1', impo
 assert.match(captureScript, /Assert-VisualCapture/);
 assert.match(captureScript, /— ready/);
 assert.match(captureScript, /nearWhite/);
+assert.doesNotMatch(captureScript, /FedoraWin Adwaita Controls/);
+assert.match(captureScript, /DWM now owns the real caption buttons/);
 assert.match(memorySmoke, /TargetIdleMb = 100/);
 assert.match(memorySmoke, /Get-CimInstance Win32_Process/);
 assert.match(memorySmoke, /WorkingSet64/);
