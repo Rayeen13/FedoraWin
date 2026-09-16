@@ -30,6 +30,11 @@ const DT_VCENTER: u32 = 0x0004;
 const DT_SINGLELINE: u32 = 0x0020;
 const TRANSPARENT: i32 = 1;
 const DEFAULT_GUI_FONT: i32 = 17;
+const NULL_PEN: i32 = 8;
+const FONT_WEIGHT_NORMAL: i32 = 400;
+const FONT_WEIGHT_SEMIBOLD: i32 = 600;
+const DEFAULT_CHARSET: u32 = 1;
+const CLEARTYPE_QUALITY: u32 = 5;
 
 const TIMER_CLOCK: usize = 1;
 
@@ -128,19 +133,88 @@ fn send_action(action: PanelAction) {
     }
 }
 
+fn scale_to_panel(value: i32, panel_height: i32) -> i32 {
+    ((value as f64) * (panel_height.max(1) as f64 / PANEL_HEIGHT)).round() as i32
+}
+
 fn clock_label() -> String {
     let mut time = SystemTime::default();
     unsafe { GetLocalTime(&mut time) };
-    let day = match time.day_of_week {
-        0 => "Sun",
-        1 => "Mon",
-        2 => "Tue",
-        3 => "Wed",
-        4 => "Thu",
-        5 => "Fri",
-        _ => "Sat",
+    let month = match time.month {
+        1 => "Jan",
+        2 => "Feb",
+        3 => "Mar",
+        4 => "Apr",
+        5 => "May",
+        6 => "Jun",
+        7 => "Jul",
+        8 => "Aug",
+        9 => "Sep",
+        10 => "Oct",
+        11 => "Nov",
+        _ => "Dec",
     };
-    format!("{day} {:02}:{:02}", time.hour, time.minute)
+    format!("{month} {}  {:02}:{:02}", time.day, time.hour, time.minute)
+}
+
+unsafe fn create_font(face: &str, logical_height: i32, panel_height: i32, weight: i32) -> isize {
+    let face = wide(face);
+    CreateFontW(
+        -scale_to_panel(logical_height, panel_height).max(1),
+        0,
+        0,
+        0,
+        weight,
+        0,
+        0,
+        0,
+        DEFAULT_CHARSET,
+        0,
+        0,
+        CLEARTYPE_QUALITY,
+        0,
+        face.as_ptr(),
+    )
+}
+
+unsafe fn draw_workspace_indicator(hdc: isize, panel_height: i32) {
+    let white = CreateSolidBrush(colorref(245, 245, 247));
+    let muted = CreateSolidBrush(colorref(142, 142, 148));
+    let null_pen = GetStockObject(NULL_PEN);
+    let previous_pen = SelectObject(hdc, null_pen);
+    let previous_brush = SelectObject(hdc, white);
+
+    let pill_left = scale_to_panel(12, panel_height);
+    let pill_top = scale_to_panel(12, panel_height);
+    let pill_right = scale_to_panel(30, panel_height);
+    let pill_bottom = scale_to_panel(20, panel_height);
+    let radius = scale_to_panel(8, panel_height);
+    RoundRect(
+        hdc,
+        pill_left,
+        pill_top,
+        pill_right,
+        pill_bottom,
+        radius,
+        radius,
+    );
+
+    SelectObject(hdc, muted);
+    let dot_left = scale_to_panel(36, panel_height);
+    let dot_top = scale_to_panel(14, panel_height);
+    let dot_size = scale_to_panel(5, panel_height);
+    Ellipse(
+        hdc,
+        dot_left,
+        dot_top,
+        dot_left + dot_size,
+        dot_top + dot_size,
+    );
+
+    SelectObject(hdc, previous_brush);
+    SelectObject(hdc, previous_pen);
+    DeleteObject(white);
+    DeleteObject(muted);
 }
 
 unsafe fn draw_text(hdc: isize, text: &str, mut rect: Rect, format: u32) {
@@ -173,45 +247,67 @@ unsafe extern "system" fn wnd_proc(
 
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, colorref(255, 255, 255));
-            let font = GetStockObject(DEFAULT_GUI_FONT);
-            let previous = SelectObject(hdc, font);
+            let text_font = create_font(
+                "Segoe UI Variable Text",
+                13,
+                client.bottom,
+                FONT_WEIGHT_SEMIBOLD,
+            );
+            let text_font = if text_font != 0 {
+                text_font
+            } else {
+                GetStockObject(DEFAULT_GUI_FONT)
+            };
+            let previous = SelectObject(hdc, text_font);
 
             let width = client.right - client.left;
-            draw_text(
-                hdc,
-                "Activities",
-                Rect {
-                    left: 12,
-                    top: 0,
-                    right: 120,
-                    bottom: client.bottom,
-                },
-                DT_LEFT,
-            );
+            draw_workspace_indicator(hdc, client.bottom);
             draw_text(
                 hdc,
                 &clock_label(),
                 Rect {
-                    left: width / 2 - 110,
+                    left: width / 2 - scale_to_panel(120, client.bottom),
                     top: 0,
-                    right: width / 2 + 110,
+                    right: width / 2 + scale_to_panel(120, client.bottom),
                     bottom: client.bottom,
                 },
                 DT_CENTER,
             );
+
+            let icon_font = create_font(
+                "Segoe Fluent Icons",
+                14,
+                client.bottom,
+                FONT_WEIGHT_NORMAL,
+            );
+            let mut status_icons = String::from("\u{E701}  \u{E767}");
+            let battery = crate::windows::power::panel_label();
+            if !battery.is_empty() {
+                status_icons.push_str("  ");
+                status_icons.push_str(&battery);
+            }
+            if icon_font != 0 {
+                SelectObject(hdc, icon_font);
+            }
             draw_text(
                 hdc,
-                &crate::windows::power::panel_label(),
+                &status_icons,
                 Rect {
-                    left: width - 145,
+                    left: width - scale_to_panel(150, client.bottom),
                     top: 0,
-                    right: width - 12,
+                    right: width - scale_to_panel(12, client.bottom),
                     bottom: client.bottom,
                 },
                 DT_RIGHT,
             );
 
             SelectObject(hdc, previous);
+            if icon_font != 0 {
+                DeleteObject(icon_font);
+            }
+            if text_font != GetStockObject(DEFAULT_GUI_FONT) {
+                DeleteObject(text_font);
+            }
             EndPaint(hwnd, &paint);
             0
         }
@@ -221,7 +317,7 @@ unsafe extern "system" fn wnd_proc(
             let width = client.right - client.left;
             let x = x_from_lparam(lparam);
 
-            if x <= 125 {
+            if x <= scale_to_panel(58, client.bottom) {
                 send_action(PanelAction::Activities);
             } else if x >= width / 2 - 125 && x <= width / 2 + 125 {
                 send_action(PanelAction::DateMenu);
@@ -457,15 +553,47 @@ extern "system" {
     fn DeleteObject(object: isize) -> i32;
     fn GetStockObject(object: i32) -> isize;
     fn SelectObject(hdc: isize, object: isize) -> isize;
+    fn RoundRect(
+        hdc: isize,
+        left: i32,
+        top: i32,
+        right: i32,
+        bottom: i32,
+        ellipse_width: i32,
+        ellipse_height: i32,
+    ) -> i32;
+    fn Ellipse(hdc: isize, left: i32, top: i32, right: i32, bottom: i32) -> i32;
+    fn CreateFontW(
+        height: i32,
+        width: i32,
+        escapement: i32,
+        orientation: i32,
+        weight: i32,
+        italic: u32,
+        underline: u32,
+        strike_out: u32,
+        char_set: u32,
+        out_precision: u32,
+        clip_precision: u32,
+        quality: u32,
+        pitch_and_family: u32,
+        face_name: *const u16,
+    ) -> isize;
 }
 
 #[cfg(test)]
 mod tests {
-    use super::x_from_lparam;
+    use super::{scale_to_panel, x_from_lparam};
 
     #[test]
     fn extracts_signed_mouse_x_coordinate() {
         assert_eq!(x_from_lparam(42), 42);
         assert_eq!(x_from_lparam(0x0000_fffe), -2);
+    }
+
+    #[test]
+    fn logical_panel_geometry_scales_with_dpi_height() {
+        assert_eq!(scale_to_panel(12, 32), 12);
+        assert_eq!(scale_to_panel(12, 48), 18);
     }
 }

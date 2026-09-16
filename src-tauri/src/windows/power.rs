@@ -51,15 +51,31 @@ pub fn status() -> Result<PowerStatus, String> {
     })
 }
 
+fn battery_glyph(percent: u8, charging: bool) -> char {
+    let bucket = ((u16::from(percent.min(100)) + 5) / 10).min(10) as u32;
+    let codepoint = if charging {
+        if bucket >= 9 {
+            0xe83e
+        } else {
+            0xe85a + bucket
+        }
+    } else if bucket >= 10 {
+        0xe83f
+    } else {
+        0xe850 + bucket
+    };
+    char::from_u32(codepoint).unwrap_or('\u{e996}')
+}
+
 pub fn panel_label() -> String {
-    match status() {
-        Ok(power) => match power.battery_percent {
-            Some(percent) => format!("●  ●  {percent}%"),
-            None if power.ac_online => "●  ●  AC".into(),
-            None => "●  ●  ●".into(),
-        },
-        Err(_) => "●  ●  ●".into(),
-    }
+    status()
+        .ok()
+        .and_then(|power| {
+            power
+                .battery_percent
+                .map(|percent| battery_glyph(percent, power.charging).to_string())
+        })
+        .unwrap_or_default()
 }
 
 #[link(name = "kernel32")]
@@ -69,12 +85,21 @@ extern "system" {
 
 #[cfg(test)]
 mod tests {
-    use super::{PowerStatus, BATTERY_FLAG_CHARGING, BATTERY_FLAG_NO_BATTERY};
+    use super::{
+        battery_glyph, PowerStatus, BATTERY_FLAG_CHARGING, BATTERY_FLAG_NO_BATTERY,
+    };
 
     #[test]
     fn battery_flags_match_win32_values() {
         assert_eq!(BATTERY_FLAG_CHARGING, 0x08);
         assert_eq!(BATTERY_FLAG_NO_BATTERY, 0x80);
+    }
+
+    #[test]
+    fn battery_glyph_tracks_charge_level_and_charging_state() {
+        assert_eq!(battery_glyph(0, false), '\u{e850}');
+        assert_eq!(battery_glyph(100, false), '\u{e83f}');
+        assert_eq!(battery_glyph(100, true), '\u{e83e}');
     }
 
     #[test]
