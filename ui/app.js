@@ -32,7 +32,7 @@ let windowEventsBound = false;
 let appPage = 0;
 let volumeCommitTimer = null;
 let volumeRevision = 0;
-const quickState = { volume: 68, brightness: 70 };
+const quickState = { volume: 68, brightness: 70, power: null };
 const APPS_PER_PAGE = 24;
 
 function applyAppearance() {
@@ -383,6 +383,28 @@ function bindMasterVolume() {
   hydrateMasterVolume(input);
 }
 
+function renderBatterySummary() {
+  const power = quickState.power;
+  if (!power) return '<span id="battery-summary" class="battery-summary"><span class="battery-mark"><i></i></span><strong>—</strong></span>';
+  if (!power.batteryPresent || !Number.isFinite(power.batteryPercent)) {
+    return '<span id="battery-summary" class="battery-summary battery-summary--ac"><strong>AC</strong></span>';
+  }
+  const percent = Math.max(0, Math.min(100, Math.round(power.batteryPercent)));
+  const state = power.charging ? 'Charging' : (power.acOnline ? 'Plugged in' : 'On battery');
+  return `<span id="battery-summary" class="battery-summary" title="${state}"><span class="battery-mark"><i style="width:${percent}%"></i></span><strong>${percent}%</strong></span>`;
+}
+
+async function hydratePowerStatus() {
+  const power = await call('get_power_status');
+  if (!power || typeof power !== 'object') return;
+  quickState.power = power;
+  const current = document.querySelector('#battery-summary');
+  if (!current) return;
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = renderBatterySummary();
+  current.replaceWith(wrapper.firstElementChild);
+}
+
 function bindAppearance() {
   document.querySelectorAll('[data-theme]').forEach(button => button.addEventListener('click', async () => {
     shell = await call('set_appearance', { theme: button.dataset.theme, accent: shell.appearance.accent }) || shell;
@@ -397,7 +419,7 @@ function bindAppearance() {
 function renderQuickSettings(appearanceOpen = false) {
   app.innerHTML = `<section class="popover quick-popover"><div class="popover-card quick-card">
     ${appearanceOpen ? renderAppearanceSheet() : `
-      <div class="quick-header"><span class="battery-summary"><span class="battery-mark"><i></i></span><strong>100%</strong></span><span class="header-actions"><button class="icon-button" title="Screenshot">${ICONS.screenshot}</button><button id="appearance-open" class="icon-button" title="Appearance">${ICONS.settings}</button><button class="icon-button" title="Power">${ICONS.power}</button></span></div>
+      <div class="quick-header">${renderBatterySummary()}<span class="header-actions"><button class="icon-button" title="Screenshot">${ICONS.screenshot}</button><button id="appearance-open" class="icon-button" title="Appearance">${ICONS.settings}</button><button class="icon-button" title="Power">${ICONS.power}</button></span></div>
       <div class="sliders">${slider(ICONS.volume,'volume',quickState.volume,'Volume')}${slider(ICONS.brightness,'brightness',quickState.brightness,'Brightness')}</div>
       <div class="quick-grid">
         ${quickTile('wifi',ICONS.wifi,'Wi-Fi','Connected',true,true)}
@@ -417,6 +439,7 @@ function renderQuickSettings(appearanceOpen = false) {
   }
   document.querySelectorAll('input[type="range"]').forEach(bindRangeFill);
   bindMasterVolume();
+  hydratePowerStatus();
   document.querySelector('#appearance-open').addEventListener('click', () => renderQuickSettings(true));
   document.querySelector('#wifi').addEventListener('click', async event => {
     const next = event.currentTarget.getAttribute('aria-pressed') !== 'true';

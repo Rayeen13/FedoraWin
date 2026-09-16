@@ -201,7 +201,7 @@ unsafe extern "system" fn wnd_proc(
             );
             draw_text(
                 hdc,
-                "●  ●  ●",
+                &crate::windows::power::panel_label(),
                 Rect {
                     left: width - 145,
                     top: 0,

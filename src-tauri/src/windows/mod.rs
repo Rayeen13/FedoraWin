@@ -13,6 +13,8 @@ pub mod hotkeys;
 #[cfg(windows)]
 pub mod panel;
 #[cfg(windows)]
+pub mod power;
+#[cfg(windows)]
 pub mod thumbnails;
 #[cfg(windows)]
 pub mod virtual_desktop;
@@ -200,6 +202,24 @@ pub mod virtual_desktop {
         pub fn pending_count(&self) -> usize {
             0
         }
+    }
+}
+#[cfg(not(windows))]
+pub mod power {
+    use serde::Serialize;
+    #[derive(Clone, Debug, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct PowerStatus {
+        pub battery_present: bool,
+        pub battery_percent: Option<u8>,
+        pub charging: bool,
+        pub ac_online: bool,
+    }
+    pub fn status() -> Result<PowerStatus, String> {
+        Err("power status is Windows-only".into())
+    }
+    pub fn panel_label() -> String {
+        "●  ●  ●".into()
     }
 }
 #[cfg(not(windows))]

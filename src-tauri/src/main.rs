@@ -116,6 +116,10 @@ fn clear_window_thumbnails(
     Ok(())
 }
 #[tauri::command]
+fn get_power_status() -> Result<windows::power::PowerStatus, String> {
+    windows::power::status()
+}
+#[tauri::command]
 fn get_master_volume() -> Result<u8, String> {
     windows::audio::get_master_volume()
 }
@@ -291,6 +295,7 @@ fn main() {
             navigate_workspace,
             sync_window_thumbnails,
             clear_window_thumbnails,
+            get_power_status,
             get_master_volume,
             set_master_volume,
             set_wifi_enabled,
