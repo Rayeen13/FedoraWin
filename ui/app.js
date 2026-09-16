@@ -176,6 +176,7 @@ async function refreshNativeWindows() {
   const windowList = await call('list_windows');
   if (!Array.isArray(windowList)) return;
   windows = windowList;
+  refreshDash();
   const search = document.querySelector('#search');
   if (!search?.value.trim() && activitiesMode === 'windows') refreshActivitiesContent();
 }
@@ -223,6 +224,10 @@ function refreshDash() {
 }
 
 function bindDash() {
+  document.querySelectorAll('#dash [data-app-id]').forEach(button => button.addEventListener('click', async () => {
+    await call('launch_app', { appId: button.dataset.appId });
+    await call('toggle_activities');
+  }));
   document.querySelector('#show-apps')?.addEventListener('click', () => {
     activitiesMode = activitiesMode === 'apps' ? 'windows' : 'apps';
     appPage = 0;
@@ -240,26 +245,28 @@ function bindDash() {
 }
 
 function bindActivitiesContent() {
-  document.querySelectorAll('[data-window]').forEach(button => button.addEventListener('click', async () => {
+  const content = document.querySelector('#activities-content');
+  if (!content) return;
+  content.querySelectorAll('[data-window]').forEach(button => button.addEventListener('click', async () => {
     await call('activate_window', { handle: button.dataset.window });
     await call('toggle_activities');
   }));
-  document.querySelectorAll('[data-close-window]').forEach(button => button.addEventListener('click', async event => {
+  content.querySelectorAll('[data-close-window]').forEach(button => button.addEventListener('click', async event => {
     event.stopPropagation();
     await call('close_window', { handle: button.dataset.closeWindow });
     setTimeout(refreshNativeWindows, 120);
   }));
-  document.querySelectorAll('[data-workspace-direction]').forEach(button => button.addEventListener('click', async () => {
+  content.querySelectorAll('[data-workspace-direction]').forEach(button => button.addEventListener('click', async () => {
     const direction = Number(button.dataset.workspaceDirection);
     if (direction !== -1 && direction !== 1) return;
     await call('clear_window_thumbnails');
     await call('navigate_workspace', { direction });
   }));
-  document.querySelectorAll('[data-app-id]').forEach(button => button.addEventListener('click', async () => {
+  content.querySelectorAll('[data-app-id]').forEach(button => button.addEventListener('click', async () => {
     await call('launch_app', { appId: button.dataset.appId });
     await call('toggle_activities');
   }));
-  document.querySelectorAll('[data-app-page]').forEach(button => button.addEventListener('click', () => {
+  content.querySelectorAll('[data-app-page]').forEach(button => button.addEventListener('click', () => {
     appPage = Number(button.dataset.appPage) || 0;
     refreshActivitiesContent();
   }));
