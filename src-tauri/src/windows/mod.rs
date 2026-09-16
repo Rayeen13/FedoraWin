@@ -15,6 +15,8 @@ pub mod panel;
 #[cfg(windows)]
 pub mod power;
 #[cfg(windows)]
+pub mod screenshot;
+#[cfg(windows)]
 pub mod thumbnails;
 #[cfg(windows)]
 pub mod virtual_desktop;
@@ -202,6 +204,12 @@ pub mod virtual_desktop {
         pub fn pending_count(&self) -> usize {
             0
         }
+    }
+}
+#[cfg(not(windows))]
+pub mod screenshot {
+    pub fn open_overlay() -> Result<(), String> {
+        Err("screenshot overlay is Windows-only".into())
     }
 }
 #[cfg(not(windows))]

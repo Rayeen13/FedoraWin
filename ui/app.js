@@ -430,7 +430,7 @@ function bindAppearance() {
 function renderQuickSettings(appearanceOpen = false) {
   app.innerHTML = `<section class="popover quick-popover"><div class="popover-card quick-card">
     ${appearanceOpen ? renderAppearanceSheet() : `
-      <div class="quick-header">${renderBatterySummary()}<span class="header-actions"><button class="icon-button" title="Screenshot">${ICONS.screenshot}</button><button id="appearance-open" class="icon-button" title="Appearance">${ICONS.settings}</button><button class="icon-button" title="Power">${ICONS.power}</button></span></div>
+      <div class="quick-header">${renderBatterySummary()}<span class="header-actions"><button id="screenshot-open" class="icon-button" title="Screenshot">${ICONS.screenshot}</button><button id="appearance-open" class="icon-button" title="Appearance">${ICONS.settings}</button><button class="icon-button" title="Power">${ICONS.power}</button></span></div>
       <div class="sliders">${slider(ICONS.volume,'volume',quickState.volume,'Volume')}${slider(ICONS.brightness,'brightness',quickState.brightness,'Brightness')}</div>
       <div class="quick-grid">
         ${quickTile('wifi',ICONS.wifi,'Wi-Fi','Connected',true,true)}
@@ -451,6 +451,7 @@ function renderQuickSettings(appearanceOpen = false) {
   document.querySelectorAll('input[type="range"]').forEach(bindRangeFill);
   bindMasterVolume();
   hydratePowerStatus();
+  document.querySelector('#screenshot-open').addEventListener('click', () => call('open_screenshot_overlay'));
   document.querySelector('#appearance-open').addEventListener('click', () => renderQuickSettings(true));
   document.querySelector('#wifi').addEventListener('click', async event => {
     const next = event.currentTarget.getAttribute('aria-pressed') !== 'true';

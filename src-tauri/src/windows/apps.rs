@@ -217,8 +217,8 @@ fn get_start_apps_json(timeout: Duration) -> Result<Vec<u8>, String> {
 
 pub fn list() -> Result<Vec<AppEntry>, String> {
     let output = get_start_apps_json(Duration::from_secs(8))?;
-    let raws: Vec<StartAppRaw> = serde_json::from_slice(&output)
-        .map_err(|e| format!("invalid Get-StartApps JSON: {e}"))?;
+    let raws: Vec<StartAppRaw> =
+        serde_json::from_slice(&output).map_err(|e| format!("invalid Get-StartApps JSON: {e}"))?;
 
     let mut apps: Vec<AppEntry> = raws
         .into_iter()

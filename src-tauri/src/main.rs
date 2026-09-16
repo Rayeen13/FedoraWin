@@ -116,6 +116,13 @@ fn clear_window_thumbnails(
     Ok(())
 }
 #[tauri::command]
+fn open_screenshot_overlay(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("quick-settings") {
+        window.close().map_err(|error| error.to_string())?;
+    }
+    windows::screenshot::open_overlay()
+}
+#[tauri::command]
 fn get_power_status() -> Result<windows::power::PowerStatus, String> {
     windows::power::status()
 }
@@ -295,6 +302,7 @@ fn main() {
             navigate_workspace,
             sync_window_thumbnails,
             clear_window_thumbnails,
+            open_screenshot_overlay,
             get_power_status,
             get_master_volume,
             set_master_volume,
