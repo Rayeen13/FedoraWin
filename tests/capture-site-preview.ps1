@@ -212,6 +212,7 @@ Invoke-Capture -Key 'search_terminal' -View 'activities' -WindowLabel 'activitie
 Invoke-Capture -Key 'quick_settings_dark' -View 'quick-settings' -WindowLabel 'quick-settings' -Theme 'dark'
 Invoke-Capture -Key 'quick_settings_light' -View 'quick-settings' -WindowLabel 'quick-settings' -Theme 'light'
 Invoke-Capture -Key 'appearance' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'appearance' -Theme 'dark'
+Invoke-Capture -Key 'power_mode' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'power-mode' -Theme 'dark' -SettleMilliseconds 1800
 Invoke-Capture -Key 'date_menu' -View 'date-menu' -WindowLabel 'date-menu' -Theme 'dark'
 
 function Invoke-NativeFrameCapture {
@@ -272,11 +273,14 @@ foreach ($entry in $captures.GetEnumerator()) {
 }
 $uniqueCaptureCount = ($hashes.Values | Select-Object -Unique).Count
 Write-Host "Unique runtime gallery captures: $uniqueCaptureCount / $($captures.Count)"
-if ($uniqueCaptureCount -lt 8) {
+if ($uniqueCaptureCount -lt 9) {
     throw 'Runtime gallery captures are not sufficiently distinct.'
 }
 if ($hashes.quick_settings_dark -eq $hashes.quick_settings_light) {
     throw 'Quick Settings dark/light captures are identical.'
+}
+if ($hashes.power_mode -eq $hashes.quick_settings_dark) {
+    throw 'Power Mode flyout capture did not produce a distinct surface.'
 }
 
 [ordered]@{
