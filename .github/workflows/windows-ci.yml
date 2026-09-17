@@ -26,8 +26,10 @@ jobs:
         run: node --check ui/app.js
       - name: Power mode syntax check
         run: node --check ui/power-mode.js
+      - name: OSD syntax check
+        run: node --check ui/osd.js
       - name: UI contract tests
-        run: node --test tests/ui_contract.test.mjs tests/gnome51_contract.test.mjs
+        run: node --test tests/ui_contract.test.mjs tests/gnome51_contract.test.mjs tests/osd_contract.test.mjs
       - name: Rust unit tests
         working-directory: src-tauri
         run: cargo test
