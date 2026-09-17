@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
 PUBLIC_PAGES = {"index.html", "docs.html", "gallery.html", "getting-started.html", "architecture.html", "status.html"}
 
+
 class Collector(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -35,6 +36,7 @@ class Collector(HTMLParser):
             self.meta_description = True
         if tag == "img" and "alt" not in attrs:
             self.images_without_alt.append(attrs.get("src", "<unknown>"))
+
 
 errors = []
 html_files = sorted(DOCS.glob("*.html"))
@@ -89,9 +91,9 @@ for html_file in html_files:
 
 index = (DOCS / "index.html").read_text(encoding="utf-8")
 for required in [
-    "Native panel + lazy Tauri/WebView2 surfaces",
-    "17 MB measured idle",
-    "Alt+F1",
+    "GNOME 51 desktop.",
+    "15 MB measured idle",
+    "Power Mode",
     "./gallery.html",
     "data-runtime-shot=\"activities\"",
 ]:
@@ -100,7 +102,7 @@ for required in [
 
 docs_hub = (DOCS / "docs.html").read_text(encoding="utf-8")
 for required in [
-    "17 MB verified idle",
+    "15 MB verified idle",
     "Safety & reversibility",
     "Workspace foundation",
     "./architecture.html",
@@ -110,14 +112,35 @@ for required in [
         errors.append(f"docs.html: missing required content: {required}")
 
 gallery = (DOCS / "gallery.html").read_text(encoding="utf-8")
-for key in ["panel", "activities", "apps", "search_terminal", "quick_settings_dark", "quick_settings_light", "appearance", "date_menu", "native_frame"]:
+for key in [
+    "panel",
+    "activities",
+    "apps",
+    "search_terminal",
+    "quick_settings_dark",
+    "quick_settings_light",
+    "appearance",
+    "power_mode",
+    "date_menu",
+    "native_frame",
+]:
     if f'data-runtime-shot="{key}"' not in gallery:
         errors.append(f"gallery.html: missing runtime shot: {key}")
 
-for required_file in [".nojekyll", "docs.html", "gallery.html", "status.html", "assets/favicon.svg", "robots.txt", "sitemap.xml"]:
+for required_file in [
+    ".nojekyll",
+    "docs.html",
+    "gallery.html",
+    "status.html",
+    "assets/favicon.svg",
+    "robots.txt",
+    "sitemap.xml",
+]:
     if not (DOCS / required_file).exists():
         errors.append(f"docs/{required_file} is missing")
 
 if errors:
     raise SystemExit("\n".join(f"ERROR: {error}" for error in errors))
-print(f"Docs validation passed: {len(html_files)} HTML pages, links, metadata, docs hub and gallery verified")
+print(
+    f"Docs validation passed: {len(html_files)} HTML pages, links, metadata, docs hub and 10-surface gallery verified"
+)
