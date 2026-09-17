@@ -16,6 +16,7 @@ pub struct ShellLayout {
     pub activities: SurfaceGeometry,
     pub date_menu: SurfaceGeometry,
     pub quick_settings: SurfaceGeometry,
+    pub osd: SurfaceGeometry,
 }
 
 fn fit_surface(preferred: f64, available: f64, margin: f64) -> f64 {
@@ -41,6 +42,14 @@ pub fn for_display(display: &DisplayInfo) -> ShellLayout {
     let quick_x =
         display.bounds.left + (display.bounds.width() - quick_width_px - quick_margin_px).max(0);
 
+    let osd_width = fit_surface(360.0, logical_width, 16.0);
+    let osd_height = fit_surface(92.0, shell_height, 16.0);
+    let osd_width_px = display.logical_to_physical(osd_width);
+    let osd_height_px = display.logical_to_physical(osd_height);
+    let osd_bottom_margin_px = display.logical_to_physical(48.0);
+    let osd_x = display.bounds.left + ((display.bounds.width() - osd_width_px) / 2).max(0);
+    let osd_y = (display.bounds.bottom - osd_height_px - osd_bottom_margin_px).max(shell_top);
+
     ShellLayout {
         panel: SurfaceGeometry {
             width: logical_width,
@@ -65,6 +74,12 @@ pub fn for_display(display: &DisplayInfo) -> ShellLayout {
             height: quick_height,
             x: quick_x,
             y: shell_top,
+        },
+        osd: SurfaceGeometry {
+            width: osd_width,
+            height: osd_height,
+            x: osd_x,
+            y: osd_y,
         },
     }
 }
@@ -101,6 +116,8 @@ mod tests {
         assert_eq!(layout.panel.width, 5120.0);
         assert_eq!(layout.panel.height, PANEL_HEIGHT);
         assert_eq!(layout.quick_settings.x, 4704);
+        assert_eq!(layout.osd.x, 2380);
+        assert_eq!(layout.osd.y, 1300);
     }
 
     #[test]
@@ -118,6 +135,7 @@ mod tests {
         assert_eq!(layout.panel.width, 720.0);
         assert_eq!(layout.date_menu.width, 696.0);
         assert!(layout.date_menu.height <= layout.activities.height);
+        assert_eq!(layout.osd.width, 360.0);
     }
 
     #[test]
@@ -136,6 +154,8 @@ mod tests {
         assert_eq!(layout.panel.y, -120);
         assert_eq!(layout.activities.x, -3440);
         assert_eq!(layout.activities.y, -88);
+        assert_eq!(layout.osd.x, -1900);
+        assert_eq!(layout.osd.y, 1180);
     }
 
     #[test]
@@ -153,5 +173,7 @@ mod tests {
         assert_eq!(layout.panel.width, 2560.0);
         assert_eq!(layout.activities.y, 48);
         assert_eq!(layout.activities.x, 3840);
+        assert_eq!(layout.osd.x, 5490);
+        assert_eq!(layout.osd.y, 1950);
     }
 }
