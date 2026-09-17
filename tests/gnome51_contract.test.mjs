@@ -29,7 +29,7 @@ assert.match(power, /GUID_POWER_MODE_BEST_PERFORMANCE/);
 assert.match(power, /GUID_POWER_MODE_NONE/);
 assert.match(power, /pub enum PowerMode/);
 assert.match(main, /fn get_power_mode\(\)/);
-assert.match(main, /fn set_power_mode\(mode: String\)/);
+assert.match(main, /fn set_power_mode\([\s\S]*?mode:\s*String,[\s\S]*?\) -> Result<windows::power::PowerMode, String>/);
 assert.match(main, /get_power_mode,[\s\S]*set_power_mode,/);
 assert.match(powerModeUi, /get_power_mode/);
 assert.match(powerModeUi, /set_power_mode/);
