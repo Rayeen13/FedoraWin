@@ -127,6 +127,14 @@ fn get_power_status() -> Result<windows::power::PowerStatus, String> {
     windows::power::status()
 }
 #[tauri::command]
+fn get_power_mode() -> Result<windows::power::PowerMode, String> {
+    windows::power::configured_mode()
+}
+#[tauri::command]
+fn set_power_mode(mode: String) -> Result<windows::power::PowerMode, String> {
+    windows::power::set_configured_mode(windows::power::PowerMode::parse(&mode)?)
+}
+#[tauri::command]
 fn get_master_volume() -> Result<u8, String> {
     windows::audio::get_master_volume()
 }
@@ -304,6 +312,8 @@ fn main() {
             clear_window_thumbnails,
             open_screenshot_overlay,
             get_power_status,
+            get_power_mode,
+            set_power_mode,
             get_master_volume,
             set_master_volume,
             set_wifi_enabled,
