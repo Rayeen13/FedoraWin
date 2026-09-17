@@ -37,12 +37,12 @@ impl OsdPayload {
     }
 
     fn initial_url(&self) -> String {
-        let value = self.value.map(|value| value.to_string()).unwrap_or_default();
+        let value = self
+            .value
+            .map(|value| value.to_string())
+            .unwrap_or_default();
         let detail = self.detail.as_deref().unwrap_or_default();
-        format!(
-            "osd.html?kind={}&value={value}&detail={detail}",
-            self.kind
-        )
+        format!("osd.html?kind={}&value={value}&detail={detail}", self.kind)
     }
 }
 
