@@ -14,9 +14,13 @@ assert.match(css, /grid-template-rows:\s*repeat\(4,\s*minmax\(86px,\s*1fr\)\)/);
 assert.match(css, /--gnome-icon-size:\s*64px/);
 assert.match(css, /\.dash\s*\{[\s\S]*height:\s*74px/);
 assert.match(css, /\.quick-card\s*\{[\s\S]*gap:\s*10px/);
+assert.match(css, /\.control-flyout\s*\{[\s\S]*border-radius:\s*20px/);
+assert.match(css, /\.control-option\.is-selected/);
+assert.match(css, /@keyframes\s+gnome-control-flyout-in/);
 assert.match(css, /prefers-reduced-motion:\s*reduce/);
 assert.match(css, /\.app-tile:focus-visible/);
 assert.match(css, /\.workspace-nav:focus-visible/);
+assert.match(css, /\.control-option:focus-visible/);
 assert.doesNotMatch(css, /position:\s*fixed/);
 assert.doesNotMatch(css, /frame-overlay|fake-caption|explorer\.exe/i);
 
@@ -35,6 +39,10 @@ assert.match(powerModeUi, /get_power_mode/);
 assert.match(powerModeUi, /set_power_mode/);
 assert.match(powerModeUi, /bestEfficiency/);
 assert.match(powerModeUi, /bestPerformance/);
+assert.match(powerModeUi, /control-flyout/);
+assert.match(powerModeUi, /role="radiogroup"/);
+assert.match(powerModeUi, /aria-checked/);
+assert.match(powerModeUi, /event\.key === 'Escape'/);
 assert.match(powerModeUi, /MutationObserver/);
 assert.doesNotMatch(powerModeUi, /powercfg|cmd\.exe|powershell|reg\.exe/i);
 
