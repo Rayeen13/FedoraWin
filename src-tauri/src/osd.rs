@@ -90,6 +90,9 @@ fn ensure_window(
     window
         .set_position(PhysicalPosition::new(geometry.x, geometry.y))
         .map_err(|error| error.to_string())?;
+    window
+        .set_ignore_cursor_events(true)
+        .map_err(|error| error.to_string())?;
     Ok(window)
 }
 
