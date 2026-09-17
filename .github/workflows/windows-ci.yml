@@ -25,7 +25,7 @@ jobs:
       - name: UI syntax check
         run: node --check ui/app.js
       - name: UI contract tests
-        run: node --test tests/ui_contract.test.mjs
+        run: node --test tests/ui_contract.test.mjs tests/gnome51_contract.test.mjs
       - name: Rust unit tests
         working-directory: src-tauri
         run: cargo test
