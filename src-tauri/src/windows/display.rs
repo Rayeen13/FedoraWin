@@ -1,5 +1,8 @@
 use serde::Serialize;
-use std::mem::{size_of, zeroed};
+use std::{
+    ffi::c_void,
+    mem::{size_of, zeroed},
+};
 
 const MONITORINFOF_PRIMARY: u32 = 1;
 const MDT_EFFECTIVE_DPI: u32 = 0;
@@ -106,7 +109,7 @@ extern "system" {
         callback: extern "system" fn(isize, isize, *mut Rect, isize) -> i32,
         data: isize,
     ) -> i32;
-    fn GetMonitorInfoW(monitor: isize, info: *mut MonitorInfoExW) -> i32;
+    fn GetMonitorInfoW(monitor: isize, info: *mut c_void) -> i32;
 }
 
 #[link(name = "Shcore")]
@@ -119,7 +122,7 @@ extern "system" fn enum_monitor(monitor: isize, _: isize, _: *mut Rect, data: is
     let mut info: MonitorInfoExW = unsafe { zeroed() };
     info.cb_size = size_of::<MonitorInfoExW>() as u32;
 
-    if unsafe { GetMonitorInfoW(monitor, &mut info) } == 0 {
+    if unsafe { GetMonitorInfoW(monitor, (&mut info as *mut MonitorInfoExW).cast()) } == 0 {
         return 1;
     }
 
