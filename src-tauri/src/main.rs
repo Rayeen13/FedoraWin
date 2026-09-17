@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod layout;
+mod osd;
 mod performance;
 mod shell;
 mod windows;
@@ -131,16 +132,50 @@ fn get_power_mode() -> Result<windows::power::PowerMode, String> {
     windows::power::configured_mode()
 }
 #[tauri::command]
-fn set_power_mode(mode: String) -> Result<windows::power::PowerMode, String> {
-    windows::power::set_configured_mode(windows::power::PowerMode::parse(&mode)?)
+fn set_power_mode(
+    app: tauri::AppHandle,
+    osd_state: tauri::State<'_, osd::OsdState>,
+    mode: String,
+) -> Result<windows::power::PowerMode, String> {
+    let configured =
+        windows::power::set_configured_mode(windows::power::PowerMode::parse(&mode)?)?;
+    let detail = match configured {
+        windows::power::PowerMode::BestEfficiency => "bestEfficiency",
+        windows::power::PowerMode::Balanced => "balanced",
+        windows::power::PowerMode::BestPerformance => "bestPerformance",
+    };
+    let _ = osd::show(&app, osd_state.inner(), "power", None, Some(detail));
+    Ok(configured)
 }
 #[tauri::command]
 fn get_master_volume() -> Result<u8, String> {
     windows::audio::get_master_volume()
 }
 #[tauri::command]
-fn set_master_volume(value: u8) -> Result<u8, String> {
-    windows::audio::set_master_volume(value)
+fn set_master_volume(
+    app: tauri::AppHandle,
+    osd_state: tauri::State<'_, osd::OsdState>,
+    value: u8,
+) -> Result<u8, String> {
+    let actual = windows::audio::set_master_volume(value)?;
+    let _ = osd::show(&app, osd_state.inner(), "volume", Some(actual), None);
+    Ok(actual)
+}
+#[tauri::command]
+fn show_control_osd(
+    app: tauri::AppHandle,
+    osd_state: tauri::State<'_, osd::OsdState>,
+    kind: String,
+    value: Option<u8>,
+    detail: Option<String>,
+) -> Result<(), String> {
+    osd::show(
+        &app,
+        osd_state.inner(),
+        &kind,
+        value,
+        detail.as_deref(),
+    )
 }
 #[tauri::command]
 fn set_wifi_enabled(enabled: bool) -> Result<(), String> {
@@ -290,6 +325,7 @@ fn main() {
     }
     let app = tauri::Builder::default()
         .manage(state.clone())
+        .manage(osd::OsdState::default())
         .manage(windows::thumbnails::ThumbnailManager::default())
         .manage(windows::virtual_desktop::WorkspaceMoveJournal::default())
         .invoke_handler(tauri::generate_handler![
@@ -316,6 +352,7 @@ fn main() {
             set_power_mode,
             get_master_volume,
             set_master_volume,
+            show_control_osd,
             set_wifi_enabled,
             refresh_window_frames,
             mark_capture_ready
