@@ -1,0 +1,7 @@
+{
+  "project": "FedoraWin",
+  "release": "0.4.0-dev",
+  "target": "GNOME 51",
+  "updated": "2026-09-18",
+  "runtime_gallery": "Windows CI captures from the current FedoraWin.exe"
+}
