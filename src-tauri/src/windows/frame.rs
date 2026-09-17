@@ -129,8 +129,9 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
             set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner);
             set_optional_color(hwnd, DWMWA_CAPTION_COLOR, ctx.palette.caption);
             set_optional_color(hwnd, DWMWA_TEXT_COLOR, ctx.palette.text);
-            // libadwaita does not paint an accent outline around every application window.
-            // Keep the real Windows non-client frame, but suppress its colored border.
+            // Windows owns the real caption buttons and non-client hit testing.
+            // libadwaita does not paint an accent outline around every application window,
+            // so keep that real frame while suppressing only its colored border.
             set_attr(hwnd, DWMWA_BORDER_COLOR, &DWMWA_COLOR_NONE);
             ctx.count += 1;
         }
