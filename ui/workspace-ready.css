@@ -1,0 +1,63 @@
+.workspace-preflight {
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px 8vw 10px;
+}
+
+.workspace-preflight__frame {
+  position: relative;
+  width: min(860px, 76vw);
+  height: min(430px, 58vh);
+  min-height: 260px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #171717;
+  overflow: hidden;
+}
+
+.workspace-preflight__window {
+  position: absolute;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(145deg, var(--surface-2), var(--surface));
+  box-shadow: 0 8px 22px rgba(0,0,0,.2);
+}
+
+.workspace-preflight__window::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 26px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-3);
+}
+
+.workspace-preflight__window--one {
+  left: 8%;
+  top: 15%;
+  width: 38%;
+  height: 44%;
+}
+
+.workspace-preflight__window--two {
+  right: 8%;
+  top: 19%;
+  width: 36%;
+  height: 38%;
+}
+
+.workspace-preflight__window--three {
+  left: 31%;
+  bottom: 10%;
+  width: 39%;
+  height: 28%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-preflight,
+  .workspace-preflight * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
