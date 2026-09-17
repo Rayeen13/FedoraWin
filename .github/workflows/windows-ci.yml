@@ -24,6 +24,8 @@ jobs:
           node-version: 22
       - name: UI syntax check
         run: node --check ui/app.js
+      - name: Power mode syntax check
+        run: node --check ui/power-mode.js
       - name: UI contract tests
         run: node --test tests/ui_contract.test.mjs tests/gnome51_contract.test.mjs
       - name: Rust unit tests
