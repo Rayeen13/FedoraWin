@@ -1,0 +1,40 @@
+{
+  "source_branch": "dev/gnome-native-20260914",
+  "source_sha": "faa2ead29fea3720dcef02e18a8fea1a3cdd6333",
+  "captured_utc": "2026-09-17T19:23:31.6040329Z",
+  "runtime": "Native Rust/Win32 panel + lazy Tauri/WebView2",
+  "launch_executable": "fedorawin.exe",
+  "runner_os": "Windows",
+  "runner_name": "GitHub Actions 1000000268",
+  "runner_image": "win25-vs2026",
+  "github_run_id": "35263414637",
+  "github_run_number": "254",
+  "screen": {
+    "width": 1024,
+    "height": 768
+  },
+  "screenshots": {
+    "panel": "panel.png",
+    "activities": "activities.png",
+    "apps": "apps.png",
+    "search_terminal": "search_terminal.png",
+    "quick_settings_dark": "quick_settings_dark.png",
+    "quick_settings_light": "quick_settings_light.png",
+    "appearance": "appearance.png",
+    "power_mode": "power_mode.png",
+    "date_menu": "date_menu.png",
+    "native_frame": "native_frame.png"
+  },
+  "sha256": {
+    "panel": "8e7ba0d5594057ae400eca5cff9bf6f0204657be3a43068b1f465b59b1163d9b",
+    "activities": "84532c83f0df129ebe89dfedc0a7ebaeb2406a7b0c4d994dd280d1aa3f48d638",
+    "apps": "cdb9ed2e4dc86bc31d653d58e51786702f0d95257f48d0b785d1d84a0e67eb46",
+    "search_terminal": "95a62aaf635319e7e5de944f01cbc6547fd99830a33e1371b8dc2d7432186c8f",
+    "quick_settings_dark": "8cb9f9f878a91c2d347917bd50cea920faa52ca5ea6b31289729859b3f9a1b96",
+    "quick_settings_light": "c497d345125927476bbb2d535f9e3a42e26811241dc24254126349d8f7370893",
+    "appearance": "9c141f779e82b30156b6b6d672ea1517e00b539c4655e0084b0b7bb7a381bdc6",
+    "power_mode": "f9a0386f8a76e0f5834ef4b0a6de2c30b2b4fed4efb59419e663f63b64eae842",
+    "date_menu": "76dbc6074d04236470cddce7c018b8769ebe2df8dda54fe79a7ea8d58c603443",
+    "native_frame": "809b1411669f1a337941cb84adefca6a51fffc2cf3acf49f98e22767f764af6b"
+  }
+}
