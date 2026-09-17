@@ -32,7 +32,8 @@ assert.match(workspaceReady, /workspace-preflight/);
 assert.doesNotMatch(workspaceReady, /Loading workspace/i);
 assert.match(workspaceCss, /\.workspace-preflight/);
 assert.match(workspaceCss, /\.workspace-preflight__frame/);
-assert.doesNotMatch(workspaceCss, /animation:\s*[^n]/i);
+assert.match(workspaceCss, /prefers-reduced-motion:\s*reduce/);
+assert.match(workspaceCss, /animation:\s*none\s*!important/);
 
 assert.match(power, /PowerGetUserConfiguredACPowerMode/);
 assert.match(power, /PowerGetUserConfiguredDCPowerMode/);
