@@ -1,5 +1,6 @@
 (() => {
   const invoke = window.__TAURI__?.core?.invoke;
+  const captureMode = new URLSearchParams(location.search).get('capture') || '';
   const MODES = ['bestEfficiency', 'balanced', 'bestPerformance'];
   const LABELS = {
     bestEfficiency: 'Best Power Efficiency',
@@ -14,6 +15,7 @@
 
   let currentMode = 'balanced';
   let revision = 0;
+  let captureFlyoutOpened = false;
 
   async function call(command, payload = {}) {
     if (!invoke) return null;
@@ -73,7 +75,7 @@
   function renderFlyout() {
     const existing = document.querySelector('#power-mode-flyout');
     if (existing) {
-      closeFlyout();
+      if (captureMode !== 'power-mode') closeFlyout();
       return;
     }
 
@@ -133,6 +135,11 @@
       more.addEventListener('click', renderFlyout);
     }
     hydratePowerMode();
+
+    if (captureMode === 'power-mode' && !captureFlyoutOpened) {
+      captureFlyoutOpened = true;
+      requestAnimationFrame(renderFlyout);
+    }
   }
 
   const observer = new MutationObserver(bindPowerModeTile);
