@@ -202,8 +202,8 @@ extern "system" {
 mod tests {
     use super::{
         battery_glyph, Guid, PowerMode, PowerStatus, BATTERY_FLAG_CHARGING,
-        BATTERY_FLAG_NO_BATTERY, GUID_POWER_MODE_BEST_EFFICIENCY,
-        GUID_POWER_MODE_BEST_PERFORMANCE, GUID_POWER_MODE_NONE,
+        BATTERY_FLAG_NO_BATTERY, GUID_POWER_MODE_BEST_EFFICIENCY, GUID_POWER_MODE_BEST_PERFORMANCE,
+        GUID_POWER_MODE_NONE,
     };
 
     #[test]
@@ -249,7 +249,10 @@ mod tests {
 
     #[test]
     fn power_mode_parser_accepts_ui_values() {
-        assert_eq!(PowerMode::parse("bestEfficiency").unwrap(), PowerMode::BestEfficiency);
+        assert_eq!(
+            PowerMode::parse("bestEfficiency").unwrap(),
+            PowerMode::BestEfficiency
+        );
         assert_eq!(PowerMode::parse("balanced").unwrap(), PowerMode::Balanced);
         assert_eq!(
             PowerMode::parse("bestPerformance").unwrap(),
