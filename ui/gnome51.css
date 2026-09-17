@@ -1,188 +1,116 @@
-/* FedoraWin GNOME 51 fidelity layer.
- *
- * This stylesheet intentionally sits after the base shell and libadwaita token
- * layers. It corrects shell proportions/interactions without changing the
- * native HWND/DWM ownership model used by FedoraWin.
- */
+/* FedoraWin GNOME 51 fidelity overrides.
+   Loaded after the base shell and Adwaita layers so this file can tighten
+   proportions without changing the native Windows safety architecture. */
 
 :root {
   --gnome-panel-height: 32px;
   --gnome-search-width: 420px;
-  --gnome-shell-radius: 18px;
-  --gnome-control-radius: 12px;
+  --gnome-control-radius: 14px;
+  --gnome-focus-ring: 0 0 0 2px color-mix(in srgb, var(--accent) 72%, white 28%);
   --gnome-icon-size: 64px;
-  --gnome-dash-icon-size: 46px;
-  --gnome-focus-ring: 0 0 0 2px color-mix(in srgb, var(--accent) 74%, transparent);
 }
 
-/* GNOME 51 keeps the top bar visually quiet and compact. */
 .panel {
   min-height: var(--gnome-panel-height);
   height: var(--gnome-panel-height);
-  padding-inline: 8px;
 }
 
-.panel-button {
-  height: 26px;
-  min-width: 30px;
-  padding-inline: 9px;
-  border-radius: 9px;
+.activities-button {
+  padding-inline: 11px;
 }
 
-.status {
-  gap: 8px;
-}
-
-/* Overview: search, workspace stage and dash use GNOME-like breathing room. */
 .activities {
-  padding: 22px 36px 16px;
-  grid-template-rows: 42px minmax(0, 1fr) 80px;
-  gap: 16px;
-  background: var(--adw-overview-bg, var(--overview));
+  padding-top: 32px;
+  gap: 20px;
 }
 
 .search-shell {
-  width: min(var(--gnome-search-width), 46vw);
+  width: min(var(--gnome-search-width), calc(100vw - 48px));
+  min-height: 42px;
+  border-radius: 22px;
 }
 
-.search {
-  height: 40px;
-  border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+.workspace-strip--native {
+  gap: 20px;
 }
 
-.search:focus-visible {
-  box-shadow: var(--gnome-focus-ring);
-}
-
-.workspace-strip {
-  grid-template-columns: 52px minmax(0, 1fr) 52px;
-  gap: 18px;
-}
-
-.workspace-nav {
-  width: 40px;
-  height: 40px;
-  justify-self: center;
-  border-radius: 50%;
-  opacity: .72;
-}
-
-.workspace-nav:hover,
-.workspace-nav:focus-visible {
-  opacity: 1;
-}
-
-.workspace-main {
-  height: 90%;
-  min-height: 280px;
-  padding: 24px;
-  border-radius: var(--gnome-shell-radius);
-  background: color-mix(in srgb, var(--surface) 72%, #000 28%);
-  border-color: color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, .22);
+.workspace-current {
+  min-width: 136px;
 }
 
 .window-grid {
-  gap: 24px;
+  gap: 18px;
 }
 
-.window-card__preview {
-  border-radius: 13px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, .24);
-}
-
-.window-card:hover .window-card__preview,
-.window-card:focus-within .window-card__preview {
-  outline-width: 2px;
-  outline-color: color-mix(in srgb, var(--accent) 88%, white 12%);
-}
-
-/* 24 apps/page should actually look like GNOME: six columns by four rows. */
-.applications-overview {
-  padding: 0 6vw;
+.window-card {
   gap: 10px;
+}
+
+.applications-overview {
+  width: min(1180px, 92vw);
+  padding-inline: 5vw;
 }
 
 .applications-grid {
   grid-template-columns: repeat(6, minmax(96px, 1fr));
   grid-template-rows: repeat(4, minmax(86px, 1fr));
-  gap: 12px 22px;
-  padding: 8px 6vw;
+  gap: 14px 22px;
+  align-content: center;
+  padding-inline: 4vw;
 }
 
 .app-tile {
-  gap: 10px;
-  padding: 10px 8px;
-  border-radius: 16px;
+  min-height: 86px;
+  border-radius: 18px;
+  padding: 8px 6px;
 }
 
 .app-icon {
   width: var(--gnome-icon-size);
   height: var(--gnome-icon-size);
-  border-radius: 15px;
-  font-size: 19px;
+  border-radius: 16px;
 }
 
 .app-name {
-  font-size: 13px;
-  line-height: 1.25;
+  max-width: 118px;
+  line-height: 1.2;
 }
 
 .app-pages {
+  min-height: 24px;
   gap: 9px;
 }
 
-.app-page-dot {
-  width: 7px;
-  height: 7px;
+.dash-wrap {
+  padding-bottom: 18px;
 }
 
-.app-page-dot.is-active {
-  width: 17px;
-}
-
-.search-results .applications-grid {
-  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
-  grid-template-rows: none;
-  grid-auto-rows: 126px;
-  padding-inline: 9vw;
-}
-
-/* Dash stays sturdy, centered and touch-friendly without looking like a taskbar. */
 .dash {
+  min-height: 74px;
   height: 74px;
+  padding: 9px 10px;
+  border-radius: 23px;
   gap: 7px;
-  padding: 8px 10px;
-  border-radius: 22px;
-  background: color-mix(in srgb, var(--surface-3) 90%, transparent);
-  border-color: color-mix(in srgb, var(--text) 10%, transparent);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, .34);
 }
 
 .dash-button {
   width: 56px;
   height: 56px;
-  border-radius: 14px;
+  border-radius: 16px;
 }
 
 .dash-icon {
-  width: var(--gnome-dash-icon-size);
-  height: var(--gnome-dash-icon-size);
-  border-radius: 12px;
-}
-
-.dash-separator {
-  height: 38px;
-  margin-inline: 4px;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
 }
 
 /* Quick Settings: consistent pill geometry and spacing with GNOME's system menu. */
 .quick-card {
+  position: relative;
   padding: 12px;
   gap: 10px;
+  overflow: visible;
 }
 
 .quick-header {
@@ -221,6 +149,132 @@
   border-radius: var(--gnome-control-radius);
 }
 
+/* Reusable GNOME 51-style detail flyout. The component is intentionally
+   shell-native in appearance while actions remain backed by Windows APIs. */
+.control-flyout {
+  position: absolute;
+  z-index: 30;
+  top: 116px;
+  right: 12px;
+  width: min(340px, calc(100vw - 40px));
+  padding: 12px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--popover-bg, #242424) 94%, white 6%);
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .34), 0 2px 10px rgba(0, 0, 0, .22);
+  transform-origin: top right;
+  animation: gnome-control-flyout-in 140ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.control-flyout.is-closing {
+  opacity: 0;
+  transform: translateY(-4px) scale(.985);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.control-flyout__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 4px 10px 8px;
+}
+
+.control-flyout__header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.control-flyout__header strong {
+  font-size: 15px;
+}
+
+.control-flyout__header small {
+  opacity: .62;
+  font-size: 12px;
+}
+
+.control-flyout__close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.control-flyout__options {
+  display: grid;
+  gap: 6px;
+}
+
+.control-option {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.control-option:hover,
+.control-option:focus-visible {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.control-option.is-selected {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.control-option__indicator {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 38%, transparent);
+  box-sizing: border-box;
+}
+
+.control-option.is-selected .control-option__indicator {
+  border: 5px solid var(--accent);
+}
+
+.control-option__copy {
+  display: grid;
+  gap: 2px;
+}
+
+.control-option__copy strong {
+  font-size: 13px;
+}
+
+.control-option__copy small {
+  opacity: .62;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+@keyframes gnome-control-flyout-in {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Calendar/date menu density mirrors current GNOME shell popovers. */
 .date-card {
   grid-template-columns: minmax(0, 1fr) minmax(330px, 360px);
@@ -248,6 +302,8 @@
 .quick-tile:focus-visible,
 .quick-more:focus-visible,
 .background-apps:focus-visible,
+.control-flyout__close:focus-visible,
+.control-option:focus-visible,
 .calendar-day:focus-visible,
 .calendar-footer button:focus-visible,
 .app-page-dot:focus-visible {
