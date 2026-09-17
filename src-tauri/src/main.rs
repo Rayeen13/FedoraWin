@@ -137,8 +137,7 @@ fn set_power_mode(
     osd_state: tauri::State<'_, osd::OsdState>,
     mode: String,
 ) -> Result<windows::power::PowerMode, String> {
-    let configured =
-        windows::power::set_configured_mode(windows::power::PowerMode::parse(&mode)?)?;
+    let configured = windows::power::set_configured_mode(windows::power::PowerMode::parse(&mode)?)?;
     let detail = match configured {
         windows::power::PowerMode::BestEfficiency => "bestEfficiency",
         windows::power::PowerMode::Balanced => "balanced",
@@ -169,13 +168,7 @@ fn show_control_osd(
     value: Option<u8>,
     detail: Option<String>,
 ) -> Result<(), String> {
-    osd::show(
-        &app,
-        osd_state.inner(),
-        &kind,
-        value,
-        detail.as_deref(),
-    )
+    osd::show(&app, osd_state.inner(), &kind, value, detail.as_deref())
 }
 #[tauri::command]
 fn set_wifi_enabled(enabled: bool) -> Result<(), String> {
