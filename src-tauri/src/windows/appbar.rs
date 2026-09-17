@@ -1,4 +1,4 @@
-use std::mem::size_of;
+use std::{ffi::c_void, mem::size_of};
 
 const ABM_NEW: u32 = 0x00000000;
 const ABM_REMOVE: u32 = 0x00000001;
@@ -43,7 +43,7 @@ extern "system" {
 extern "system" {
     fn GetWindowRect(hwnd: isize, rect: *mut Rect) -> i32;
     fn MonitorFromWindow(hwnd: isize, flags: u32) -> isize;
-    fn GetMonitorInfoW(monitor: isize, info: *mut MonitorInfo) -> i32;
+    fn GetMonitorInfoW(monitor: isize, info: *mut c_void) -> i32;
 }
 
 pub fn reserve_top(hwnd: isize) -> Result<(), String> {
@@ -67,7 +67,7 @@ pub fn reserve_top(hwnd: isize) -> Result<(), String> {
         work: Rect::default(),
         flags: 0,
     };
-    if unsafe { GetMonitorInfoW(monitor, &mut monitor_info) } == 0 {
+    if unsafe { GetMonitorInfoW(monitor, (&mut monitor_info as *mut MonitorInfo).cast()) } == 0 {
         return Err("GetMonitorInfoW failed for panel".into());
     }
 
