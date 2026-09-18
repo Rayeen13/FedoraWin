@@ -1,14 +1,14 @@
 {
   "source_branch": "dev/gnome-native-20260914",
-  "source_sha": "4fdebcab3b2f45d8bb778f1b19921ee1a37a6c8c",
-  "captured_utc": "2026-09-18T12:01:52.4038615Z",
+  "source_sha": "950633db01a299a3a1718e4d847f5d6ec6de9e23",
+  "captured_utc": "2026-09-18T12:09:05.2609247Z",
   "runtime": "Native Rust/Win32 panel + lazy Tauri/WebView2",
   "launch_executable": "fedorawin.exe",
   "runner_os": "Windows",
-  "runner_name": "GitHub Actions 1000000343",
+  "runner_name": "GitHub Actions 1000000360",
   "runner_image": "win25-vs2026",
-  "github_run_id": "35342240094",
-  "github_run_number": "344",
+  "github_run_id": "35342765428",
+  "github_run_number": "358",
   "screen": {
     "width": 1024,
     "height": 768
@@ -26,15 +26,15 @@
     "native_frame": "native_frame.png"
   },
   "sha256": {
-    "panel": "707f80e508c39d73cc7d6a043c66201dac3f63e6c712058417940c01ac3259b7",
-    "activities": "84532c83f0df129ebe89dfedc0a7ebaeb2406a7b0c4d994dd280d1aa3f48d638",
-    "apps": "cdb9ed2e4dc86bc31d653d58e51786702f0d95257f48d0b785d1d84a0e67eb46",
-    "search_terminal": "95a62aaf635319e7e5de944f01cbc6547fd99830a33e1371b8dc2d7432186c8f",
-    "quick_settings_dark": "56730050b9f71b94d7b8d4d4743b4b3dfbaa659bcb744e96fcfdf00ac58a7ba6",
-    "quick_settings_light": "6964f126ab70fc9f9d7e53187046f4bd34153b87b5bda5d9262cd00bc9f56465",
-    "appearance": "688d0f27ab9ac6c81d1a2ffcf58faa548fa1bd72bedf9b7b4a4494a4af11c413",
-    "power_mode": "cc60b38160bda55ef9548a44184e69643a32615131af950ae809760819e6c1a7",
-    "date_menu": "cf92ce6f5fc31764560f4c131bc9cedf9bff03425ca837668eaec42b0ebf3fef",
-    "native_frame": "dc2da32025ce3508659cf08734c236af5c9dbedb3be9ba6dc3d8437bd4d71d9e"
+    "panel": "7a34cbed72a8f503afb0c6ca92668223b6adbd2ba713980973c1864a32d5661a",
+    "activities": "3157aacb20dc3706f5b1959d7533decfa4f8950cd923f4576c902a262b96b89f",
+    "apps": "42771ef05c7e698c3c25bda5ceb8e3734ab52fa8f6d505caa12dd2926d181e28",
+    "search_terminal": "249a8ddb177e3ed6b22a9f59ddaa6afccef1fe995a5d22ee16ea7c6800a2b494",
+    "quick_settings_dark": "69272b6d46327454d00b81799cdb5ed4dd4a627135381909d3dc02fa52e4f8cc",
+    "quick_settings_light": "f0291cfed44d925ec5da4d9d0077d5a126306df7b91d02332bd6025c00f88cba",
+    "appearance": "b4088214c726aa84bd8681017c8b022faeb6e0be67ac8bbb5f0afb53a70cd787",
+    "power_mode": "a7c56c1a8381a29f9c31ead5398c88a10b061e5033957a9a20b41dae32f6b2fe",
+    "date_menu": "b0770f496c40e811f616d1b7c6e1106798227ac0df8e6b8086791c679bb3559b",
+    "native_frame": "91d7c6dac8734390834af886bf8168f33c6bde87707e61d9d1cd8ea3407a8b77"
   }
 }
