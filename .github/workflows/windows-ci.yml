@@ -29,6 +29,8 @@ jobs:
         run: node --check ui/app.js
       - name: Workspace ready syntax check
         run: node --check ui/workspace-ready.js
+      - name: Brightness syntax check
+        run: node --check ui/brightness.js
       - name: Power mode syntax check
         run: node --check ui/power-mode.js
       - name: OSD syntax check
