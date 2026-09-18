@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const html = fs.readFileSync(new URL('../ui/index.html', import.meta.url), 'utf8');
-const css = fs.readFileSync(new URL('../ui/gnome51.css', import.meta.url), 'utf8');
+const css = fs.readFileSync(new URL('../ui/gnome51.css', import.meta.url), 'utf8');\nconst appUi = fs.readFileSync(new URL('../ui/app.js', import.meta.url), 'utf8');
 const workspaceCss = fs.readFileSync(new URL('../ui/workspace-ready.css', import.meta.url), 'utf8');
 const workspaceReady = fs.readFileSync(new URL('../ui/workspace-ready.js', import.meta.url), 'utf8');
 const brightnessUi = fs.readFileSync(new URL('../ui/brightness.js', import.meta.url), 'utf8');
@@ -29,7 +29,7 @@ assert.match(css, /\.control-option:focus-visible/);
 assert.doesNotMatch(css, /position:\s*fixed/);
 assert.doesNotMatch(css, /frame-overlay|fake-caption|explorer\.exe/i);
 
-assert.match(workspaceReady, /MutationObserver/);
+assert.doesNotMatch(appUi, /Loading workspace/i);\nassert.match(appUi, /workspace-preflight/);\nassert.match(workspaceReady, /MutationObserver/);
 assert.match(workspaceReady, /#activities-content \.loading/);
 assert.match(workspaceReady, /workspace-preflight/);
 assert.doesNotMatch(workspaceReady, /Loading workspace/i);
