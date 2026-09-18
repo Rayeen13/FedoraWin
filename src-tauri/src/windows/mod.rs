@@ -7,6 +7,8 @@ pub mod audio;
 #[cfg(windows)]
 pub mod brightness;
 #[cfg(windows)]
+pub mod bluetooth;
+#[cfg(windows)]
 pub mod display;
 #[cfg(windows)]
 pub mod frame;
@@ -36,6 +38,32 @@ pub mod audio {
     }
     pub fn set_master_volume(_: u8) -> Result<u8, String> {
         Err("audio control is Windows-only".into())
+    }
+}
+#[cfg(not(windows))]
+pub mod bluetooth {
+    use serde::Serialize;
+
+    #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+    #[serde(rename_all = "camelCase")]
+    pub struct BluetoothStatus {
+        pub supported: bool,
+        pub enabled: bool,
+        pub name: Option<String>,
+        pub state: String,
+    }
+
+    pub fn status() -> Result<BluetoothStatus, String> {
+        Ok(BluetoothStatus {
+            supported: false,
+            enabled: false,
+            name: None,
+            state: "unavailable".into(),
+        })
+    }
+
+    pub fn set_enabled(_: bool) -> Result<BluetoothStatus, String> {
+        Err("Bluetooth control is Windows-only".into())
     }
 }
 #[cfg(not(windows))]
