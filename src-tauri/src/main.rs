@@ -147,6 +147,14 @@ fn set_power_mode(
     Ok(configured)
 }
 #[tauri::command]
+fn get_bluetooth_status() -> Result<windows::bluetooth::BluetoothStatus, String> {
+    windows::bluetooth::status()
+}
+#[tauri::command]
+fn set_bluetooth_enabled(enabled: bool) -> Result<windows::bluetooth::BluetoothStatus, String> {
+    windows::bluetooth::set_enabled(enabled)
+}
+#[tauri::command]
 fn get_brightness_status() -> Result<windows::brightness::BrightnessStatus, String> {
     windows::brightness::status()
 }
@@ -357,6 +365,8 @@ fn main() {
             get_power_status,
             get_power_mode,
             set_power_mode,
+            get_bluetooth_status,
+            set_bluetooth_enabled,
             get_brightness_status,
             set_brightness,
             get_master_volume,
