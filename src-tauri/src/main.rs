@@ -202,7 +202,7 @@ fn refresh_window_frames(state: tauri::State<'_, Arc<ShellState>>) -> Result<usi
         .map_err(|e| e.to_string())
 }
 #[tauri::command]
-fn mark_capture_ready(app: tauri::AppHandle, label: String) -> Result<(), String> {
+fn mark_capture_ready(app: tauri::AppHandle, label: String) -> Result<String, String> {
     if !matches!(
         label.as_str(),
         "activities" | "date-menu" | "quick-settings"
@@ -214,7 +214,8 @@ fn mark_capture_ready(app: tauri::AppHandle, label: String) -> Result<(), String
         .ok_or_else(|| format!("{label} window is unavailable"))?;
     window
         .set_title(&format!("FedoraWin — {label} — ready"))
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    Ok(label)
 }
 
 fn build_window(
