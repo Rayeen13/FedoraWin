@@ -1,5 +1,6 @@
 (() => {
   const invoke = window.__TAURI__?.core?.invoke;
+  const Flyouts = window.FedoraWinControlFlyouts;
   let current = {
     supported: false,
     enabled: false,
@@ -102,70 +103,54 @@
   }
 
   function closeFlyout() {
-    const flyout = document.querySelector('#wifi-flyout');
-    if (!flyout) return;
-    flyout.classList.add('is-closing');
-    setTimeout(() => flyout.remove(), 120);
-    document.querySelector('#wifi')?.setAttribute('aria-expanded', 'false');
+    Flyouts?.close('wifi-flyout');
   }
 
   function renderFlyout() {
+    if (!Flyouts) return;
     const existing = document.querySelector('#wifi-flyout');
     if (existing) {
       closeFlyout();
       return;
     }
 
-    const card = document.querySelector('.quick-card');
-    if (!card) return;
-
-    const flyout = document.createElement('section');
-    flyout.id = 'wifi-flyout';
-    flyout.className = 'control-flyout control-flyout--wifi';
-    flyout.setAttribute('role', 'dialog');
-    flyout.setAttribute('aria-modal', 'false');
-    flyout.setAttribute('aria-label', 'Wi-Fi');
-    flyout.innerHTML = `
-      <div class="control-flyout__header">
-        <div>
-          <strong>Wi-Fi</strong>
-          <small>Windows WLAN control</small>
-        </div>
-        <button class="control-flyout__close" type="button" aria-label="Close Wi-Fi">×</button>
-      </div>
-      <div class="control-flyout__options">
-        <div class="control-detail">
-          <span class="control-detail__indicator" aria-hidden="true"></span>
-          <span class="control-option__copy">
-            <strong data-wifi-state>${escapeHtml(subtitle(current))}</strong>
-            <small data-wifi-detail>${escapeHtml(detail(current))}</small>
-          </span>
-        </div>
-        <div class="control-detail control-detail--secondary">
-          <span class="control-detail__indicator" aria-hidden="true"></span>
-          <span class="control-option__copy">
-            <strong>Adapter</strong>
-            <small data-wifi-adapter>${escapeHtml(current.interfaceName || 'Windows WLAN adapter')}</small>
-          </span>
-        </div>
-        <button class="control-option" type="button" data-wifi-toggle aria-pressed="${current.enabled}" ${current.supported ? '' : 'disabled'}>
-          <span class="control-option__indicator" aria-hidden="true"></span>
-          <span class="control-option__copy">
-            <strong>${current.enabled ? 'Turn Off' : 'Turn On'}</strong>
-            <small>${current.enabled ? 'Disable the Wi-Fi radio' : 'Enable the Wi-Fi radio'}</small>
-          </span>
-        </button>
-      </div>
-    `;
-
-    card.appendChild(flyout);
-    document.querySelector('#wifi')?.setAttribute('aria-expanded', 'true');
-    flyout.querySelector('.control-flyout__close')?.addEventListener('click', closeFlyout);
-    flyout.querySelector('[data-wifi-toggle]')?.addEventListener('click', toggle);
-    flyout.addEventListener('keydown', event => {
-      if (event.key === 'Escape') closeFlyout();
+    Flyouts.open({
+      id: 'wifi-flyout',
+      tileId: 'wifi',
+      modifier: 'control-flyout--wifi',
+      ariaLabel: 'Wi-Fi',
+      title: 'Wi-Fi',
+      subtitle: 'Windows WLAN control',
+      closeLabel: 'Close Wi-Fi',
+      bodyHtml: `
+        <div class="control-flyout__options">
+          <div class="control-detail">
+            <span class="control-detail__indicator" aria-hidden="true"></span>
+            <span class="control-option__copy">
+              <strong data-wifi-state>${escapeHtml(subtitle(current))}</strong>
+              <small data-wifi-detail>${escapeHtml(detail(current))}</small>
+            </span>
+          </div>
+          <div class="control-detail control-detail--secondary">
+            <span class="control-detail__indicator" aria-hidden="true"></span>
+            <span class="control-option__copy">
+              <strong>Adapter</strong>
+              <small data-wifi-adapter>${escapeHtml(current.interfaceName || 'Windows WLAN adapter')}</small>
+            </span>
+          </div>
+          <button class="control-option" type="button" data-wifi-toggle aria-pressed="${current.enabled}" ${current.supported ? '' : 'disabled'}>
+            <span class="control-option__indicator" aria-hidden="true"></span>
+            <span class="control-option__copy">
+              <strong>${current.enabled ? 'Turn Off' : 'Turn On'}</strong>
+              <small>${current.enabled ? 'Disable the Wi-Fi radio' : 'Enable the Wi-Fi radio'}</small>
+            </span>
+          </button>
+        </div>`,
+      focusSelector: '[data-wifi-toggle]',
+      onMount(flyout) {
+        flyout.querySelector('[data-wifi-toggle]')?.addEventListener('click', toggle);
+      }
     });
-    flyout.querySelector('[data-wifi-toggle]')?.focus();
   }
 
   function bind() {
