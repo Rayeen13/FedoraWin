@@ -34,6 +34,10 @@ assert.doesNotMatch(css, /frame-overlay|fake-caption|explorer\.exe/i);
 
 assert.doesNotMatch(appUi, /Loading workspace/i);
 assert.match(appUi, /workspace-preflight/);
+assert.match(appUi, /async function signalCaptureReady/);
+assert.match(appUi, /attempt < 3/);
+assert.match(appUi, /acknowledged === view/);
+assert.match(main, /fn mark_capture_ready\([\s\S]*?\) -> Result<String, String>/);
 assert.match(workspaceReady, /MutationObserver/);
 assert.match(workspaceReady, /#activities-content \.loading/);
 assert.match(workspaceReady, /workspace-preflight/);
