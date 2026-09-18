@@ -305,7 +305,7 @@ async function renderActivities() {
   app.innerHTML = `
     <section class="activities">
       <div class="search-shell"><span class="search-icon">${ICONS.search}</span><input id="search" class="search" placeholder="Type to search" autocomplete="off" spellcheck="false" /></div>
-      <div id="activities-content" class="activities-content"><div class="loading">Loading workspace…</div></div>
+      <div id="activities-content" class="activities-content"><div class="workspace-preflight"><div class="workspace-preflight__frame" aria-hidden="true"><span class="workspace-preflight__window workspace-preflight__window--one"></span><span class="workspace-preflight__window workspace-preflight__window--two"></span><span class="workspace-preflight__window workspace-preflight__window--three"></span></div></div></div>
       <div class="dash-wrap"><div id="dash" class="dash"></div></div>
     </section>`;
   const search = document.querySelector('#search');
