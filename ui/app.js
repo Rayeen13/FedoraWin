@@ -477,11 +477,6 @@ function renderQuickSettings(appearanceOpen = false) {
   hydratePowerStatus();
   document.querySelector('#screenshot-open').addEventListener('click', () => call('open_screenshot_overlay'));
   document.querySelector('#appearance-open').addEventListener('click', () => renderQuickSettings(true));
-  document.querySelector('#wifi').addEventListener('click', async event => {
-    const next = event.currentTarget.getAttribute('aria-pressed') !== 'true';
-    const result = await call('set_wifi_enabled', { enabled: next });
-    if (result !== null || !invoke) event.currentTarget.setAttribute('aria-pressed', String(next));
-  });
   document.querySelector('#dark-style').addEventListener('click', async () => {
     const nextTheme = shell.appearance.theme === 'dark' ? 'light' : 'dark';
     shell = await call('set_appearance', { theme: nextTheme, accent: shell.appearance.accent }) || { ...shell, appearance: { ...shell.appearance, theme: nextTheme } };
