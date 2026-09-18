@@ -60,9 +60,7 @@ fn brightness_rows(connection: &WMIConnection) -> Result<Vec<BrightnessRow>, Str
 
 fn method_rows(connection: &WMIConnection) -> Result<Vec<BrightnessMethodRow>, String> {
     connection
-        .raw_query(
-            "SELECT __Path, InstanceName, Active FROM WmiMonitorBrightnessMethods",
-        )
+        .raw_query("SELECT __Path, InstanceName, Active FROM WmiMonitorBrightnessMethods")
         .map_err(|error| format!("brightness method query failed: {error}"))
 }
 
@@ -105,8 +103,9 @@ pub fn status() -> Result<BrightnessStatus, String> {
 pub fn set(requested: u8) -> Result<u8, String> {
     let connection = connection()?;
     let brightness = brightness_rows(&connection)?;
-    let row = active_brightness(&brightness)
-        .ok_or_else(|| "Windows reported no brightness-controllable internal display".to_string())?;
+    let row = active_brightness(&brightness).ok_or_else(|| {
+        "Windows reported no brightness-controllable internal display".to_string()
+    })?;
     let requested = requested.min(100);
     let target = nearest_level(&row.level, requested);
 
