@@ -1,5 +1,6 @@
 (() => {
   const invoke = window.__TAURI__?.core?.invoke;
+  const Flyouts = window.FedoraWinControlFlyouts;
   let current = { supported: false, enabled: false, name: '', state: 'unavailable' };
   let revision = 0;
 
@@ -87,65 +88,47 @@
   }
 
   function closeFlyout() {
-    const flyout = document.querySelector('#bluetooth-flyout');
-    if (!flyout) return;
-    flyout.classList.add('is-closing');
-    setTimeout(() => flyout.remove(), 120);
-    document.querySelector('#bluetooth')?.setAttribute('aria-expanded', 'false');
+    Flyouts?.close('bluetooth-flyout');
   }
 
   function renderFlyout() {
+    if (!Flyouts) return;
     const existing = document.querySelector('#bluetooth-flyout');
     if (existing) {
       closeFlyout();
       return;
     }
 
-    const card = document.querySelector('.quick-card');
-    if (!card) return;
-
-    const flyout = document.createElement('section');
-    flyout.id = 'bluetooth-flyout';
-    flyout.className = 'control-flyout control-flyout--bluetooth';
-    flyout.setAttribute('role', 'dialog');
-    flyout.setAttribute('aria-modal', 'false');
-    flyout.setAttribute('aria-label', 'Bluetooth');
-    flyout.innerHTML = `
-      <div class="control-flyout__header">
-        <div>
-          <strong>Bluetooth</strong>
-          <small>Windows radio control</small>
-        </div>
-        <button class="control-flyout__close" type="button" aria-label="Close Bluetooth">×</button>
-      </div>
-      <div class="control-flyout__options">
-        <div class="control-detail">
-          <span class="control-detail__indicator" aria-hidden="true"></span>
-          <span class="control-option__copy">
-            <strong data-bluetooth-state>${escapeHtml(labelFor(current))}</strong>
-            <small data-bluetooth-detail>${escapeHtml(current.name || (current.supported ? 'Windows Bluetooth radio' : 'No Bluetooth radio detected'))}</small>
-          </span>
-        </div>
-        <button class="control-option" type="button" data-bluetooth-toggle aria-pressed="${current.enabled}" ${current.supported ? '' : 'disabled'}>
-          <span class="control-option__indicator" aria-hidden="true"></span>
-          <span class="control-option__copy">
-            <strong>${current.enabled ? 'Turn Off' : 'Turn On'}</strong>
-            <small>${current.enabled ? 'Disable the Bluetooth radio' : 'Enable the Bluetooth radio'}</small>
-          </span>
-        </button>
-      </div>
-    `;
-
-    card.appendChild(flyout);
-    document.querySelector('#bluetooth')?.setAttribute('aria-expanded', 'true');
-    flyout.querySelector('.control-flyout__close')?.addEventListener('click', closeFlyout);
-    flyout.querySelector('[data-bluetooth-toggle]')?.addEventListener('click', async () => {
-      await toggle();
+    Flyouts.open({
+      id: 'bluetooth-flyout',
+      tileId: 'bluetooth',
+      modifier: 'control-flyout--bluetooth',
+      ariaLabel: 'Bluetooth',
+      title: 'Bluetooth',
+      subtitle: 'Windows radio control',
+      closeLabel: 'Close Bluetooth',
+      bodyHtml: `
+        <div class="control-flyout__options">
+          <div class="control-detail">
+            <span class="control-detail__indicator" aria-hidden="true"></span>
+            <span class="control-option__copy">
+              <strong data-bluetooth-state>${escapeHtml(labelFor(current))}</strong>
+              <small data-bluetooth-detail>${escapeHtml(current.name || (current.supported ? 'Windows Bluetooth radio' : 'No Bluetooth radio detected'))}</small>
+            </span>
+          </div>
+          <button class="control-option" type="button" data-bluetooth-toggle aria-pressed="${current.enabled}" ${current.supported ? '' : 'disabled'}>
+            <span class="control-option__indicator" aria-hidden="true"></span>
+            <span class="control-option__copy">
+              <strong>${current.enabled ? 'Turn Off' : 'Turn On'}</strong>
+              <small>${current.enabled ? 'Disable the Bluetooth radio' : 'Enable the Bluetooth radio'}</small>
+            </span>
+          </button>
+        </div>`,
+      focusSelector: '[data-bluetooth-toggle]',
+      onMount(flyout) {
+        flyout.querySelector('[data-bluetooth-toggle]')?.addEventListener('click', toggle);
+      }
     });
-    flyout.addEventListener('keydown', event => {
-      if (event.key === 'Escape') closeFlyout();
-    });
-    flyout.querySelector('[data-bluetooth-toggle]')?.focus();
   }
 
   function bind() {
