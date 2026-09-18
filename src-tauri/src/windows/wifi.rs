@@ -202,7 +202,9 @@ unsafe fn query_radio_state(client: &Client, guid: &Guid) -> Result<bool, String
         null_mut(),
     );
     if result != ERROR_SUCCESS || data.is_null() {
-        return Err(format!("WlanQueryInterface radio state failed with {result}"));
+        return Err(format!(
+            "WlanQueryInterface radio state failed with {result}"
+        ));
     }
     let _memory = WlanMemory::new(data);
     let state = &*(data as *const WlanRadioState);
@@ -210,8 +212,7 @@ unsafe fn query_radio_state(client: &Client, guid: &Guid) -> Result<bool, String
         .unwrap_or(0)
         .min(WLAN_MAX_PHY_INDEX);
     Ok(state.states[..count].iter().any(|phy| {
-        phy.software_state == DOT11_RADIO_STATE_ON
-            && phy.hardware_state == DOT11_RADIO_STATE_ON
+        phy.software_state == DOT11_RADIO_STATE_ON && phy.hardware_state == DOT11_RADIO_STATE_ON
     }))
 }
 
@@ -368,7 +369,10 @@ mod tests {
 
     #[test]
     fn decodes_connected_ssid() {
-        assert_eq!(ssid_name(&connection(b"FedoraNet")), Some("FedoraNet".into()));
+        assert_eq!(
+            ssid_name(&connection(b"FedoraNet")),
+            Some("FedoraNet".into())
+        );
     }
 
     #[test]
