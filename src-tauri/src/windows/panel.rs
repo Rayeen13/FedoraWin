@@ -23,7 +23,6 @@ const SWP_NOACTIVATE: u32 = 0x0010;
 const SWP_SHOWWINDOW: u32 = 0x0040;
 const HWND_TOPMOST: isize = -1;
 
-const DT_LEFT: u32 = 0x0000;
 const DT_CENTER: u32 = 0x0001;
 const DT_RIGHT: u32 = 0x0002;
 const DT_VCENTER: u32 = 0x0004;
