@@ -284,6 +284,11 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
+.control-detail--secondary .control-detail__indicator {
+  background: color-mix(in srgb, currentColor 45%, transparent);
+  box-shadow: none;
+}
+
 .control-option:disabled {
   cursor: default;
   opacity: .5;
