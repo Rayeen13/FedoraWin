@@ -193,8 +193,12 @@ fn show_control_osd(
     osd::show(&app, osd_state.inner(), &kind, value, detail.as_deref())
 }
 #[tauri::command]
-fn set_wifi_enabled(enabled: bool) -> Result<(), String> {
-    windows::wifi::set_enabled(enabled).map_err(|e| e.to_string())
+fn get_wifi_status() -> Result<windows::wifi::WifiStatus, String> {
+    windows::wifi::status()
+}
+#[tauri::command]
+fn set_wifi_enabled(enabled: bool) -> Result<windows::wifi::WifiStatus, String> {
+    windows::wifi::set_enabled(enabled)
 }
 #[tauri::command]
 fn refresh_window_frames(state: tauri::State<'_, Arc<ShellState>>) -> Result<usize, String> {
@@ -373,6 +377,7 @@ fn main() {
             get_master_volume,
             set_master_volume,
             show_control_osd,
+            get_wifi_status,
             set_wifi_enabled,
             refresh_window_frames,
             mark_capture_ready
