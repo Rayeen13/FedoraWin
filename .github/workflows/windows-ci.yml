@@ -29,6 +29,8 @@ jobs:
         run: node --check ui/app.js
       - name: Workspace ready syntax check
         run: node --check ui/workspace-ready.js
+      - name: Control flyout syntax check
+        run: node --check ui/control-flyouts.js
       - name: Brightness syntax check
         run: node --check ui/brightness.js
       - name: Wi-Fi syntax check
