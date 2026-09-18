@@ -176,7 +176,29 @@ pub mod frame {
 }
 #[cfg(not(windows))]
 pub mod wifi {
-    pub fn set_enabled(_: bool) -> Result<(), String> {
+    use serde::Serialize;
+
+    #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+    #[serde(rename_all = "camelCase")]
+    pub struct WifiStatus {
+        pub supported: bool,
+        pub enabled: bool,
+        pub connected: bool,
+        pub network_name: Option<String>,
+        pub interface_name: Option<String>,
+    }
+
+    pub fn status() -> Result<WifiStatus, String> {
+        Ok(WifiStatus {
+            supported: false,
+            enabled: false,
+            connected: false,
+            network_name: None,
+            interface_name: None,
+        })
+    }
+
+    pub fn set_enabled(_: bool) -> Result<WifiStatus, String> {
         Err("Wi-Fi control is Windows-only".into())
     }
 }
