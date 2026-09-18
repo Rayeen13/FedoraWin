@@ -6,6 +6,7 @@ const css = fs.readFileSync(new URL('../ui/gnome51.css', import.meta.url), 'utf8
 const appUi = fs.readFileSync(new URL('../ui/app.js', import.meta.url), 'utf8');
 const workspaceCss = fs.readFileSync(new URL('../ui/workspace-ready.css', import.meta.url), 'utf8');
 const workspaceReady = fs.readFileSync(new URL('../ui/workspace-ready.js', import.meta.url), 'utf8');
+const controlFlyouts = fs.readFileSync(new URL('../ui/control-flyouts.js', import.meta.url), 'utf8');
 const brightnessUi = fs.readFileSync(new URL('../ui/brightness.js', import.meta.url), 'utf8');
 const wifiUi = fs.readFileSync(new URL('../ui/wifi.js', import.meta.url), 'utf8');
 const bluetoothUi = fs.readFileSync(new URL('../ui/bluetooth.js', import.meta.url), 'utf8');
@@ -18,7 +19,7 @@ const power = fs.readFileSync(new URL('../src-tauri/src/windows/power.rs', impor
 const cargo = fs.readFileSync(new URL('../src-tauri/Cargo.toml', import.meta.url), 'utf8');
 
 assert.match(html, /styles\.css[\s\S]*adwaita\.css[\s\S]*gnome51\.css[\s\S]*workspace-ready\.css/);
-assert.match(html, /app\.js[\s\S]*workspace-ready\.js[\s\S]*brightness\.js[\s\S]*wifi\.js[\s\S]*bluetooth\.js[\s\S]*power-mode\.js/);
+assert.match(html, /app\.js[\s\S]*workspace-ready\.js[\s\S]*control-flyouts\.js[\s\S]*brightness\.js[\s\S]*wifi\.js[\s\S]*bluetooth\.js[\s\S]*power-mode\.js/);
 assert.match(css, /grid-template-columns:\s*repeat\(6,\s*minmax\(96px,\s*1fr\)\)/);
 assert.match(css, /grid-template-rows:\s*repeat\(4,\s*minmax\(86px,\s*1fr\)\)/);
 assert.match(css, /--gnome-icon-size:\s*64px/);
@@ -33,6 +34,13 @@ assert.match(css, /\.workspace-nav:focus-visible/);
 assert.match(css, /\.control-option:focus-visible/);
 assert.doesNotMatch(css, /position:\s*fixed/);
 assert.doesNotMatch(css, /frame-overlay|fake-caption|explorer\.exe/i);
+
+assert.match(controlFlyouts, /window\.FedoraWinControlFlyouts/);
+assert.match(controlFlyouts, /function closeOthers/);
+assert.match(controlFlyouts, /event\.key !== 'Escape'/);
+assert.match(controlFlyouts, /aria-expanded/);
+assert.match(controlFlyouts, /focusSelector/);
+assert.match(controlFlyouts, /Object\.freeze/);
 
 assert.doesNotMatch(appUi, /Loading workspace/i);
 assert.match(appUi, /workspace-preflight/);
@@ -75,7 +83,9 @@ assert.match(wifiUi, /set_wifi_enabled/);
 assert.match(wifiUi, /control-flyout--wifi/);
 assert.match(wifiUi, /networkName/);
 assert.match(wifiUi, /interfaceName/);
-assert.match(wifiUi, /event\.key === 'Escape'/);
+assert.match(wifiUi, /FedoraWinControlFlyouts/);
+assert.match(wifiUi, /Flyouts\.open/);
+assert.match(wifiUi, /Flyouts\?\.close/);
 assert.match(wifiUi, /MutationObserver/);
 assert.match(main, /fn get_wifi_status\(\)/);
 assert.match(main, /fn set_wifi_enabled\(enabled:\s*bool\) -> Result<windows::wifi::WifiStatus, String>/);
@@ -93,7 +103,9 @@ assert.match(bluetooth, /RoUninitialize/);
 assert.match(bluetoothUi, /get_bluetooth_status/);
 assert.match(bluetoothUi, /set_bluetooth_enabled/);
 assert.match(bluetoothUi, /control-flyout--bluetooth/);
-assert.match(bluetoothUi, /event\.key === 'Escape'/);
+assert.match(bluetoothUi, /FedoraWinControlFlyouts/);
+assert.match(bluetoothUi, /Flyouts\.open/);
+assert.match(bluetoothUi, /Flyouts\?\.close/);
 assert.match(bluetoothUi, /MutationObserver/);
 assert.match(main, /fn get_bluetooth_status\(\)/);
 assert.match(main, /fn set_bluetooth_enabled\(enabled:\s*bool\)/);
@@ -122,7 +134,9 @@ assert.match(powerModeUi, /bestPerformance/);
 assert.match(powerModeUi, /control-flyout/);
 assert.match(powerModeUi, /role="radiogroup"/);
 assert.match(powerModeUi, /aria-checked/);
-assert.match(powerModeUi, /event\.key === 'Escape'/);
+assert.match(powerModeUi, /FedoraWinControlFlyouts/);
+assert.match(powerModeUi, /Flyouts\.open/);
+assert.match(powerModeUi, /Flyouts\?\.close/);
 assert.match(powerModeUi, /MutationObserver/);
 assert.doesNotMatch(powerModeUi, /powercfg|cmd\.exe|powershell|reg\.exe/i);
 
