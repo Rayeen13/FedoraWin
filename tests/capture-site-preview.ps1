@@ -213,6 +213,8 @@ Invoke-Capture -Key 'quick_settings_dark' -View 'quick-settings' -WindowLabel 'q
 Invoke-Capture -Key 'quick_settings_light' -View 'quick-settings' -WindowLabel 'quick-settings' -Theme 'light'
 Invoke-Capture -Key 'appearance' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'appearance' -Theme 'dark'
 Invoke-Capture -Key 'power_mode' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'power-mode' -Theme 'dark' -SettleMilliseconds 1800
+Invoke-Capture -Key 'wifi' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'wifi' -Theme 'dark' -SettleMilliseconds 1800
+Invoke-Capture -Key 'bluetooth' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'bluetooth' -Theme 'dark' -SettleMilliseconds 1800
 Invoke-Capture -Key 'date_menu' -View 'date-menu' -WindowLabel 'date-menu' -Theme 'dark'
 
 function Invoke-NativeFrameCapture {
@@ -273,7 +275,7 @@ foreach ($entry in $captures.GetEnumerator()) {
 }
 $uniqueCaptureCount = ($hashes.Values | Select-Object -Unique).Count
 Write-Host "Unique runtime gallery captures: $uniqueCaptureCount / $($captures.Count)"
-if ($uniqueCaptureCount -lt 9) {
+if ($uniqueCaptureCount -lt 11) {
     throw 'Runtime gallery captures are not sufficiently distinct.'
 }
 if ($hashes.quick_settings_dark -eq $hashes.quick_settings_light) {
@@ -281,6 +283,15 @@ if ($hashes.quick_settings_dark -eq $hashes.quick_settings_light) {
 }
 if ($hashes.power_mode -eq $hashes.quick_settings_dark) {
     throw 'Power Mode flyout capture did not produce a distinct surface.'
+}
+if ($hashes.wifi -eq $hashes.quick_settings_dark) {
+    throw 'Wi-Fi flyout capture did not produce a distinct surface.'
+}
+if ($hashes.bluetooth -eq $hashes.quick_settings_dark) {
+    throw 'Bluetooth flyout capture did not produce a distinct surface.'
+}
+if ($hashes.wifi -eq $hashes.bluetooth) {
+    throw 'Wi-Fi and Bluetooth flyout captures are unexpectedly identical.'
 }
 
 [ordered]@{
