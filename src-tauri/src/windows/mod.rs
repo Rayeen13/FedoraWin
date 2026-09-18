@@ -5,6 +5,8 @@ pub mod apps;
 #[cfg(windows)]
 pub mod audio;
 #[cfg(windows)]
+pub mod brightness;
+#[cfg(windows)]
 pub mod display;
 #[cfg(windows)]
 pub mod frame;
@@ -34,6 +36,28 @@ pub mod audio {
     }
     pub fn set_master_volume(_: u8) -> Result<u8, String> {
         Err("audio control is Windows-only".into())
+    }
+}
+#[cfg(not(windows))]
+pub mod brightness {
+    use serde::Serialize;
+
+    #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+    #[serde(rename_all = "camelCase")]
+    pub struct BrightnessStatus {
+        pub supported: bool,
+        pub value: Option<u8>,
+    }
+
+    pub fn status() -> Result<BrightnessStatus, String> {
+        Ok(BrightnessStatus {
+            supported: false,
+            value: None,
+        })
+    }
+
+    pub fn set(_: u8) -> Result<u8, String> {
+        Err("brightness control is Windows-only".into())
     }
 }
 #[cfg(not(windows))]
