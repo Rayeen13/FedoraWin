@@ -61,6 +61,26 @@ function nextPaint() {
   return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 
+function delay(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function signalCaptureReady() {
+  if (!captureEvidence || view === 'panel') return;
+  await withTimeout(nextPaint(), 2000, null);
+  if (view === 'activities') await withTimeout(syncLiveThumbnails(), 3500, null);
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const acknowledged = await withTimeout(
+      call('mark_capture_ready', { label: view }),
+      1500,
+      null
+    );
+    if (acknowledged === view) return;
+    await delay(120);
+  }
+}
+
 function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
 }
@@ -504,7 +524,8 @@ function renderDateMenu() {
 }
 
 async function bootstrap() {
-  shell = await withTimeout(call('get_shell_state'), 3000, null) || shell;
+  try {
+    shell = await withTimeout(call('get_shell_state'), 3000, null) || shell;
   if (mockMode) {
     apps = [
       { name: 'Files', appId: 'mock.files', aliases: ['files','file manager'] },
@@ -530,10 +551,8 @@ async function bootstrap() {
   else if (view === 'quick-settings') renderQuickSettings(captureMode === 'appearance');
   else renderDateMenu();
 
-  if (captureEvidence && view !== 'panel') {
-    await withTimeout(nextPaint(), 2000, null);
-    if (view === 'activities') await withTimeout(syncLiveThumbnails(), 3500, null);
-    void call('mark_capture_ready', { label: view });
+  } finally {
+    await signalCaptureReady();
   }
 }
 bootstrap();
