@@ -1,6 +1,7 @@
 (() => {
   const invoke = window.__TAURI__?.core?.invoke;
   const Flyouts = window.FedoraWinControlFlyouts;
+  const captureMode = new URLSearchParams(location.search).get('capture') || '';
   let current = {
     supported: false,
     enabled: false,
@@ -9,6 +10,7 @@
     interfaceName: ''
   };
   let revision = 0;
+  let captureFlyoutOpened = false;
 
   async function call(command, payload = {}) {
     if (!invoke) return null;
@@ -169,6 +171,11 @@
     }
 
     hydrate();
+
+    if (captureMode === 'wifi' && !captureFlyoutOpened) {
+      captureFlyoutOpened = true;
+      requestAnimationFrame(renderFlyout);
+    }
   }
 
   const observer = new MutationObserver(bind);
