@@ -5,12 +5,15 @@ const html = fs.readFileSync(new URL('../ui/index.html', import.meta.url), 'utf8
 const css = fs.readFileSync(new URL('../ui/gnome51.css', import.meta.url), 'utf8');
 const workspaceCss = fs.readFileSync(new URL('../ui/workspace-ready.css', import.meta.url), 'utf8');
 const workspaceReady = fs.readFileSync(new URL('../ui/workspace-ready.js', import.meta.url), 'utf8');
+const brightnessUi = fs.readFileSync(new URL('../ui/brightness.js', import.meta.url), 'utf8');
 const powerModeUi = fs.readFileSync(new URL('../ui/power-mode.js', import.meta.url), 'utf8');
 const main = fs.readFileSync(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf8');
+const brightness = fs.readFileSync(new URL('../src-tauri/src/windows/brightness.rs', import.meta.url), 'utf8');
 const power = fs.readFileSync(new URL('../src-tauri/src/windows/power.rs', import.meta.url), 'utf8');
+const cargo = fs.readFileSync(new URL('../src-tauri/Cargo.toml', import.meta.url), 'utf8');
 
 assert.match(html, /styles\.css[\s\S]*adwaita\.css[\s\S]*gnome51\.css[\s\S]*workspace-ready\.css/);
-assert.match(html, /app\.js[\s\S]*workspace-ready\.js[\s\S]*power-mode\.js/);
+assert.match(html, /app\.js[\s\S]*workspace-ready\.js[\s\S]*brightness\.js[\s\S]*power-mode\.js/);
 assert.match(css, /grid-template-columns:\s*repeat\(6,\s*minmax\(96px,\s*1fr\)\)/);
 assert.match(css, /grid-template-rows:\s*repeat\(4,\s*minmax\(86px,\s*1fr\)\)/);
 assert.match(css, /--gnome-icon-size:\s*64px/);
@@ -34,6 +37,21 @@ assert.match(workspaceCss, /\.workspace-preflight/);
 assert.match(workspaceCss, /\.workspace-preflight__frame/);
 assert.match(workspaceCss, /prefers-reduced-motion:\s*reduce/);
 assert.match(workspaceCss, /animation:\s*none\s*!important/);
+
+assert.match(brightness, /WmiMonitorBrightness/);
+assert.match(brightness, /WmiMonitorBrightnessMethods/);
+assert.match(brightness, /WmiSetBrightness/);
+assert.match(brightness, /ROOT\\\\WMI/);
+assert.match(brightness, /nearest_level/);
+assert.match(brightnessUi, /get_brightness_status/);
+assert.match(brightnessUi, /set_brightness/);
+assert.match(brightnessUi, /MutationObserver/);
+assert.match(main, /fn get_brightness_status\(\)/);
+assert.match(main, /fn set_brightness\([\s\S]*?value:\s*u8,[\s\S]*?\) -> Result<u8, String>/);
+assert.match(main, /get_brightness_status,[\s\S]*set_brightness,/);
+assert.match(cargo, /wmi\s*=\s*"0\.18\.4"/);
+assert.doesNotMatch(brightnessUi, /powershell|cmd\.exe|powercfg|reg\.exe/i);
+assert.doesNotMatch(brightness, /powershell|cmd\.exe|powercfg|reg\.exe/i);
 
 assert.match(power, /PowerGetUserConfiguredACPowerMode/);
 assert.match(power, /PowerGetUserConfiguredDCPowerMode/);
