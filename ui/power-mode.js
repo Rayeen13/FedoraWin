@@ -1,5 +1,6 @@
 (() => {
   const invoke = window.__TAURI__?.core?.invoke;
+  const Flyouts = window.FedoraWinControlFlyouts;
   const captureMode = new URLSearchParams(location.search).get('capture') || '';
   const MODES = ['bestEfficiency', 'balanced', 'bestPerformance'];
   const LABELS = {
@@ -65,11 +66,7 @@
   }
 
   function closeFlyout() {
-    const flyout = document.querySelector('#power-mode-flyout');
-    if (!flyout) return;
-    flyout.classList.add('is-closing');
-    setTimeout(() => flyout.remove(), 120);
-    document.querySelector('#power-mode')?.setAttribute('aria-expanded', 'false');
+    Flyouts?.close('power-mode-flyout');
   }
 
   function renderFlyout() {
@@ -78,46 +75,37 @@
       if (captureMode !== 'power-mode') closeFlyout();
       return;
     }
+    if (!Flyouts) return;
 
-    const card = document.querySelector('.quick-card');
-    if (!card) return;
-    const flyout = document.createElement('section');
-    flyout.id = 'power-mode-flyout';
-    flyout.className = 'control-flyout control-flyout--power';
-    flyout.setAttribute('role', 'dialog');
-    flyout.setAttribute('aria-modal', 'false');
-    flyout.setAttribute('aria-label', 'Power Mode');
-    flyout.innerHTML = `
-      <div class="control-flyout__header">
-        <div>
-          <strong>Power Mode</strong>
-          <small>Windows power behavior</small>
-        </div>
-        <button class="control-flyout__close" type="button" aria-label="Close Power Mode">×</button>
-      </div>
-      <div class="control-flyout__options" role="radiogroup" aria-label="Power Mode">
-        ${MODES.map(mode => `
-          <button class="control-option${mode === currentMode ? ' is-selected' : ''}" type="button" role="radio" aria-checked="${mode === currentMode}" data-power-mode-option="${mode}">
-            <span class="control-option__indicator" aria-hidden="true"></span>
-            <span class="control-option__copy">
-              <strong>${LABELS[mode]}</strong>
-              <small>${DESCRIPTIONS[mode]}</small>
-            </span>
-          </button>`).join('')}
-      </div>
-    `;
-    card.appendChild(flyout);
-    document.querySelector('#power-mode')?.setAttribute('aria-expanded', 'true');
-
-    flyout.querySelector('.control-flyout__close')?.addEventListener('click', closeFlyout);
-    flyout.querySelectorAll('[data-power-mode-option]').forEach(option => option.addEventListener('click', async () => {
-      await setPowerMode(option.dataset.powerModeOption);
-      closeFlyout();
-    }));
-    flyout.addEventListener('keydown', event => {
-      if (event.key === 'Escape') closeFlyout();
+    Flyouts.open({
+      id: 'power-mode-flyout',
+      tileId: 'power-mode',
+      modifier: 'control-flyout--power',
+      ariaLabel: 'Power Mode',
+      title: 'Power Mode',
+      subtitle: 'Windows power behavior',
+      closeLabel: 'Close Power Mode',
+      bodyHtml: `
+        <div class="control-flyout__options" role="radiogroup" aria-label="Power Mode">
+          ${MODES.map(mode => `
+            <button class="control-option${mode === currentMode ? ' is-selected' : ''}" type="button" role="radio" aria-checked="${mode === currentMode}" data-power-mode-option="${mode}">
+              <span class="control-option__indicator" aria-hidden="true"></span>
+              <span class="control-option__copy">
+                <strong>${LABELS[mode]}</strong>
+                <small>${DESCRIPTIONS[mode]}</small>
+              </span>
+            </button>`).join('')}
+        </div>`,
+      focusSelector: '[aria-checked="true"]',
+      onMount(flyout) {
+        flyout.querySelectorAll('[data-power-mode-option]').forEach(option => {
+          option.addEventListener('click', async () => {
+            await setPowerMode(option.dataset.powerModeOption);
+            closeFlyout();
+          });
+        });
+      }
     });
-    flyout.querySelector('[aria-checked="true"]')?.focus();
   }
 
   function bindPowerModeTile() {
