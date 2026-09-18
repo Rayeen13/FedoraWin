@@ -1,6 +1,9 @@
 use serde::Serialize;
 use std::{thread, time::Duration};
-use windows::Devices::Radios::{Radio, RadioAccessStatus, RadioKind, RadioState};
+use windows::{
+    Devices::Radios::{Radio, RadioAccessStatus, RadioKind, RadioState},
+    Win32::System::WinRT::{RoInitialize, RoUninitialize, RO_INIT_MULTITHREADED},
+};
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -27,8 +30,24 @@ fn radio_state_name(state: RadioState) -> &'static str {
     }
 }
 
-fn bluetooth_radio() -> Result<Option<Radio>, String> {
-    windows::core::init_mta().map_err(|error| windows_error("WinRT initialization failed", error))?;
+struct WinRtApartment;
+
+impl WinRtApartment {
+    fn enter() -> Result<Self, String> {
+        unsafe { RoInitialize(RO_INIT_MULTITHREADED) }
+            .map_err(|error| windows_error("WinRT initialization failed", error))?;
+        Ok(Self)
+    }
+}
+
+impl Drop for WinRtApartment {
+    fn drop(&mut self) {
+        unsafe { RoUninitialize() };
+    }
+}
+
+fn bluetooth_radio() -> Result<(WinRtApartment, Option<Radio>), String> {
+    let apartment = WinRtApartment::enter()?;
     let radios = Radio::GetRadiosAsync()
         .map_err(|error| windows_error("Bluetooth radio enumeration failed", error))?
         .join()
@@ -45,10 +64,10 @@ fn bluetooth_radio() -> Result<Option<Radio>, String> {
             .Kind()
             .map_err(|error| windows_error("Bluetooth radio kind failed", error))?;
         if kind == RadioKind::Bluetooth {
-            return Ok(Some(radio));
+            return Ok((apartment, Some(radio)));
         }
     }
-    Ok(None)
+    Ok((apartment, None))
 }
 
 fn from_radio(radio: &Radio) -> Result<BluetoothStatus, String> {
@@ -70,7 +89,8 @@ fn from_radio(radio: &Radio) -> Result<BluetoothStatus, String> {
 }
 
 pub fn status() -> Result<BluetoothStatus, String> {
-    let Some(radio) = bluetooth_radio()? else {
+    let (_apartment, radio) = bluetooth_radio()?;
+    let Some(radio) = radio else {
         return Ok(BluetoothStatus {
             supported: false,
             enabled: false,
@@ -82,8 +102,8 @@ pub fn status() -> Result<BluetoothStatus, String> {
 }
 
 pub fn set_enabled(enabled: bool) -> Result<BluetoothStatus, String> {
-    let radio = bluetooth_radio()?
-        .ok_or_else(|| "Windows reported no Bluetooth radio".to_string())?;
+    let (_apartment, radio) = bluetooth_radio()?;
+    let radio = radio.ok_or_else(|| "Windows reported no Bluetooth radio".to_string())?;
 
     let access = Radio::RequestAccessAsync()
         .map_err(|error| windows_error("Bluetooth access request failed", error))?
