@@ -147,6 +147,20 @@ fn set_power_mode(
     Ok(configured)
 }
 #[tauri::command]
+fn get_brightness_status() -> Result<windows::brightness::BrightnessStatus, String> {
+    windows::brightness::status()
+}
+#[tauri::command]
+fn set_brightness(
+    app: tauri::AppHandle,
+    osd_state: tauri::State<'_, osd::OsdState>,
+    value: u8,
+) -> Result<u8, String> {
+    let actual = windows::brightness::set(value)?;
+    let _ = osd::show(&app, osd_state.inner(), "brightness", Some(actual), None);
+    Ok(actual)
+}
+#[tauri::command]
 fn get_master_volume() -> Result<u8, String> {
     windows::audio::get_master_volume()
 }
@@ -343,6 +357,8 @@ fn main() {
             get_power_status,
             get_power_mode,
             set_power_mode,
+            get_brightness_status,
+            set_brightness,
             get_master_volume,
             set_master_volume,
             show_control_osd,
