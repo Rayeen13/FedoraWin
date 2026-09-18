@@ -264,6 +264,31 @@
   line-height: 1.25;
 }
 
+.control-detail {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+
+.control-detail__indicator {
+  width: 10px;
+  height: 10px;
+  margin-inline: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.control-option:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
 @keyframes gnome-control-flyout-in {
   from {
     opacity: 0;
