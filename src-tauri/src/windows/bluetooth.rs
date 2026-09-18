@@ -110,7 +110,9 @@ pub fn set_enabled(enabled: bool) -> Result<BluetoothStatus, String> {
         .join()
         .map_err(|error| windows_error("Bluetooth access request failed", error))?;
     if access != RadioAccessStatus::Allowed {
-        return Err(format!("Windows denied Bluetooth radio control: {access:?}"));
+        return Err(format!(
+            "Windows denied Bluetooth radio control: {access:?}"
+        ));
     }
 
     let target = if enabled {
@@ -124,7 +126,9 @@ pub fn set_enabled(enabled: bool) -> Result<BluetoothStatus, String> {
         .join()
         .map_err(|error| windows_error("Bluetooth state change failed", error))?;
     if result != RadioAccessStatus::Allowed {
-        return Err(format!("Windows rejected Bluetooth state change: {result:?}"));
+        return Err(format!(
+            "Windows rejected Bluetooth state change: {result:?}"
+        ));
     }
 
     for _ in 0..8 {
