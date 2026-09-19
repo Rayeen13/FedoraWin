@@ -19,6 +19,8 @@ const bluetooth = fs.readFileSync(new URL('../src-tauri/src/windows/bluetooth.rs
 const radioPause = fs.readFileSync(new URL('../src-tauri/src/windows/radio_pause.rs', import.meta.url), 'utf8');
 const wifi = fs.readFileSync(new URL('../src-tauri/src/windows/wifi.rs', import.meta.url), 'utf8');
 const power = fs.readFileSync(new URL('../src-tauri/src/windows/power.rs', import.meta.url), 'utf8');
+const desktopPresentation = fs.readFileSync(new URL('../src-tauri/src/windows/desktop_presentation.rs', import.meta.url), 'utf8');
+const captureScript = fs.readFileSync(new URL('../tests/capture-site-preview.ps1', import.meta.url), 'utf8');
 const cargo = fs.readFileSync(new URL('../src-tauri/Cargo.toml', import.meta.url), 'utf8');
 
 assert.match(html, /styles\.css[\s\S]*adwaita\.css[\s\S]*gnome51\.css[\s\S]*workspace-ready\.css/);
@@ -168,6 +170,19 @@ assert.match(main, /RadioPauseManager::default\(\)/);
 assert.match(main, /get_radio_pause_status,[\s\S]*set_radio_pause,/);
 assert.doesNotMatch(radioPause, /powershell|cmd\.exe|netsh|reg\.exe|GlobalAirplaneMode/i);
 assert.doesNotMatch(radioPauseUi, /powershell|cmd\.exe|netsh|reg\.exe|ms-settings:/i);
+
+assert.match(main, /desktop_presentation::maybe_run_guardian\(\)/);
+assert.match(main, /desktop_presentation::start\(\)/);
+assert.match(desktopPresentation, /Shell_TrayWnd/);
+assert.match(desktopPresentation, /Shell_SecondaryTrayWnd/);
+assert.match(desktopPresentation, /--restore-taskbar-after/);
+assert.match(desktopPresentation, /WaitForSingleObject/);
+assert.match(desktopPresentation, /FEDORAWIN_KEEP_WINDOWS_TASKBAR/);
+assert.match(desktopPresentation, /ShowWindow\(hwnd, SW_HIDE\)/);
+assert.match(desktopPresentation, /ShowWindow\(hwnd, SW_SHOW\)/);
+assert.doesNotMatch(desktopPresentation, /taskkill|TerminateProcess|explorer\.exe|reg\.exe|powershell|SetWindowLong/i);
+assert.match(captureScript, /AnyVisibleExplorerTaskbar/);
+assert.match(captureScript, /still has a visible Explorer taskbar/);
 
 assert.match(power, /PowerGetUserConfiguredACPowerMode/);
 assert.match(power, /PowerGetUserConfiguredDCPowerMode/);
