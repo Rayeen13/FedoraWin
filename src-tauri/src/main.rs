@@ -247,9 +247,14 @@ fn build_window(
         Some(mode) => format!("index.html?view={view}&capture={mode}"),
         None => format!("index.html?view={view}"),
     };
+    // Shell surfaces must composite into the desktop instead of exposing the
+    // rectangular WebView2 host behind rounded GNOME cards. Windows still owns
+    // all third-party application HWND frames; only our shell is transparent.
     let window = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title(format!("FedoraWin — {label}"))
         .decorations(false)
+        .transparent(true)
+        .shadow(false)
         .resizable(false)
         .skip_taskbar(true)
         .always_on_top(true)
