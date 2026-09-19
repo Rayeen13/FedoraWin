@@ -127,6 +127,45 @@ for key in [
     if f'data-runtime-shot="{key}"' not in gallery:
         errors.append(f"gallery.html: missing runtime shot: {key}")
 
+
+# Gallery controls must operate on the real runtime shots, not copied mock cards.
+for mode in ("list", "grid", "card", "carousel"):
+    if f'data-gallery-view="{mode}"' not in gallery:
+        errors.append(f"gallery.html: missing {mode} view switch")
+if gallery.count('data-runtime-shot=') != 13:
+    errors.append("gallery.html: expected exactly 13 runtime screenshot elements")
+for element_id in ("galleryGrid", "galleryPrevious", "galleryNext", "galleryPosition", "galleryCarouselControls"):
+    if element_id not in parsed["gallery.html"].ids:
+        errors.append(f"gallery.html: missing interactive element #{element_id}")
+
+site_js = (DOCS / "app.js").read_text(encoding="utf-8")
+site_css = (DOCS / "styles.css").read_text(encoding="utf-8")
+for required in (
+    "gallery.dataset.view=view",
+    "card.hidden=carousel&&index!==active",
+    "localStorage.setItem(viewKey,view)",
+    "ArrowLeft",
+    "ArrowRight",
+    "touchstart",
+    "touchend",
+    "data-runtime-shot",
+):
+    if required not in site_js:
+        errors.append(f"app.js: gallery controller is missing {required}")
+for required in (
+    '[data-view="list"]',
+    '[data-view="grid"]',
+    '[data-view="card"]',
+    '[data-view="carousel"]',
+    "auto-fit",
+    "dvh",
+    "object-fit:contain",
+    "prefers-reduced-motion",
+):
+    if required not in site_css:
+        errors.append(f"styles.css: gallery layout is missing {required}")
+
+
 for required_file in [
     ".nojekyll",
     "docs.html",
@@ -142,5 +181,5 @@ for required_file in [
 if errors:
     raise SystemExit("\n".join(f"ERROR: {error}" for error in errors))
 print(
-    f"Docs validation passed: {len(html_files)} HTML pages, links, metadata, docs hub and 10-surface gallery verified"
+    f"Docs validation passed: {len(html_files)} HTML pages, links, metadata, docs hub and 13-surface, four-view gallery verified"
 )
