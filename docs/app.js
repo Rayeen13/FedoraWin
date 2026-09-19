@@ -83,6 +83,77 @@
   }else{
     addEventListener('keydown',event=>{if(event.key==='Escape') closeMenu()});
   }
+
+  // All four layouts reuse the same screenshot buttons, captions and CI hydration.
+  // No cloned or mock images: the live runtime metadata updates one source of truth.
+  const gallery=document.querySelector('#galleryGrid');
+  if(gallery){
+    const cards=[...gallery.querySelectorAll('[data-runtime-shot]')];
+    const modes=new Set(['list','grid','card','carousel']);
+    const toggles=[...document.querySelectorAll('[data-gallery-view]')];
+    const controls=document.querySelector('#galleryCarouselControls');
+    const position=document.querySelector('#galleryPosition');
+    const previous=document.querySelector('#galleryPrevious');
+    const next=document.querySelector('#galleryNext');
+    const viewKey='fedorawin-gallery-view';
+    let active=0;
+    let touchX=null;
+    let view='card';
+    try{
+      const stored=localStorage.getItem(viewKey);
+      if(modes.has(stored)) view=stored;
+    }catch(_){ /* A private browser can deny persistence. */ }
+
+    const render=()=>{
+      gallery.dataset.view=view;
+      const carousel=view==='carousel';
+      if(controls) controls.hidden=!carousel;
+      toggles.forEach(button=>{
+        const selected=button.dataset.galleryView===view;
+        button.setAttribute('aria-pressed',String(selected));
+        button.classList.toggle('is-active',selected);
+      });
+      cards.forEach((card,index)=>{
+        card.hidden=carousel&&index!==active;
+        if(carousel) card.classList.add('visible');
+        card.setAttribute('aria-label',(index+1)+' of '+cards.length+': '+(card.querySelector('span b')?.textContent||'Screenshot'));
+      });
+      if(position){
+        position.textContent=(active+1)+' / '+cards.length+' · '+(cards[active]?.querySelector('span b')?.textContent||'');
+      }
+    };
+    const select=index=>{
+      if(!cards.length) return;
+      active=(index+cards.length)%cards.length;
+      render();
+    };
+    toggles.forEach(button=>button.addEventListener('click',()=>{
+      const choice=button.dataset.galleryView;
+      if(!modes.has(choice)) return;
+      view=choice;
+      try{localStorage.setItem(viewKey,view)}catch(_){}
+      render();
+    }));
+    previous?.addEventListener('click',()=>select(active-1));
+    next?.addEventListener('click',()=>select(active+1));
+    gallery.addEventListener('keydown',event=>{
+      if(view!=='carousel'||!['ArrowLeft','ArrowRight'].includes(event.key)) return;
+      if(document.querySelector('#lightbox.open')) return;
+      event.preventDefault();
+      select(active+(event.key==='ArrowRight'?1:-1));
+    });
+    gallery.addEventListener('touchstart',event=>{
+      touchX=view==='carousel'&&event.touches.length===1?event.touches[0].clientX:null;
+    },{passive:true});
+    gallery.addEventListener('touchend',event=>{
+      if(touchX===null||view!=='carousel') return;
+      const change=event.changedTouches[0].clientX-touchX;
+      touchX=null;
+      if(Math.abs(change)>48) select(active+(change<0?1:-1));
+    },{passive:true});
+    render();
+  }
+
   const hydrateCiPreview=async()=> {
     try{
       const response=await fetch('./assets/runtime/preview-metadata.json',{cache:'no-store'});
