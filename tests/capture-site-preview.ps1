@@ -31,6 +31,31 @@ public static class FedoraWinCaptureNative {
     [DllImport("user32.dll")]
     public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr FindWindowW(string className, string title);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hwnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int capacity);
+
+    public static bool AnyVisibleExplorerTaskbar() {
+        bool visible = false;
+        EnumWindows((hwnd, _) => {
+            if (!IsWindowVisible(hwnd)) return true;
+            var name = new StringBuilder(128);
+            GetClassNameW(hwnd, name, name.Capacity);
+            if (name.ToString() == "Shell_TrayWnd" ||
+                name.ToString() == "Shell_SecondaryTrayWnd") {
+                visible = true;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return visible;
+    }
+
     public static IntPtr FindVisibleWindow(int processId, string exactTitle) {
         IntPtr found = IntPtr.Zero;
         EnumWindows((hwnd, _) => {
@@ -245,6 +270,9 @@ function Invoke-Capture {
         $expectedTitle = if ($WindowLabel -eq 'panel') { "FedoraWin — $WindowLabel" } else { "FedoraWin — $WindowLabel — ready" }
         $hwnd = Wait-Window -ProcessId $process.Id -Title $expectedTitle -TimeoutSeconds 35
         Start-Sleep -Milliseconds $SettleMilliseconds
+        if ([FedoraWinCaptureNative]::AnyVisibleExplorerTaskbar()) {
+            throw "FedoraWin DE '$Key' capture still has a visible Explorer taskbar."
+        }
         $fileName = "$Key.png"
         $capturePath = Save-WindowCapture -Hwnd $hwnd -FileName $fileName
         Assert-VisualCapture -Path $capturePath -Key $Key
