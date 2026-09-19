@@ -18,6 +18,7 @@ pub mod hotkeys;
 pub mod panel;
 #[cfg(windows)]
 pub mod power;
+pub mod radio_pause;
 #[cfg(windows)]
 pub mod screenshot;
 #[cfg(windows)]
