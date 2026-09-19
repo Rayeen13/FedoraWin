@@ -65,10 +65,7 @@ fn visible_taskbars() -> Vec<isize> {
         windows.push(primary);
     }
     unsafe {
-        EnumWindows(
-            enumerate_taskbars,
-            &mut windows as *mut Vec<isize> as isize,
-        );
+        EnumWindows(enumerate_taskbars, &mut windows as *mut Vec<isize> as isize);
     }
     windows
 }
