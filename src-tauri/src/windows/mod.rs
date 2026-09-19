@@ -1,7 +1,7 @@
 #[cfg(windows)]
-pub mod appbar;
-#[cfg(windows)]
 pub mod app_icons;
+#[cfg(windows)]
+pub mod appbar;
 #[cfg(windows)]
 pub mod apps;
 #[cfg(windows)]
