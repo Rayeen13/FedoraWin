@@ -428,3 +428,19 @@ body,
     ),
     color-mix(in srgb, var(--adw-overview-bg) 92%, transparent);
 }
+
+/* Real Windows Shell icons: only fall back to initials when Shell has none. */
+.app-icon:has(img), .dash-icon:has(img) {
+  background: transparent;
+  box-shadow: none;
+}
+.app-icon img, .dash-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  image-rendering: auto;
+  user-select: none;
+  pointer-events: none;
+}
+.app-icon img { filter: drop-shadow(0 4px 8px rgba(0,0,0,.17)); }
