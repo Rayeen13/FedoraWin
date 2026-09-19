@@ -462,7 +462,7 @@ function renderQuickSettings(appearanceOpen = false) {
         ${quickTile('power-mode',ICONS.power,'Power Mode','Balanced',false,true)}
         ${quickTile('dark-style',ICONS.brightness,'Dark Style',shell.appearance.theme === 'dark' ? 'On' : 'Off',shell.appearance.theme === 'dark')}
         ${quickTile('night-light',ICONS.brightness,'Night Light','Off',false)}
-        ${quickTile('airplane',ICONS.wifi,'Airplane Mode','Off',false)}
+        ${quickTile('radio-pause',ICONS.wifi,'Wireless Pause','Wi-Fi + Bluetooth',false,true)}
       </div>
       <button class="background-apps"><span>Background Apps</span><span>0</span></button>`}
   </div></section>`;
