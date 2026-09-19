@@ -25,6 +25,7 @@ const ICONS = {
 
 let shell = { appearance: { theme: 'dark', accent: 'blue' }, activitiesOpen: false };
 let apps = [];
+let appsLoaded = false;
 let windows = [];
 let activitiesMode = 'windows';
 let calendarCursor = new Date();
@@ -228,10 +229,11 @@ function renderPanel() {
 async function loadActivitiesData() {
   if (mockMode) return;
   const [appList, windowList] = await Promise.all([
-    withTimeout(call('list_apps'), 7000, []),
+    withTimeout(call('list_apps'), 16000, null),
     withTimeout(call('list_windows'), 3000, [])
   ]);
-  if (Array.isArray(appList)) apps = appList;
+  appsLoaded = Array.isArray(appList);
+  if (appsLoaded) apps = appList;
   if (Array.isArray(windowList)) windows = windowList;
 }
 
@@ -386,7 +388,7 @@ function refreshActivitiesContent(query = '') {
   const q = query.trim().toLowerCase();
   if (q) {
     const filtered = searchApps(q);
-    content.innerHTML = `<div class="search-results"><div class="results-label">Applications</div>${renderAppGrid(filtered)}</div>`;
+    content.innerHTML = `<div class="search-results"><div class="results-label">Applications</div>${filtered.length ? renderAppGrid(filtered) : `<div class="search-empty" role="status"><span class="search-empty__symbol" aria-hidden="true">⌕</span><strong>${appsLoaded ? 'No matching applications' : 'Application discovery unavailable'}</strong><small>${appsLoaded ? `No installed app matches “${escapeHtml(query)}”.` : 'Windows has not returned the installed apps yet.'}</small></div>`}</div>`;
   } else {
     content.innerHTML = activitiesMode === 'apps' ? renderAppDrawer() : renderWindowOverview();
   }
@@ -439,7 +441,12 @@ async function renderActivities() {
     }
   }
   if (captureMode === 'apps') activitiesMode = 'apps';
-  if (captureMode === 'search-terminal') search.value = 'terminal';
+  if (captureMode === 'search-terminal') {
+    // Capture real installed search results, not a mock Terminal card. The
+    // Windows CI image may not have Windows Terminal or Command Prompt.
+    const target = searchApps('terminal')[0] || findFavorite('files') || apps[0];
+    search.value = target ? target.name : 'terminal';
+  }
   refreshActivitiesContent(search.value);
   if (captureEvidence) await withTimeout(hydrateRenderedAppIcons(), 3500, null);
   search.focus();
