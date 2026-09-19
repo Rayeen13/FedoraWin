@@ -375,3 +375,35 @@
     height: 58px;
   }
 }
+
+/* Wireless pause uses the shared GNOME control flyout; do not imply system Airplane Mode. */
+.control-flyout--radios .control-flyout__note {
+  display: block;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: .74;
+}
+
+.control-flyout--radios .control-flyout__error,
+.control-flyout--radios [data-radio-error] {
+  color: #ff8d83;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.control-flyout--radios [hidden] {
+  display: none;
+}
+
+.control-flyout--radios [data-radio-action] {
+  margin-top: 4px;
+  justify-content: center;
+  display: flex;
+  font-weight: 600;
+}
+
+#radio-pause[data-radio-pause="partial"] {
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
