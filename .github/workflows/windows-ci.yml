@@ -37,6 +37,8 @@ jobs:
         run: node --check ui/wifi.js
       - name: Bluetooth syntax check
         run: node --check ui/bluetooth.js
+      - name: Wireless pause syntax check
+        run: node --check ui/radio-pause.js
       - name: Power mode syntax check
         run: node --check ui/power-mode.js
       - name: OSD syntax check
