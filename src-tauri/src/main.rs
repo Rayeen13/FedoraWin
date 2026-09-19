@@ -371,6 +371,10 @@ fn start_display_topology_watcher(app: tauri::AppHandle) {
 }
 
 fn main() {
+    #[cfg(windows)]
+    if windows::desktop_presentation::maybe_run_guardian() {
+        return;
+    }
     let state = Arc::new(ShellState::default());
     let capture_view = std::env::var("FEDORAWIN_CAPTURE_VIEW").ok();
     let capture_mode = std::env::var("FEDORAWIN_CAPTURE_MODE").ok();
@@ -432,6 +436,11 @@ fn main() {
             #[cfg(windows)]
             windows::panel::start(app.handle().clone(), display.clone())
                 .map_err(std::io::Error::other)?;
+            #[cfg(windows)]
+            if let Err(error) = windows::desktop_presentation::start() {
+                // Failure to spawn recovery must never prevent access to Explorer.
+                eprintln!("FedoraWin DE kept the Windows taskbar: {error}");
+            }
             #[cfg(not(windows))]
             build_window(app.handle(), "panel", "panel", l.panel, true, capture)
                 .map_err(std::io::Error::other)?;
