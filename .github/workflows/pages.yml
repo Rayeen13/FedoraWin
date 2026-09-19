@@ -88,6 +88,9 @@ jobs:
           name: pages-windows-preview
           path: docs/assets/runtime
 
+      - name: Validate Gallery JavaScript
+        run: node --check docs/app.js
+
       - name: Validate static docs
         run: python .github/scripts/check-docs.py
 
