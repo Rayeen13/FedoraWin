@@ -10,10 +10,9 @@ pub mod audio;
 pub mod bluetooth;
 #[cfg(windows)]
 pub mod brightness;
+pub mod desktop_presentation;
 #[cfg(windows)]
 pub mod display;
-#[cfg(windows)]
-pub mod desktop_presentation;
 #[cfg(windows)]
 pub mod frame;
 #[cfg(windows)]
