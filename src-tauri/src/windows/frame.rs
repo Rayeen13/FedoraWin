@@ -1,4 +1,4 @@
-use crate::shell::{Accent, AppearanceState, ThemeMode};
+use crate::shell::{AppearanceState, ThemeMode};
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::sync::Arc;
@@ -36,9 +36,9 @@ extern "system" {
 
 #[derive(Clone, Copy)]
 struct FramePalette {
-    dark: i32,
-    caption: u32,
-    text: u32,
+    dark: Option<i32>,
+    caption: Option<u32>,
+    text: Option<u32>,
 }
 
 fn colorref(r: u8, g: u8, b: u8) -> u32 {
@@ -46,10 +46,26 @@ fn colorref(r: u8, g: u8, b: u8) -> u32 {
 }
 
 fn palette(appearance: &AppearanceState) -> FramePalette {
-    let dark = !matches!(appearance.theme, ThemeMode::Light);
-    let caption = if dark { colorref(48, 48, 48) } else { colorref(246, 245, 244) };
-    let text = if dark { colorref(255, 255, 255) } else { colorref(32, 32, 32) };
-    FramePalette { dark: if dark { 1 } else { 0 }, caption, text }
+    match appearance.theme {
+        ThemeMode::Dark => FramePalette {
+            dark: Some(1),
+            caption: Some(colorref(46, 46, 50)),
+            text: Some(colorref(255, 255, 255)),
+        },
+        ThemeMode::Light => FramePalette {
+            dark: Some(0),
+            caption: Some(colorref(255, 255, 255)),
+            text: Some(colorref(32, 32, 34)),
+        },
+        // System means Windows remains authoritative for light/dark. FedoraWin still
+        // applies the GNOME-like corner/border treatment, but must not silently turn
+        // every real application frame dark when the OS is using its light theme.
+        ThemeMode::System => FramePalette {
+            dark: None,
+            caption: None,
+            text: None,
+        },
+    }
 }
 
 unsafe fn set_attr<T>(hwnd: isize, attribute: u32, value: &T) {
@@ -61,8 +77,17 @@ unsafe fn set_attr<T>(hwnd: isize, attribute: u32, value: &T) {
     );
 }
 
+unsafe fn set_optional_color(hwnd: isize, attribute: u32, value: Option<u32>) {
+    let value = value.unwrap_or(0xFFFF_FFFFu32);
+    set_attr(hwnd, attribute, &value);
+}
+
 unsafe fn eligible(hwnd: isize) -> bool {
-    if hwnd == 0 || IsWindowVisible(hwnd) == 0 || IsIconic(hwnd) != 0 || GetWindow(hwnd, GW_OWNER) != 0 {
+    if hwnd == 0
+        || IsWindowVisible(hwnd) == 0
+        || IsIconic(hwnd) != 0
+        || GetWindow(hwnd, GW_OWNER) != 0
+    {
         return false;
     }
     let exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
@@ -80,7 +105,9 @@ unsafe fn eligible(hwnd: isize) -> bool {
         DWMWA_CLOAKED,
         &mut cloaked as *mut i32 as *mut c_void,
         size_of::<i32>() as u32,
-    ) == 0 && cloaked != 0 {
+    ) == 0
+        && cloaked != 0
+    {
         return false;
     }
     true
@@ -96,12 +123,15 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
     unsafe {
         if eligible(hwnd) {
             let corner = DWMWCP_ROUND;
-            set_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &ctx.palette.dark);
+            if let Some(dark) = ctx.palette.dark {
+                set_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark);
+            }
             set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner);
-            set_attr(hwnd, DWMWA_CAPTION_COLOR, &ctx.palette.caption);
-            set_attr(hwnd, DWMWA_TEXT_COLOR, &ctx.palette.text);
-            // libadwaita does not paint an accent outline around every application window.
-            // Keep the real Windows non-client frame, but suppress its colored border.
+            set_optional_color(hwnd, DWMWA_CAPTION_COLOR, ctx.palette.caption);
+            set_optional_color(hwnd, DWMWA_TEXT_COLOR, ctx.palette.text);
+            // Windows owns the real caption buttons and non-client hit testing.
+            // libadwaita does not paint an accent outline around every application window,
+            // so keep that real frame while suppressing only its colored border.
             set_attr(hwnd, DWMWA_BORDER_COLOR, &DWMWA_COLOR_NONE);
             ctx.count += 1;
         }
@@ -110,7 +140,10 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
 }
 
 pub fn apply_to_top_level_windows(appearance: &AppearanceState) -> Result<usize, String> {
-    let mut ctx = EnumContext { palette: palette(appearance), count: 0 };
+    let mut ctx = EnumContext {
+        palette: palette(appearance),
+        count: 0,
+    };
     let ok = unsafe { EnumWindows(apply_callback, &mut ctx as *mut EnumContext as isize) };
     if ok == 0 {
         return Err("EnumWindows failed".into());
@@ -135,7 +168,9 @@ pub fn reset_top_level_windows() {
         }
         1
     }
-    unsafe { EnumWindows(reset_callback, 0); }
+    unsafe {
+        EnumWindows(reset_callback, 0);
+    }
     let _ = ResetContext;
     let _ = DWMWA_COLOR_NONE;
 }
@@ -146,4 +181,35 @@ pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) {
         let _ = apply_to_top_level_windows(&appearance);
         thread::sleep(Duration::from_millis(750));
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::palette;
+    use crate::shell::{AppearanceState, ThemeMode};
+
+    fn appearance(theme: ThemeMode) -> AppearanceState {
+        AppearanceState {
+            theme,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn system_theme_does_not_force_non_client_colors() {
+        let palette = palette(&appearance(ThemeMode::System));
+        assert_eq!(palette.dark, None);
+        assert_eq!(palette.caption, None);
+        assert_eq!(palette.text, None);
+    }
+
+    #[test]
+    fn explicit_themes_still_drive_native_frames() {
+        let dark = palette(&appearance(ThemeMode::Dark));
+        let light = palette(&appearance(ThemeMode::Light));
+        assert_eq!(dark.dark, Some(1));
+        assert_eq!(light.dark, Some(0));
+        assert!(dark.caption.is_some());
+        assert!(light.caption.is_some());
+    }
 }

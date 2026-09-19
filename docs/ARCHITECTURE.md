@@ -8,7 +8,7 @@ The architecture intentionally mirrors the *shape* of successful Windows desktop
 
 ## Shell surfaces
 
-- **panel** — 32 logical-pixel top bar, registered as a Windows AppBar so maximized/snapped windows stop below it.
+- **panel** — 32 logical-pixel native Win32/GDI top bar, registered as a Windows AppBar so maximized/snapped windows stop below it. It follows GNOME's workspace-indicator / centered-clock / system-status structure without keeping WebView2 resident.
 - **activities** — full work-area overview, hidden until toggled.
 - **date-menu** — calendar, notifications, appointments.
 - **quick-settings** — direct-action system controls.
@@ -29,7 +29,7 @@ Windows continues to own minimize/maximize/close, hit testing, resizing, Snap La
 
 ## Quick Settings
 
-Direct public APIs are preferred. Wi-Fi uses `WlanSetInterface(... wlan_intf_opcode_radio_state ...)`, which Microsoft documents for changing the software radio state from desktop apps. Features without a stable/public direct control path are reported unavailable rather than pretending a Settings deep-link is a toggle.
+Direct public APIs are preferred. Wi-Fi uses `WlanSetInterface(... wlan_intf_opcode_radio_state ...)`. Master volume uses the default Core Audio endpoint through `IAudioEndpointVolume`. Battery/AC/charging state comes from `GetSystemPowerStatus`. Screenshot opens the native Snipping overlay through the documented Win+Shift+S input chord. Bluetooth is planned around `Windows.Devices.Radios` with permission and effective-state checks. Brightness will be capability-detected across internal WMI and supported physical-monitor paths. Features without a stable/public direct control path are reported unavailable rather than pretending a Settings deep-link is a toggle.
 
 ## Safety
 
