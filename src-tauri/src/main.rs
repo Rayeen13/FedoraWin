@@ -193,6 +193,19 @@ fn show_control_osd(
     osd::show(&app, osd_state.inner(), &kind, value, detail.as_deref())
 }
 #[tauri::command]
+fn get_radio_pause_status(
+    manager: tauri::State<'_, windows::radio_pause::RadioPauseManager>,
+) -> Result<windows::radio_pause::RadioPauseStatus, String> {
+    manager.status()
+}
+#[tauri::command]
+fn set_radio_pause(
+    manager: tauri::State<'_, windows::radio_pause::RadioPauseManager>,
+    paused: bool,
+) -> Result<windows::radio_pause::RadioPauseStatus, String> {
+    manager.set_paused(paused)
+}
+#[tauri::command]
 fn get_wifi_status() -> Result<windows::wifi::WifiStatus, String> {
     windows::wifi::status()
 }
@@ -346,6 +359,7 @@ fn main() {
     let app = tauri::Builder::default()
         .manage(state.clone())
         .manage(osd::OsdState::default())
+        .manage(windows::radio_pause::RadioPauseManager::default())
         .manage(windows::thumbnails::ThumbnailManager::default())
         .manage(windows::virtual_desktop::WorkspaceMoveJournal::default())
         .invoke_handler(tauri::generate_handler![
@@ -379,6 +393,8 @@ fn main() {
             show_control_osd,
             get_wifi_status,
             set_wifi_enabled,
+            get_radio_pause_status,
+            set_radio_pause,
             refresh_window_frames,
             mark_capture_ready
         ])
