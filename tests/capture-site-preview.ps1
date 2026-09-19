@@ -215,6 +215,7 @@ Invoke-Capture -Key 'appearance' -View 'quick-settings' -WindowLabel 'quick-sett
 Invoke-Capture -Key 'power_mode' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'power-mode' -Theme 'dark' -SettleMilliseconds 1800
 Invoke-Capture -Key 'wifi' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'wifi' -Theme 'dark' -SettleMilliseconds 1800
 Invoke-Capture -Key 'bluetooth' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'bluetooth' -Theme 'dark' -SettleMilliseconds 1800
+Invoke-Capture -Key 'radio_pause' -View 'quick-settings' -WindowLabel 'quick-settings' -Mode 'radio-pause' -Theme 'dark' -SettleMilliseconds 2200
 Invoke-Capture -Key 'date_menu' -View 'date-menu' -WindowLabel 'date-menu' -Theme 'dark'
 
 function Invoke-NativeFrameCapture {
@@ -275,7 +276,7 @@ foreach ($entry in $captures.GetEnumerator()) {
 }
 $uniqueCaptureCount = ($hashes.Values | Select-Object -Unique).Count
 Write-Host "Unique runtime gallery captures: $uniqueCaptureCount / $($captures.Count)"
-if ($uniqueCaptureCount -lt 11) {
+if ($uniqueCaptureCount -lt 12) {
     throw 'Runtime gallery captures are not sufficiently distinct.'
 }
 if ($hashes.quick_settings_dark -eq $hashes.quick_settings_light) {
@@ -289,6 +290,12 @@ if ($hashes.wifi -eq $hashes.quick_settings_dark) {
 }
 if ($hashes.bluetooth -eq $hashes.quick_settings_dark) {
     throw 'Bluetooth flyout capture did not produce a distinct surface.'
+}
+if ($hashes.radio_pause -eq $hashes.quick_settings_dark) {
+    throw 'Wireless Pause flyout capture did not produce a distinct surface.'
+}
+if ($hashes.radio_pause -eq $hashes.wifi -or $hashes.radio_pause -eq $hashes.bluetooth) {
+    throw 'Wireless Pause capture is indistinguishable from another radio flyout.'
 }
 if ($hashes.wifi -eq $hashes.bluetooth) {
     throw 'Wi-Fi and Bluetooth flyout captures are unexpectedly identical.'
