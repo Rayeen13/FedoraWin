@@ -121,7 +121,7 @@ assert.match(js, /hydrateMasterVolume/);
 assert.match(js, /bindMasterVolume/);
 assert.match(apps, /Get-StartApps/);
 assert.match(apps, /get_start_apps_json/);
-assert.match(apps, /Duration::from_secs\(8\)/);
+assert.match(apps, /Duration::from_secs\(12\)/);
 assert.match(apps, /child\.kill\(\)/);
 assert.match(apps, /try_wait\(\)/);
 assert.match(js, /withTimeout/);
