@@ -444,3 +444,33 @@ body,
   pointer-events: none;
 }
 .app-icon img { filter: drop-shadow(0 4px 8px rgba(0,0,0,.17)); }
+
+/* Native app-search errors must not silently become a blank overview. */
+.search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  justify-self: center;
+  gap: 10px;
+  min-width: min(360px, 82vw);
+  padding: 28px 34px;
+  text-align: center;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--adw-thumbnail-bg) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--adw-window-fg) 10%, transparent);
+  box-shadow: 0 12px 32px rgba(0,0,0,.12);
+}
+.search-empty__symbol {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+  font-size: 42px;
+}
+.search-empty strong { font-size: 17px; }
+.search-empty small { color: var(--adw-dim); max-width: 30ch; }
