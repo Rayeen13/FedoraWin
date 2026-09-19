@@ -1,4 +1,4 @@
-//! FedoraWin DE temporarily hides Explorer's presentation, never Explorer.exe.
+//! FedoraWin DE temporarily hides Explorer's presentation, without terminating the Windows shell process.
 //! A separate copy of this executable restores the original taskbar HWNDs
 //! even when the desktop process is force-killed. No registry or Shell change.
 use std::process::Command;
