@@ -172,6 +172,61 @@ function Assert-VisualCapture {
     }
 }
 
+function Assert-NoOpaqueShellHost {
+    param(
+        [Parameter(Mandatory)][IntPtr]$Hwnd,
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Key
+    )
+
+    # Activities is a full-screen overview, not a floating popover.
+    if ($Key -in @('panel','activities','apps','search_terminal','native_frame')) { return }
+
+    $rect = New-Object FedoraWinCaptureNative+RECT
+    if (-not [FedoraWinCaptureNative]::GetWindowRect($Hwnd, [ref]$rect)) {
+        throw "Could not inspect $Key window transparency."
+    }
+    if ($rect.Left -lt 4) { return }
+
+    $bitmap = [System.Drawing.Bitmap]::FromFile($Path)
+    try {
+        $positions = @(2, ($bitmap.Height - 3))
+        $opaqueCorners = 0
+        foreach ($y in $positions) {
+            $outside = [System.Drawing.Bitmap]::new(1, 1)
+            $graphics = [System.Drawing.Graphics]::FromImage($outside)
+            try {
+                $graphics.CopyFromScreen(
+                    $rect.Left - 2,
+                    $rect.Top + $y,
+                    0, 0,
+                    [System.Drawing.Size]::new(1, 1),
+                    [System.Drawing.CopyPixelOperation]::SourceCopy
+                )
+                $actual = $bitmap.GetPixel(1, $y)
+                $desktop = $outside.GetPixel(0, 0)
+                $delta = [Math]::Max(
+                    [Math]::Abs([int]$actual.R - [int]$desktop.R),
+                    [Math]::Max(
+                        [Math]::Abs([int]$actual.G - [int]$desktop.G),
+                        [Math]::Abs([int]$actual.B - [int]$desktop.B)
+                    )
+                )
+                Write-Host "COMPOSITE $Key corner y=$y difference=$delta"
+                if ($delta -gt 55) { $opaqueCorners++ }
+            } finally {
+                $graphics.Dispose()
+                $outside.Dispose()
+            }
+        }
+        if ($opaqueCorners -eq $positions.Count) {
+            throw "Capture '$Key' still shows an opaque rectangular shell host."
+        }
+    } finally {
+        $bitmap.Dispose()
+    }
+}
+
 function Invoke-Capture {
     param(
         [Parameter(Mandatory)][string]$Key,
@@ -193,6 +248,7 @@ function Invoke-Capture {
         $fileName = "$Key.png"
         $capturePath = Save-WindowCapture -Hwnd $hwnd -FileName $fileName
         Assert-VisualCapture -Path $capturePath -Key $Key
+        Assert-NoOpaqueShellHost -Hwnd $hwnd -Path $capturePath -Key $Key
         $captures[$Key] = $fileName
     } finally {
         if ($process -and -not $process.HasExited) {
