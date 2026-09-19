@@ -32,12 +32,6 @@ public static class FedoraWinCaptureNative {
     public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern IntPtr FindWindowW(string className, string title);
-
-    [DllImport("user32.dll")]
-    public static extern bool IsWindowVisible(IntPtr hwnd);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int capacity);
 
     public static bool AnyVisibleExplorerTaskbar() {
