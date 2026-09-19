@@ -14,6 +14,7 @@ const radioPauseUi = fs.readFileSync(new URL('../ui/radio-pause.js', import.meta
 const powerModeUi = fs.readFileSync(new URL('../ui/power-mode.js', import.meta.url), 'utf8');
 const main = fs.readFileSync(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf8');
 const brightness = fs.readFileSync(new URL('../src-tauri/src/windows/brightness.rs', import.meta.url), 'utf8');
+const appIcons = fs.readFileSync(new URL('../src-tauri/src/windows/app_icons.rs', import.meta.url), 'utf8');
 const bluetooth = fs.readFileSync(new URL('../src-tauri/src/windows/bluetooth.rs', import.meta.url), 'utf8');
 const radioPause = fs.readFileSync(new URL('../src-tauri/src/windows/radio_pause.rs', import.meta.url), 'utf8');
 const wifi = fs.readFileSync(new URL('../src-tauri/src/windows/wifi.rs', import.meta.url), 'utf8');
@@ -61,6 +62,25 @@ assert.match(workspaceCss, /\.workspace-preflight/);
 assert.match(workspaceCss, /\.workspace-preflight__frame/);
 assert.match(workspaceCss, /prefers-reduced-motion:\s*reduce/);
 assert.match(workspaceCss, /animation:\s*none\s*!important/);
+
+assert.match(appIcons, /SHParseDisplayName/);
+assert.match(appIcons, /SHGetFileInfoW/);
+assert.match(appIcons, /SHGFI_PIDL/);
+assert.match(appIcons, /DrawIconEx/);
+assert.match(appIcons, /DestroyIcon/);
+assert.match(appIcons, /CoTaskMemFree/);
+assert.match(appIcons, /MAX_CACHE_ENTRIES/);
+assert.match(main, /async fn get_app_icon/);
+assert.match(main, /spawn_blocking/);
+assert.match(main, /list_apps,[\\s\\S]*get_app_icon,/);
+assert.match(appUi, /function nativeAppIconMarkup/);
+assert.match(appUi, /get_app_icon/);
+assert.match(appUi, /ICON_WORKERS = 4/);
+assert.match(appUi, /hydrateRenderedAppIcons/);
+assert.match(appUi, /nativeAppIconMarkup\\(entry/);
+assert.match(css, /\\.app-icon img, \\.dash-icon img/);
+assert.match(cargo, /base64\\s*=\\s*"0\\.22"/);
+assert.match(cargo, /png\\s*=\\s*"0\\.17"/);
 
 assert.match(brightness, /WmiMonitorBrightness/);
 assert.match(brightness, /WmiMonitorBrightnessMethods/);
