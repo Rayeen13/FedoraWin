@@ -75,8 +75,15 @@ extern "system" {
 extern "system" {
     fn DestroyIcon(icon: isize) -> i32;
     fn DrawIconEx(
-        hdc: isize, x: i32, y: i32, icon: isize, width: i32, height: i32,
-        step: u32, brush: isize, flags: u32,
+        hdc: isize,
+        x: i32,
+        y: i32,
+        icon: isize,
+        width: i32,
+        height: i32,
+        step: u32,
+        brush: isize,
+        flags: u32,
     ) -> i32;
 }
 
@@ -85,8 +92,12 @@ extern "system" {
     fn CreateCompatibleDC(hdc: isize) -> isize;
     fn DeleteDC(hdc: isize) -> i32;
     fn CreateDIBSection(
-        hdc: isize, info: *const BitmapInfo, usage: u32,
-        bits: *mut *mut c_void, section: isize, offset: u32,
+        hdc: isize,
+        info: *const BitmapInfo,
+        usage: u32,
+        bits: *mut *mut c_void,
+        section: isize,
+        offset: u32,
     ) -> isize;
     fn SelectObject(hdc: isize, object: isize) -> isize;
     fn DeleteObject(object: isize) -> i32;
@@ -100,7 +111,9 @@ fn cache() -> &'static Mutex<HashMap<String, Option<String>>> {
 fn valid_app_id(app_id: &str) -> bool {
     !app_id.is_empty()
         && app_id.len() <= 320
-        && !app_id.chars().any(|value| matches!(value, '\0' | '\r' | '\n'))
+        && !app_id
+            .chars()
+            .any(|value| matches!(value, '\0' | '\r' | '\n'))
 }
 
 pub fn icon_data_uri(app_id: &str) -> Option<String> {
@@ -137,9 +150,7 @@ unsafe fn extract_in_apartment(app_id: &str) -> Option<String> {
         .chain(std::iter::once(0))
         .collect();
     let mut pidl = null_mut();
-    if SHParseDisplayName(path.as_ptr(), null(), &mut pidl, 0, null_mut()) < 0
-        || pidl.is_null()
-    {
+    if SHParseDisplayName(path.as_ptr(), null(), &mut pidl, 0, null_mut()) < 0 || pidl.is_null() {
         return None;
     }
     let mut info: ShellFileInfo = zeroed();
@@ -205,7 +216,8 @@ unsafe fn draw_icon(icon: isize) -> Option<Vec<u8>> {
         } else {
             let mut output = Vec::new();
             let result = (|| {
-                let mut encoder = png::Encoder::new(&mut output, ICON_SIZE as u32, ICON_SIZE as u32);
+                let mut encoder =
+                    png::Encoder::new(&mut output, ICON_SIZE as u32, ICON_SIZE as u32);
                 encoder.set_color(png::ColorType::Rgba);
                 encoder.set_depth(png::BitDepth::Eight);
                 let mut writer = encoder.write_header().ok()?;
