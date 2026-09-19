@@ -156,6 +156,7 @@
     }
   }
 
+  window.addEventListener('fedorawin:radios-changed', hydrate);
   const observer = new MutationObserver(bind);
   observer.observe(document.documentElement, { childList: true, subtree: true });
   bind();
