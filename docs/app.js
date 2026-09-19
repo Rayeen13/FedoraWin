@@ -115,17 +115,20 @@
       });
       cards.forEach((card,index)=>{
         card.hidden=carousel&&index!==active;
-        if(carousel) card.classList.add('visible');
+        // Hidden cards were not eligible for IntersectionObserver. Reveal them
+        // when switching back so the gallery never appears empty.
+        if(carousel||view!=='carousel') card.classList.add('visible');
         card.setAttribute('aria-label',(index+1)+' of '+cards.length+': '+(card.querySelector('span b')?.textContent||'Screenshot'));
       });
       if(position){
         position.textContent=(active+1)+' / '+cards.length+' · '+(cards[active]?.querySelector('span b')?.textContent||'');
       }
     };
-    const select=index=>{
+    const select=(index,focusCard=false)=>{
       if(!cards.length) return;
       active=(index+cards.length)%cards.length;
       render();
+      if(focusCard) cards[active].focus({preventScroll:true});
     };
     toggles.forEach(button=>button.addEventListener('click',()=>{
       const choice=button.dataset.galleryView;
@@ -140,7 +143,7 @@
       if(view!=='carousel'||!['ArrowLeft','ArrowRight'].includes(event.key)) return;
       if(document.querySelector('#lightbox.open')) return;
       event.preventDefault();
-      select(active+(event.key==='ArrowRight'?1:-1));
+      select(active+(event.key==='ArrowRight'?1:-1),true);
     });
     gallery.addEventListener('touchstart',event=>{
       touchX=view==='carousel'&&event.touches.length===1?event.touches[0].clientX:null;
