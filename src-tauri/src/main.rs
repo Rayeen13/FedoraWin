@@ -40,6 +40,24 @@ fn toggle_surface(app: tauri::AppHandle, label: String) -> Result<(), String> {
     shell::toggle_surface(&app, &label)
 }
 #[tauri::command]
+async fn get_app_icon(app_id: String) -> Option<String> {
+    // Shell image handlers may be slow; never block the Tauri UI thread.
+    tauri::async_runtime::spawn_blocking(move || {
+        #[cfg(windows)]
+        {
+            windows::app_icons::icon_data_uri(&app_id)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = app_id;
+            None
+        }
+    })
+    .await
+    .ok()
+    .flatten()
+}
+#[tauri::command]
 fn list_apps() -> Result<Vec<windows::apps::AppEntry>, String> {
     windows::apps::list()
 }
@@ -374,6 +392,7 @@ fn main() {
             toggle_surface,
             get_memory_snapshot,
             list_apps,
+            get_app_icon,
             list_displays,
             launch_app,
             list_windows,
