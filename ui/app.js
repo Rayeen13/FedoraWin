@@ -34,6 +34,79 @@ let volumeCommitTimer = null;
 let volumeRevision = 0;
 const quickState = { volume: 68, brightness: 70, power: null };
 const APPS_PER_PAGE = 24;
+const appIconCache = new Map();
+const appIconQueued = new Set();
+const appIconQueue = [];
+let appIconActive = 0;
+const ICON_WORKERS = 4;
+
+function nativeAppIconMarkup(entry, fallback = appInitials(entry.name)) {
+  const src = appIconCache.get(entry.appId);
+  return src
+    ? `<img src="${src}" alt="" draggable="false" loading="eager">`
+    : escapeHtml(fallback);
+}
+
+function showResolvedAppIcon(appId, uri) {
+  document.querySelectorAll('[data-app-id]').forEach(tile => {
+    if (tile.dataset.appId !== appId) return;
+    const target = tile.querySelector('.app-icon, .dash-icon');
+    if (!target) return;
+    if (uri) {
+      const img = document.createElement('img');
+      img.src = uri;
+      img.alt = '';
+      img.draggable = false;
+      target.replaceChildren(img);
+    }
+  });
+}
+
+function runIconQueue() {
+  while (invoke && appIconActive < ICON_WORKERS && appIconQueue.length) {
+    const appId = appIconQueue.shift();
+    appIconActive += 1;
+    (async () => {
+      const result = await call('get_app_icon', { appId });
+      const icon = typeof result === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(result)
+        ? result : null;
+      appIconCache.set(appId, icon);
+      if (appIconCache.size > 256) {
+        appIconCache.delete(appIconCache.keys().next().value);
+      }
+      showResolvedAppIcon(appId, icon);
+      appIconQueued.delete(appId);
+    })().finally(() => {
+      appIconActive -= 1;
+      runIconQueue();
+    });
+  }
+}
+
+function hydrateRenderedAppIcons() {
+  const ids = [...new Set(
+    [...document.querySelectorAll('[data-app-id]')]
+      .map(tile => tile.dataset.appId)
+      .filter(Boolean)
+  )];
+  for (const appId of ids) {
+    if (appIconCache.has(appId) || appIconQueued.has(appId)) continue;
+    appIconQueued.add(appId);
+    appIconQueue.push(appId);
+  }
+  runIconQueue();
+  return Promise.all(ids.map(id => {
+    if (appIconCache.has(id)) return Promise.resolve();
+    return new Promise(resolve => {
+      // Capture readiness is bounded, even if an app's Shell handler hangs.
+      const poll = () => {
+        if (appIconCache.has(id) || !appIconQueued.has(id)) resolve();
+        else setTimeout(poll, 75);
+      };
+      poll();
+    });
+  }));
+}
 
 function applyAppearance() {
   const { theme, accent } = shell.appearance;
@@ -218,7 +291,7 @@ async function refreshNativeWindows() {
 function renderAppGrid(list = apps) {
   const items = list.map(entry => `
     <button class="app-tile" data-app-id="${escapeHtml(entry.appId)}" title="${escapeHtml(entry.name)}">
-      <span class="app-icon">${escapeHtml(appInitials(entry.name))}</span>
+      <span class="app-icon">${nativeAppIconMarkup(entry)}</span>
       <span class="app-name">${escapeHtml(entry.name)}</span>
     </button>`).join('');
   return `<div class="applications-grid">${items || '<div class="overview-empty">No matching applications</div>'}</div>`;
@@ -245,7 +318,7 @@ function renderDash() {
       ? `data-app-id="${escapeHtml(entry.appId)}"`
       : `data-search="${escapeHtml(query)}"`;
     const running = entry && appLooksRunning(entry) ? ' is-running' : '';
-    return `<button class="dash-button dash-favorite${running}" ${target} title="${escapeHtml(entry?.name || label)}"><span class="dash-icon">${escapeHtml(entry ? appInitials(entry.name) : fallback)}</span></button>`;
+    return `<button class="dash-button dash-favorite${running}" ${target} title="${escapeHtml(entry?.name || label)}"><span class="dash-icon">${entry ? nativeAppIconMarkup(entry, fallback) : escapeHtml(fallback)}</span></button>`;
   }).join('');
   return `${favorites}<span class="dash-separator"></span><button id="show-apps" class="dash-button" title="Show Applications">${iconGrid()}</button>`;
 }
@@ -255,6 +328,7 @@ function refreshDash() {
   if (!dash) return;
   dash.innerHTML = renderDash();
   bindDash();
+  hydrateRenderedAppIcons();
 }
 
 function bindDash() {
@@ -318,6 +392,7 @@ function refreshActivitiesContent(query = '') {
   }
   document.querySelector('#show-apps')?.classList.toggle('is-active', activitiesMode === 'apps' && !q);
   bindActivitiesContent();
+  hydrateRenderedAppIcons();
   requestAnimationFrame(() => requestAnimationFrame(syncLiveThumbnails));
 }
 
@@ -366,6 +441,7 @@ async function renderActivities() {
   if (captureMode === 'apps') activitiesMode = 'apps';
   if (captureMode === 'search-terminal') search.value = 'terminal';
   refreshActivitiesContent(search.value);
+  if (captureEvidence) await withTimeout(hydrateRenderedAppIcons(), 3500, null);
   search.focus();
 }
 
