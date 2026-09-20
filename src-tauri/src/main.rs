@@ -372,6 +372,10 @@ fn start_display_topology_watcher(app: tauri::AppHandle) {
 
 fn main() {
     #[cfg(windows)]
+    if windows::frame_recovery::maybe_run_guardian() {
+        return;
+    }
+    #[cfg(windows)]
     if windows::desktop_presentation::maybe_run_guardian() {
         return;
     }
@@ -479,7 +483,10 @@ fn main() {
             }
             #[cfg(windows)]
             {
-                windows::frame::start_frame_watcher(state.clone());
+                if let Err(error) = windows::frame::start_frame_watcher(state.clone()) {
+                    // With no independent recovery helper, never style foreign HWNDs.
+                    eprintln!("Native frame styling disabled: {error}");
+                }
                 let _ = windows::hotkeys::start_activities_hotkey(app.handle().clone());
                 let _ = windows::window_events::start(app.handle().clone());
                 start_display_topology_watcher(app.handle().clone());
