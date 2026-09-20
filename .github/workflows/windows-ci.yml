@@ -45,6 +45,8 @@ jobs:
         run: node --check ui/osd.js
       - name: UI contract tests
         run: node --test tests/ui_contract.test.mjs tests/gnome51_contract.test.mjs tests/osd_contract.test.mjs
+      - name: Native frame lifecycle contract tests
+        run: node --test tests/frame_contract.test.mjs
       - name: Rust unit tests
         working-directory: src-tauri
         run: cargo test
