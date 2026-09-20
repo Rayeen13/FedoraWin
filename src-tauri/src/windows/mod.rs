@@ -16,6 +16,8 @@ pub mod display;
 #[cfg(windows)]
 pub mod frame;
 #[cfg(windows)]
+pub mod frame_recovery;
+#[cfg(windows)]
 pub mod hotkeys;
 #[cfg(windows)]
 pub mod panel;
