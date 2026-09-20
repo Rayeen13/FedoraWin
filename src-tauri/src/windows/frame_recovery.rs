@@ -85,15 +85,16 @@ pub fn process_creation_time(pid: u32) -> Option<u64> {
     let mut exited = FileTime::default();
     let mut kernel = FileTime::default();
     let mut user = FileTime::default();
-    let ok = unsafe {
-        GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user)
-    };
+    let ok = unsafe { GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user) };
     unsafe { CloseHandle(process) };
     (ok != 0).then_some(((created.high as u64) << 32) | created.low as u64)
 }
 
 fn wide(path: &Path) -> Vec<u16> {
-    path.as_os_str().encode_wide().chain(std::iter::once(0)).collect()
+    path.as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }
 
 /// Commit a complete journal BEFORE the first DWM write to any newly observed HWND.
@@ -114,7 +115,10 @@ pub fn persist(snapshots: &[Snapshot]) -> Result<(), String> {
         )
     };
     if moved == 0 {
-        return Err(format!("atomic frame journal replace failed: {}", std::io::Error::last_os_error()));
+        return Err(format!(
+            "atomic frame journal replace failed: {}",
+            std::io::Error::last_os_error()
+        ));
     }
     Ok(())
 }
@@ -154,7 +158,12 @@ pub fn start_guardian() -> Result<(), String> {
 
 unsafe fn read_attr<T: Copy + Default>(hwnd: isize, attr: u32) -> Option<T> {
     let mut value = T::default();
-    (DwmGetWindowAttribute(hwnd, attr, (&mut value as *mut T).cast(), size_of::<T>() as u32) == 0)
+    (DwmGetWindowAttribute(
+        hwnd,
+        attr,
+        (&mut value as *mut T).cast(),
+        size_of::<T>() as u32,
+    ) == 0)
         .then_some(value)
 }
 
@@ -187,15 +196,25 @@ fn restore_snapshot(snapshot: Snapshot) {
     }
     let mut current_pid = 0u32;
     unsafe { GetWindowThreadProcessId(snapshot.hwnd, &mut current_pid) };
-    if current_pid != snapshot.pid
-        || process_creation_time(current_pid) != Some(snapshot.created)
-    {
+    if current_pid != snapshot.pid || process_creation_time(current_pid) != Some(snapshot.created) {
         return;
     }
     unsafe {
-        restore_if(snapshot.hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, snapshot.dark, |v| v == 0 || v == 1);
-        restore_if(snapshot.hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, snapshot.corner, |v| v == DWMWCP_ROUND);
-        restore_if(snapshot.hwnd, DWMWA_BORDER_COLOR, snapshot.border, |v| v == DWMWA_COLOR_NONE);
+        restore_if(
+            snapshot.hwnd,
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            snapshot.dark,
+            |v| v == 0 || v == 1,
+        );
+        restore_if(
+            snapshot.hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            snapshot.corner,
+            |v| v == DWMWCP_ROUND,
+        );
+        restore_if(snapshot.hwnd, DWMWA_BORDER_COLOR, snapshot.border, |v| {
+            v == DWMWA_COLOR_NONE
+        });
         restore_if(snapshot.hwnd, DWMWA_CAPTION_COLOR, snapshot.caption, |v| {
             v == colorref(46, 46, 50) || v == colorref(255, 255, 255)
         });
@@ -211,7 +230,9 @@ pub fn maybe_run_guardian() -> bool {
     if args.next().as_deref() != Some(std::ffi::OsStr::new("--restore-frames-after")) {
         return false;
     }
-    let pid = args.next().and_then(|s| s.to_string_lossy().parse::<u32>().ok());
+    let pid = args
+        .next()
+        .and_then(|s| s.to_string_lossy().parse::<u32>().ok());
     let path = args.next().map(PathBuf::from);
     if let (Some(pid), Some(path)) = (pid, path) {
         let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
