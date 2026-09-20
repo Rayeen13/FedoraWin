@@ -2,6 +2,7 @@
   "project": "FedoraWin",
   "release": "0.4.0-dev",
   "target": "GNOME 51",
-  "updated": "2026-09-18",
-  "runtime_gallery": "Windows CI captures from the current FedoraWin.exe"
+  "updated": "2026-09-20",
+  "runtime_gallery": "Windows CI captures from the current FedoraWin.exe",
+  "frame_recovery": "Write-ahead independent guardian implemented; force-kill Windows CI verification pending"
 }
