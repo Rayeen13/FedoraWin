@@ -210,10 +210,10 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
             if original.corner.is_some() {
                 set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_ROUND);
             }
-            if original.caption.is_some() {
+            if original.caption.is_some() && ctx.palette.caption.is_some() {
                 set_optional_color(hwnd, DWMWA_CAPTION_COLOR, ctx.palette.caption);
             }
-            if original.text.is_some() {
+            if original.text.is_some() && ctx.palette.text.is_some() {
                 set_optional_color(hwnd, DWMWA_TEXT_COLOR, ctx.palette.text);
             }
             if original.border.is_some() {
