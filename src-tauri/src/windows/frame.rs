@@ -1,4 +1,5 @@
 use crate::shell::{AppearanceState, ThemeMode};
+use crate::windows::frame_recovery::{self, Snapshot};
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::mem::size_of;
@@ -53,6 +54,7 @@ struct FramePalette {
 #[derive(Clone, Copy)]
 struct OriginalFrame {
     pid: u32,
+    created: u64,
     dark: Option<i32>,
     corner: Option<i32>,
     border: Option<u32>,
@@ -66,11 +68,28 @@ struct OriginalFrame {
     changed_text: bool,
 }
 
-static FRAME_WATCHER_ENABLED: AtomicBool = AtomicBool::new(true);
+static FRAME_WATCHER_ENABLED: AtomicBool = AtomicBool::new(false);
 static ORIGINAL_FRAMES: OnceLock<Mutex<HashMap<isize, OriginalFrame>>> = OnceLock::new();
 
 fn originals() -> &'static Mutex<HashMap<isize, OriginalFrame>> {
     ORIGINAL_FRAMES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn persist_originals(journal: &HashMap<isize, OriginalFrame>) -> Result<(), String> {
+    let frames: Vec<Snapshot> = journal
+        .iter()
+        .map(|(&hwnd, original)| Snapshot {
+            hwnd,
+            pid: original.pid,
+            created: original.created,
+            dark: original.dark,
+            corner: original.corner,
+            border: original.border,
+            caption: original.caption,
+            text: original.text,
+        })
+        .collect();
+    frame_recovery::persist(&frames)
 }
 
 unsafe fn read_attr<T: Copy + Default>(hwnd: isize, attribute: u32) -> Option<T> {
@@ -84,9 +103,10 @@ unsafe fn read_attr<T: Copy + Default>(hwnd: isize, attribute: u32) -> Option<T>
         .then_some(value)
 }
 
-unsafe fn snapshot_frame(hwnd: isize, pid: u32) -> OriginalFrame {
+unsafe fn snapshot_frame(hwnd: isize, pid: u32, created: u64) -> OriginalFrame {
     OriginalFrame {
         pid,
+        created,
         dark: read_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE),
         corner: read_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE),
         border: read_attr(hwnd, DWMWA_BORDER_COLOR),
@@ -122,7 +142,10 @@ unsafe fn restore_colors(hwnd: isize, original: &mut OriginalFrame) {
 }
 
 unsafe fn restore_frame(hwnd: isize, mut original: OriginalFrame) {
-    if IsWindow(hwnd) == 0 || window_pid(hwnd) != original.pid {
+    if IsWindow(hwnd) == 0
+        || window_pid(hwnd) != original.pid
+        || frame_recovery::process_creation_time(original.pid) != Some(original.created)
+    {
         return;
     }
     restore_colors(hwnd, &mut original);
@@ -241,15 +264,25 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
             // Restore our changes instead of continuing to own that HWND.
             if let Some(original) = journal.remove(&hwnd) {
                 restore_frame(hwnd, original);
+                let _ = persist_originals(&journal);
             }
             return 1;
         }
 
+        let Some(created) = frame_recovery::process_creation_time(pid) else {
+            return 1;
+        };
         if journal
             .get(&hwnd)
-            .is_none_or(|original| original.pid != pid)
+            .is_none_or(|original| original.pid != pid || original.created != created)
         {
-            journal.insert(hwnd, snapshot_frame(hwnd, pid));
+            journal.insert(hwnd, snapshot_frame(hwnd, pid, created));
+            // Never apply an unjournaled attribute: the guardian must have the
+            // original HWND values on disk before our first DWM mutation.
+            if persist_originals(&journal).is_err() {
+                journal.remove(&hwnd);
+                return 1;
+            }
         }
         let original = journal.get_mut(&hwnd).expect("frame journal entry");
         // Never replace Win32 caption buttons/hit-testing or fake a titlebar.
@@ -308,9 +341,12 @@ pub fn reset_top_level_windows() {
     for (hwnd, original) in journal.drain() {
         unsafe { restore_frame(hwnd, original) };
     }
+    frame_recovery::remove_journal();
 }
 
-pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) {
+pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) -> Result<(), String> {
+    frame_recovery::start_guardian()?;
+    FRAME_WATCHER_ENABLED.store(true, Ordering::SeqCst);
     thread::spawn(move || loop {
         if !FRAME_WATCHER_ENABLED.load(Ordering::SeqCst) {
             break;
@@ -319,6 +355,7 @@ pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) {
         let _ = apply_to_top_level_windows(&appearance);
         thread::sleep(Duration::from_millis(750));
     });
+    Ok(())
 }
 
 #[cfg(test)]
