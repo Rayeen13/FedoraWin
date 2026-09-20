@@ -212,8 +212,7 @@ unsafe fn eligible(hwnd: isize) -> bool {
         return false;
     }
     let exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-    if exstyle
-        & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP)
+    if exstyle & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP)
         != 0
     {
         return false;
