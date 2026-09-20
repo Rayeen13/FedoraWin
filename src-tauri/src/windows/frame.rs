@@ -198,8 +198,13 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
     unsafe {
         if eligible(hwnd) {
             let pid = window_pid(hwnd);
-            let mut journal = originals().lock().unwrap_or_else(|error| error.into_inner());
-            if journal.get(&hwnd).is_none_or(|original| original.pid != pid) {
+            let mut journal = originals()
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            if journal
+                .get(&hwnd)
+                .is_none_or(|original| original.pid != pid)
+            {
                 journal.insert(hwnd, snapshot_frame(hwnd, pid));
             }
             let original = journal[&hwnd];
@@ -239,7 +244,9 @@ pub fn apply_to_top_level_windows(appearance: &AppearanceState) -> Result<usize,
 }
 
 pub fn reset_top_level_windows() {
-    let mut journal = originals().lock().unwrap_or_else(|error| error.into_inner());
+    let mut journal = originals()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     for (hwnd, original) in journal.drain() {
         unsafe { restore_frame(hwnd, original) };
     }
