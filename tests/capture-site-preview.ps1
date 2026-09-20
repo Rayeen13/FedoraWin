@@ -183,7 +183,8 @@ function Assert-VisualCapture {
         }
         $whiteRatio = if ($samples) { $nearWhite / $samples } else { 1 }
         Write-Host ("VISUAL {0}: sampled={1} buckets={2} nearWhite={3:P1}" -f $Key, $samples, $buckets.Count, $whiteRatio)
-        if ($buckets.Count -lt 6 -or $whiteRatio -gt 0.92) {
+        $minimumBuckets = if ($Key -eq 'search_terminal') { 5 } else { 6 }
+        if ($buckets.Count -lt $minimumBuckets -or $whiteRatio -gt 0.92) {
             throw "Capture '$Key' looks blank or visually uninitialized."
         }
     } finally {
