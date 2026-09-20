@@ -21,15 +21,13 @@ if (-not (Test-Path -LiteralPath $exe)) { throw 'Build the real fedorawin.exe be
 $title = "FedoraWin frame restoration probe $PID"
 $probeCode = @"
 Add-Type -AssemblyName System.Windows.Forms
-\$form = New-Object System.Windows.Forms.Form
-\$form.Text = '$title'
-\$form.Width = 700
-\$form.Height = 440
-\$form.StartPosition = 'CenterScreen'
-[void]\$form.ShowDialog()
+`$form = New-Object System.Windows.Forms.Form
+`$form.Text = '$title'
+`$form.Width = 700
+`$form.Height = 440
+`$form.StartPosition = 'CenterScreen'
+[void]`$form.ShowDialog()
 "@
-# PowerShell backtick, not backslash, escapes interpolated $ in the code above.
-$probeCode = $probeCode.Replace('\$form', '$form')
 $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($probeCode))
 $probe = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-STA','-EncodedCommand', $encoded) -PassThru
 $shell = $null
