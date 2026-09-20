@@ -1,6 +1,6 @@
 use crate::shell::{AppearanceState, ThemeMode};
-use std::ffi::c_void;
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::mem::size_of;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
@@ -203,6 +203,7 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
                 journal.insert(hwnd, snapshot_frame(hwnd, pid));
             }
             let original = journal[&hwnd];
+            // Windows owns the real caption buttons and hit testing; this only styles native captions.
             // Never mutate an attribute we cannot read back for restoration.
             if let (Some(dark), Some(_)) = (ctx.palette.dark, original.dark) {
                 set_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark);
