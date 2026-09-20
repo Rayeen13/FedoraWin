@@ -17,7 +17,7 @@ All surfaces use the same `ui/index.html` bundle with a `?view=` selector so sty
 
 ## Window frames
 
-FedoraWin never paints a second fake caption over an app. It applies reversible DWM attributes to real top-level HWNDs:
+FedoraWin never paints a second fake caption over an app. It applies reversible DWM attributes to eligible real top-level HWNDs. Borderless, layered, no-redirection-bitmap and tool windows are excluded; custom-drawn windows can still require an additional app-specific exclusion:
 
 - immersive dark/light mode
 - native caption color
@@ -25,7 +25,7 @@ FedoraWin never paints a second fake caption over an app. It applies reversible 
 - native border/accent color
 - native rounded-corner preference
 
-Windows continues to own minimize/maximize/close, hit testing, resizing, Snap Layouts, keyboard accessibility, DPI scaling, and non-client behavior.
+Windows continues to own minimize/maximize/close, hit testing, resizing, Snap Layouts, keyboard accessibility, DPI scaling, and non-client behavior. The per-HWND journal tracks successful writes and restores the observed original attributes on ordinary shutdown or when a window becomes ineligible. Switching back to System restores previously forced caption colors.
 
 ## Quick Settings
 
@@ -33,4 +33,4 @@ Direct public APIs are preferred. Wi-Fi uses `WlanSetInterface(... wlan_intf_opc
 
 ## Safety
 
-No Explorer shell replacement, no System32/uxtheme patching, no injected DLL hooks, no driver/service installation, and no machine-wide registry takeover. The shell should be killable without leaving foreign window styles patched.
+No Explorer shell replacement, no System32/uxtheme patching, no injected DLL hooks, no driver/service installation, and no machine-wide registry takeover. The independent taskbar guardian restores Explorer even after a force kill. Native DWM attributes currently restore on normal process shutdown, not on a force kill: the frame journal is process-local. Do not mark native-frame recovery or the beta release gate complete until an independent forced-termination recovery path and a physical Windows test verify it. This limitation must not be hidden by the screenshot or taskbar-recovery CI gates.
