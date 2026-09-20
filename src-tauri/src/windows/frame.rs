@@ -189,7 +189,10 @@ unsafe fn eligible(hwnd: isize) -> bool {
         return false;
     }
     let exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-    if exstyle & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP) != 0 {
+    if exstyle
+        & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP)
+        != 0
+    {
         return false;
     }
     // Leave Electron, UWP and other self-drawn/borderless titlebars alone.
@@ -261,7 +264,8 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
             restore_colors(hwnd, original);
         }
         if original.corner.is_some() {
-            original.changed_corner |= set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_ROUND);
+            original.changed_corner |=
+                set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_ROUND);
         }
         if let Some(caption) = ctx.palette.caption {
             if original.caption.is_some() {
