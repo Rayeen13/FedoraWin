@@ -59,6 +59,9 @@ jobs:
       - name: Build release runtime
         working-directory: src-tauri
         run: cargo build --release
+      - name: Force-kill native frame recovery test
+        shell: pwsh
+        run: ./tests/check-frame-recovery.ps1
       - name: FedoraWin memory budget
         shell: pwsh
         run: ./tests/check-memory-budget.ps1
