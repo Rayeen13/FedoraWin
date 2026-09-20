@@ -14,7 +14,7 @@ test('foreign native caption buttons and hit testing remain Windows-owned', () =
 test('DWM original values are journaled and restored only after successful writes', () => {
   for (const property of ['dark', 'corner', 'border', 'caption', 'text']) {
     assert.match(frame, new RegExp(`changed_${property}: bool`));
-    assert.match(frame, new RegExp(`original\\.changed_${property} \\|= set_attr`));
+    assert.match(frame, new RegExp(`original\\.changed_${property} \\|=\\s*set_attr`));
   }
   assert.match(frame, /window_pid\(hwnd\) != original\.pid/);
   assert.match(frame, /restore_colors\(hwnd, original\)/);
