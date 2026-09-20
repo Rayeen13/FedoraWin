@@ -32,3 +32,27 @@ test('System restores forced caption colors without changing real frames', () =>
   assert.match(frame, /restore_colors\(hwnd, original\)/);
   assert.match(frame, /DWMWA_USE_IMMERSIVE_DARK_MODE/);
 });
+
+const recovery = readFileSync(new URL('../src-tauri/src/windows/frame_recovery.rs', import.meta.url), 'utf8');
+
+test('frame guardian is initialized before the watcher can mutate foreign HWNDs', () => {
+  assert.match(frame, /AtomicBool::new\(false\)/);
+  assert.match(frame, /frame_recovery::start_guardian\(\)\?/);
+  assert.match(frame, /FRAME_WATCHER_ENABLED\.store\(true, Ordering::SeqCst\)/);
+  assert.match(runtime, /frame_recovery::maybe_run_guardian\(\)/);
+});
+
+test('original DWM values are committed to disk before first styling', () => {
+  assert.match(frame, /journal\.insert\(hwnd, snapshot_frame\(hwnd, pid, created\)\)/);
+  assert.match(frame, /if persist_originals\(&journal\)\.is_err\(\)/);
+  assert.match(frame, /journal\.remove\(&hwnd\);\s*return 1;/);
+  assert.match(recovery, /file\.sync_all\(\)/);
+  assert.match(recovery, /MOVEFILE_REPLACE_EXISTING \| MOVEFILE_WRITE_THROUGH/);
+});
+
+test('force-kill guardian checks HWND process lifetime and respects external style changes', () => {
+  assert.match(recovery, /WaitForSingleObject\(process, WAIT_FOREVER\)/);
+  assert.match(recovery, /process_creation_time\(current_pid\) != Some\(snapshot\.created\)/);
+  assert.match(recovery, /matches_our_style\(current\) && current != original/);
+  assert.match(recovery, /restore_snapshot\(snapshot\)/);
+});
