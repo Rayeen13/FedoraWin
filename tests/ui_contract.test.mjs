@@ -74,7 +74,7 @@ assert.match(frame, /DWMWA_CAPTION_COLOR/);
 assert.match(frame, /DWMWA_TEXT_COLOR/);
 assert.match(frame, /DWMWA_COLOR_NONE/);
 assert.match(frame, /colorref\(46, 46, 50\)/);
-assert.match(frame, /Windows owns the real caption buttons/);
+assert.match(frame, /Never replace Win32 caption buttons\/hit-testing or fake a titlebar/);
 assert.doesNotMatch(windowEvents, /frame_overlay/);
 assert.doesNotMatch(main, /frame_overlay/);
 assert.match(hotkeys, /RegisterHotKey/);
