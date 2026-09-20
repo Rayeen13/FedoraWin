@@ -1,11 +1,14 @@
 use crate::shell::{AppearanceState, ThemeMode};
 use std::ffi::c_void;
+use std::collections::HashMap;
 use std::mem::size_of;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
+const GWL_STYLE: i32 = -16;
 const GWL_EXSTYLE: i32 = -20;
+const WS_CAPTION: isize = 0x00C0_0000;
 const WS_EX_TOOLWINDOW: isize = 0x00000080;
 const WS_EX_NOACTIVATE: isize = 0x08000000;
 const GW_OWNER: u32 = 4;
@@ -22,6 +25,7 @@ const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;
 extern "system" {
     fn EnumWindows(callback: extern "system" fn(isize, isize) -> i32, lparam: isize) -> i32;
     fn IsWindowVisible(hwnd: isize) -> i32;
+    fn IsWindow(hwnd: isize) -> i32;
     fn IsIconic(hwnd: isize) -> i32;
     fn GetWindow(hwnd: isize, command: u32) -> isize;
     fn GetWindowLongPtrW(hwnd: isize, index: i32) -> isize;
@@ -39,6 +43,73 @@ struct FramePalette {
     dark: Option<i32>,
     caption: Option<u32>,
     text: Option<u32>,
+}
+
+// FedoraWin may only restore state it actually observed and changed. Save
+// process identity alongside HWND to avoid restoring a recycled handle.
+#[derive(Clone, Copy)]
+struct OriginalFrame {
+    pid: u32,
+    dark: Option<i32>,
+    corner: Option<i32>,
+    border: Option<u32>,
+    caption: Option<u32>,
+    text: Option<u32>,
+}
+
+static ORIGINAL_FRAMES: OnceLock<Mutex<HashMap<isize, OriginalFrame>>> = OnceLock::new();
+
+fn originals() -> &'static Mutex<HashMap<isize, OriginalFrame>> {
+    ORIGINAL_FRAMES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+unsafe fn read_attr<T: Copy + Default>(hwnd: isize, attribute: u32) -> Option<T> {
+    let mut value = T::default();
+    (DwmGetWindowAttribute(
+        hwnd,
+        attribute,
+        (&mut value as *mut T).cast(),
+        size_of::<T>() as u32,
+    ) == 0)
+        .then_some(value)
+}
+
+unsafe fn snapshot_frame(hwnd: isize, pid: u32) -> OriginalFrame {
+    OriginalFrame {
+        pid,
+        dark: read_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE),
+        corner: read_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE),
+        border: read_attr(hwnd, DWMWA_BORDER_COLOR),
+        caption: read_attr(hwnd, DWMWA_CAPTION_COLOR),
+        text: read_attr(hwnd, DWMWA_TEXT_COLOR),
+    }
+}
+
+unsafe fn restore_frame(hwnd: isize, original: OriginalFrame) {
+    if IsWindow(hwnd) == 0 || window_pid(hwnd) != original.pid {
+        return;
+    }
+    if let Some(value) = original.dark {
+        set_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &value);
+    }
+    if let Some(value) = original.corner {
+        set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &value);
+    }
+    if let Some(value) = original.border {
+        set_attr(hwnd, DWMWA_BORDER_COLOR, &value);
+    }
+    if let Some(value) = original.caption {
+        set_attr(hwnd, DWMWA_CAPTION_COLOR, &value);
+    }
+    if let Some(value) = original.text {
+        set_attr(hwnd, DWMWA_TEXT_COLOR, &value);
+    }
+}
+
+unsafe fn window_pid(hwnd: isize) -> u32 {
+    let mut pid = 0u32;
+    GetWindowThreadProcessId(hwnd, &mut pid);
+    pid
 }
 
 fn colorref(r: u8, g: u8, b: u8) -> u32 {
@@ -94,8 +165,12 @@ unsafe fn eligible(hwnd: isize) -> bool {
     if exstyle & WS_EX_TOOLWINDOW != 0 || exstyle & WS_EX_NOACTIVATE != 0 {
         return false;
     }
-    let mut pid = 0u32;
-    GetWindowThreadProcessId(hwnd, &mut pid);
+    // Leave Electron, UWP and other self-drawn/borderless titlebars alone.
+    // Third-party processes must keep ownership of custom frame hit testing.
+    if GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CAPTION != WS_CAPTION {
+        return false;
+    }
+    let pid = window_pid(hwnd);
     if pid == 0 || pid == std::process::id() {
         return false;
     }
@@ -122,17 +197,28 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
     let ctx = unsafe { &mut *(lparam as *mut EnumContext) };
     unsafe {
         if eligible(hwnd) {
-            let corner = DWMWCP_ROUND;
-            if let Some(dark) = ctx.palette.dark {
+            let pid = window_pid(hwnd);
+            let mut journal = originals().lock().unwrap_or_else(|error| error.into_inner());
+            if journal.get(&hwnd).is_none_or(|original| original.pid != pid) {
+                journal.insert(hwnd, snapshot_frame(hwnd, pid));
+            }
+            let original = journal[&hwnd];
+            // Never mutate an attribute we cannot read back for restoration.
+            if let (Some(dark), Some(_)) = (ctx.palette.dark, original.dark) {
                 set_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark);
             }
-            set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner);
-            set_optional_color(hwnd, DWMWA_CAPTION_COLOR, ctx.palette.caption);
-            set_optional_color(hwnd, DWMWA_TEXT_COLOR, ctx.palette.text);
-            // Windows owns the real caption buttons and non-client hit testing.
-            // libadwaita does not paint an accent outline around every application window,
-            // so keep that real frame while suppressing only its colored border.
-            set_attr(hwnd, DWMWA_BORDER_COLOR, &DWMWA_COLOR_NONE);
+            if original.corner.is_some() {
+                set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_ROUND);
+            }
+            if original.caption.is_some() {
+                set_optional_color(hwnd, DWMWA_CAPTION_COLOR, ctx.palette.caption);
+            }
+            if original.text.is_some() {
+                set_optional_color(hwnd, DWMWA_TEXT_COLOR, ctx.palette.text);
+            }
+            if original.border.is_some() {
+                set_attr(hwnd, DWMWA_BORDER_COLOR, &DWMWA_COLOR_NONE);
+            }
             ctx.count += 1;
         }
     }
@@ -152,27 +238,10 @@ pub fn apply_to_top_level_windows(appearance: &AppearanceState) -> Result<usize,
 }
 
 pub fn reset_top_level_windows() {
-    struct ResetContext;
-    extern "system" fn reset_callback(hwnd: isize, _: isize) -> i32 {
-        unsafe {
-            if eligible(hwnd) {
-                let default = 0xFFFF_FFFFu32;
-                let dark = 0i32;
-                let corner = 0i32;
-                set_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark);
-                set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner);
-                set_attr(hwnd, DWMWA_BORDER_COLOR, &default);
-                set_attr(hwnd, DWMWA_CAPTION_COLOR, &default);
-                set_attr(hwnd, DWMWA_TEXT_COLOR, &default);
-            }
-        }
-        1
+    let mut journal = originals().lock().unwrap_or_else(|error| error.into_inner());
+    for (hwnd, original) in journal.drain() {
+        unsafe { restore_frame(hwnd, original) };
     }
-    unsafe {
-        EnumWindows(reset_callback, 0);
-    }
-    let _ = ResetContext;
-    let _ = DWMWA_COLOR_NONE;
 }
 
 pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) {
