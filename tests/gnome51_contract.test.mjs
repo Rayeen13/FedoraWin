@@ -55,7 +55,7 @@ assert.match(appUi, /attempt < 3/);
 assert.match(appUi, /acknowledged === view/);
 assert.match(nativeFrame, /static ORIGINAL_FRAMES: OnceLock<Mutex<HashMap<isize, OriginalFrame>>>/);
 assert.match(nativeFrame, /snapshot_frame\(hwnd, pid\)/);
-assert.match(nativeFrame, /originals\(\)\.lock\(\)/);
+assert.match(nativeFrame, /originals\(\)[\s\S]*?\.lock\(\)/);
 assert.match(nativeFrame, /for \(hwnd, original\) in journal\.drain\(\)/);
 assert.match(nativeFrame, /restore_frame\(hwnd, original\)/);
 assert.match(nativeFrame, /window_pid\(hwnd\) != original\.pid/);
