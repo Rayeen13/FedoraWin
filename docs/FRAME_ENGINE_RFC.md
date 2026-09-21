@@ -1,7 +1,14 @@
 # FedoraWin optional Adwaita-style native frame engine — design contract
 
-**Status: DESIGN / NOT IMPLEMENTED.** This document authorizes investigation and defines
-constraints. The tested libadwaita Windows executable is a *FedoraWin-owned GTK window*.
+**Status: STAGE 1 PROVEN; CROSS-PROCESS INJECTION NOT IMPLEMENTED.**
+This document defines safety constraints for a future opt-in app-process engine.
+A disposable Win32 window now passes a *same-process, same-GUI-thread*
+attach/detach/reattach test using actual window-procedure replacement;
+its original and restored screenshots were identical in the initial
+[Windows CI run](https://github.com/Rayeen13/FedoraWin/actions/runs/35592649463).
+This does not validate injection into another application, Snap hover, physical
+DPI, accessibility or complete Adwaita visual fidelity. The separate real
+GTK4/libadwaita executable is a *FedoraWin-owned GTK window*.
 No third-party application is currently injected or given genuine `AdwHeaderBar`.
 
 ## Goal
@@ -92,7 +99,7 @@ Research references:
 
 ## Release gates before any user-facing switch
 
-- Real in-process prototype in an isolated disposable Windows app, not a mockup.
+- First same-process prototype in a disposable Windows app: automated attach/detach/reattach passed; appearance and cross-app integration remain unfinished.
 - Attach, disable, detach, reattach and force-kill cases on 64-bit and, separately,
   32-bit where supported; no OS reboot, and document when app relaunch is needed.
 - Prove Win+arrow Snap, Windows Snap Layouts, border/corner resizing, caption drag,
@@ -103,6 +110,4 @@ Research references:
 - Run multi-hour app stress, memory/handle-leak tests and per-app compatibility
   matrix on physical Windows. Do not ship while only CI test apps are passing.
 
-**Beta status:** Native injected frame engine not yet implemented or tested.
-The existing 45-test native shell CI and optional real-libadwaita capture do not
-validate any of these injection-specific gates.
+**Beta status:** Native *cross-process* injected frame engine remains unimplemented and untested. The disposable same-process proof, existing native shell CI, and separate real-libadwaita captures do not validate injection-specific release gates.

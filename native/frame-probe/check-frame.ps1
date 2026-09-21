@@ -101,6 +101,14 @@ try {
   $param = [int64](($x -band 0xffff) -bor (($y -band 0xffff) -shl 16))
   $drag = Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($param))
   Check ($drag -eq 2) "Header dragging failed: hit=$drag"
+  $maxX = [int]($styled.Rect.Right - 70)
+  $maxParam = [int64](($maxX -band 0xffff) -bor (($y -band 0xffff) -shl 16))
+  $maxHit = Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($maxParam))
+  Check ($maxHit -eq 9) "Maximize button hit target failed: hit=$maxHit"
+  $leftX = [int]($styled.Rect.Left + 3)
+  $leftParam = [int64](($leftX -band 0xffff) -bor (($y -band 0xffff) -shl 16))
+  $resize = Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($leftParam))
+  Check ($resize -eq 10) "Left resize border hit target failed: hit=$resize"
 
   [void](Send $hwnd $WM_KEYDOWN 0x77)
   Check ((Send $hwnd ($WM_APP+81)) -eq 0) 'Detach did not occur.'
@@ -109,6 +117,8 @@ try {
   Check (-not $process.HasExited) 'Target app died during detach.'
   $restored = Capture $hwnd 'restored'
   Check ($restored.Pixel.R -gt 115) 'Windows caption not restored.'
+  Check ((Get-FileHash $original.Path -Algorithm SHA256).Hash -eq
+         (Get-FileHash $restored.Path -Algorithm SHA256).Hash) 'Restored frame differs pixel-for-pixel from original.'
 
   [void](Send $hwnd $WM_KEYDOWN 0x77)
   Check ((Send $hwnd ($WM_APP+81)) -eq 1) 'Reattach failed.'
