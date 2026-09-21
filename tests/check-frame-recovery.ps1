@@ -9,6 +9,12 @@ using System.Runtime.InteropServices;
 public static class FedoraWinFrameProbe {
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr FindWindowW(string className, string title);
+    [DllImport("user32.dll")]
+    public static extern int IsWindow(IntPtr hwnd);
+    [DllImport("user32.dll")]
+    public static extern int IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
     [DllImport("dwmapi.dll")]
     public static extern int DwmGetWindowAttribute(IntPtr hwnd, uint attribute, out int value, uint size);
 }
@@ -19,18 +25,35 @@ $exe = Join-Path $root 'src-tauri\target\release\fedorawin.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw 'Build the real fedorawin.exe before running frame recovery test.' }
 
 $title = "FedoraWin frame restoration probe $PID"
+# Report the real WinForms HWND instead of depending on a global title search.
+$probeReady = Join-Path ([IO.Path]::GetTempPath()) "fedorawin-frame-probe-$PID-$([guid]::NewGuid().ToString('N')).ready"
+$probeStdout = "$probeReady.stdout"
+$probeStderr = "$probeReady.stderr"
+$escapedReadyPath = $probeReady.Replace("'", "''")
 $probeCode = @"
 Add-Type -AssemblyName System.Windows.Forms
+if (-not [System.Windows.Forms.SystemInformation]::UserInteractive) {
+    throw 'The Windows runner has no interactive desktop for a real WinForms HWND.'
+}
 `$form = New-Object System.Windows.Forms.Form
 `$form.Text = '$title'
 `$form.Width = 700
 `$form.Height = 440
 `$form.StartPosition = 'CenterScreen'
-[void]`$form.ShowDialog()
+`$form.Show()
+[IO.File]::WriteAllText('$escapedReadyPath', [string]`$form.Handle.ToInt64())
+[System.Windows.Forms.Application]::Run(`$form)
 "@
 $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($probeCode))
-$probe = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-STA','-EncodedCommand', $encoded) -PassThru
+$probe = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-STA','-EncodedCommand', $encoded) -RedirectStandardOutput $probeStdout -RedirectStandardError $probeStderr -PassThru
 $shell = $null
+
+function Get-ProbeDiagnostics {
+    $exit = if ($probe.HasExited) { $probe.ExitCode } else { 'running' }
+    $errors = if (Test-Path -LiteralPath $probeStderr) { (Get-Content -LiteralPath $probeStderr -Raw).Trim() } else { '' }
+    $output = if (Test-Path -LiteralPath $probeStdout) { (Get-Content -LiteralPath $probeStdout -Raw).Trim() } else { '' }
+    return "exit=$exit; stderr=$errors; stdout=$output"
+}
 
 function Read-DwmAttributes {
     param([IntPtr]$Hwnd)
@@ -45,13 +68,25 @@ function Read-DwmAttributes {
 
 try {
     $hwnd = [IntPtr]::Zero
-    for ($attempt = 0; $attempt -lt 80; $attempt++) {
-        if ($probe.HasExited) { throw 'Native WinForms probe exited unexpectedly.' }
-        $hwnd = [FedoraWinFrameProbe]::FindWindowW($null, $title)
-        if ($hwnd -ne [IntPtr]::Zero) { break }
+    for ($attempt = 0; $attempt -lt 300; $attempt++) {
+        if ($probe.HasExited) { throw "WinForms probe exited: $(Get-ProbeDiagnostics)" }
+        if (Test-Path -LiteralPath $probeReady) {
+            $reported = (Get-Content -LiteralPath $probeReady -Raw).Trim()
+            $candidate = [IntPtr]::new([long]::Parse($reported))
+            $ownerPid = [uint32]0
+            [void][FedoraWinFrameProbe]::GetWindowThreadProcessId($candidate, [ref]$ownerPid)
+            if ([FedoraWinFrameProbe]::IsWindow($candidate) -ne 0 -and
+                [FedoraWinFrameProbe]::IsWindowVisible($candidate) -ne 0 -and
+                $ownerPid -eq $probe.Id) {
+                $hwnd = $candidate
+                break
+            }
+        }
         Start-Sleep -Milliseconds 100
     }
-    if ($hwnd -eq [IntPtr]::Zero) { throw 'Could not find the real WinForms probe HWND.' }
+    if ($hwnd -eq [IntPtr]::Zero) {
+        throw "Real WinForms probe HWND is not visible in the runner window station: $(Get-ProbeDiagnostics)"
+    }
     $original = Read-DwmAttributes $hwnd
     if ($original.Count -lt 2) { throw 'DWM did not expose enough native attributes for a recovery test.' }
 
@@ -94,4 +129,5 @@ try {
     Remove-Item Env:FEDORAWIN_KEEP_WINDOWS_TASKBAR -ErrorAction SilentlyContinue
     Remove-Item Env:FEDORAWIN_CAPTURE_VIEW -ErrorAction SilentlyContinue
     Remove-Item Env:FEDORAWIN_CAPTURE_THEME -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $probeReady, $probeStdout, $probeStderr -ErrorAction SilentlyContinue
 }
