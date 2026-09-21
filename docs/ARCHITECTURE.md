@@ -27,10 +27,19 @@ FedoraWin never paints a second fake caption over an app. It applies reversible 
 
 Windows continues to own minimize/maximize/close, hit testing, resizing, Snap Layouts, keyboard accessibility, DPI scaling, and non-client behavior. The per-HWND journal tracks successful writes and restores the observed original attributes on ordinary shutdown or when a window becomes ineligible. Switching back to System restores previously forced caption colors.
 
+## Optional in-process frame engine (design only)
+
+A faithful Adwaita-style frame for standard third-party Win32 apps may require
+opt-in, in-process **user-mode** non-client rendering; DWM alone is insufficient.
+See [FRAME_ENGINE_RFC.md](FRAME_ENGINE_RFC.md) for the exact eligibility, consent,
+privacy, rollback, no-reboot goal, failure modes and release gates. It is not
+implemented. FedoraWin-owned GTK windows already have a separate real-libadwaita
+proof. Do not call the proposed foreign-window renderer real GTK widgets.
+
 ## Quick Settings
 
 Direct public APIs are preferred. Wi-Fi uses `WlanSetInterface(... wlan_intf_opcode_radio_state ...)`. Master volume uses the default Core Audio endpoint through `IAudioEndpointVolume`. Battery/AC/charging state comes from `GetSystemPowerStatus`. Screenshot opens the native Snipping overlay through the documented Win+Shift+S input chord. Bluetooth is planned around `Windows.Devices.Radios` with permission and effective-state checks. Brightness will be capability-detected across internal WMI and supported physical-monitor paths. Features without a stable/public direct control path are reported unavailable rather than pretending a Settings deep-link is a toggle.
 
 ## Safety
 
-No Explorer shell replacement, no System32/uxtheme patching, no injected DLL hooks, no driver/service installation, and no machine-wide registry takeover. The independent taskbar guardian restores Explorer after a force kill. A separate frame guardian now reads a write-ahead DWM journal after FedoraWin exits, including on forced termination. New HWNDs are not styled unless their original attributes are committed to disk first; recovery checks both PID and process creation time and avoids overwriting values that no longer match FedoraWin's styling. If the guardian cannot launch or persistence fails, frame styling is disabled for the affected scope. A Windows CI integration test force-kills the actual FedoraWin executable while a native WinForms window is styled and checks restoration. This implementation is not a beta guarantee until that CI gate passes and physical Windows testing covers Explorer restarts, custom titlebars, Snap and multiple monitors. DWM restoration after OS crash or power loss is not covered by the process guardian.
+No Explorer shell replacement, no System32/uxtheme patching, no driver/service installation, and no machine-wide registry takeover. The *currently implemented* runtime has no injected DLL hooks. The proposed optional per-app user-mode frame engine is a future feature and must obey the separate FRAME_ENGINE_RFC.md safeguards. The independent taskbar guardian restores Explorer after a force kill. A separate frame guardian now reads a write-ahead DWM journal after FedoraWin exits, including on forced termination. New HWNDs are not styled unless their original attributes are committed to disk first; recovery checks both PID and process creation time and avoids overwriting values that no longer match FedoraWin's styling. If the guardian cannot launch or persistence fails, frame styling is disabled for the affected scope. A Windows CI integration test force-kills the actual FedoraWin executable while a native WinForms window is styled and checks restoration. This implementation is not a beta guarantee until that CI gate passes and physical Windows testing covers Explorer restarts, custom titlebars, Snap and multiple monitors. DWM restoration after OS crash or power loss is not covered by the process guardian.
