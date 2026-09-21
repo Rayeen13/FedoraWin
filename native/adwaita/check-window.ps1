@@ -30,7 +30,12 @@ public static class AdwaitaProbe {
 $out = Join-Path $PSScriptRoot 'out'
 $exe = Join-Path $out 'fedorawin-adwaita.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "Native executable absent: $exe" }
-$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+if (-not $env:MSYS2_ROOT) { throw 'MSYS2_ROOT must come from setup-msys2 output.' }
+$ucrtBin = Join-Path $env:MSYS2_ROOT 'ucrt64\bin'
+if (-not (Test-Path -LiteralPath (Join-Path $ucrtBin 'libadwaita-1-0.dll'))) {
+    throw "Missing UCRT64 libadwaita runtime: $ucrtBin"
+}
+$env:PATH = "$ucrtBin;$env:PATH"
 $title = 'FedoraWin Adwaita Native Probe'
 $env:GDK_BACKEND = 'win32'
 $env:GSETTINGS_BACKEND = 'memory'
@@ -68,7 +73,10 @@ foreach ($theme in @('dark','light')) {
     try {
         $hwnd = [IntPtr]::Zero
         for ($attempt=0; $attempt -lt 150; $attempt++) {
-            if ($process.HasExited) { throw "Adwaita $theme exited: $($process.ExitCode)" }
+            if ($process.HasExited) {
+                $errors = try { Get-Content -LiteralPath $stderr -Raw -ErrorAction Stop } catch { '<unavailable>' }
+                throw "Adwaita $theme exited: $($process.ExitCode); stderr=$errors; MSYS2_ROOT=$env:MSYS2_ROOT"
+            }
             $window = @(Get-ProcessWindows -OwnerProcessId $process.Id | Where-Object {
                 $_.Visible -and ($_.Title -eq $title -or $_.Class -match "gdk|gtk")
             } | Select-Object -First 1)
