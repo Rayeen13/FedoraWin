@@ -3,8 +3,16 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
 using System;
+using System.Text;
 using System.Runtime.InteropServices;
 public static class AdwaitaProbe {
+    public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr unused);
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr unused);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+    public static extern int GetWindowTextW(IntPtr hwnd, StringBuilder title, int length);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+    public static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int length);
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll", CharSet=CharSet.Unicode)]
@@ -24,22 +32,57 @@ $exe = Join-Path $out 'fedorawin-adwaita.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "Native executable absent: $exe" }
 $env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
 $title = 'FedoraWin Adwaita Native Probe'
+$env:GDK_BACKEND = 'win32'
+$env:GSETTINGS_BACKEND = 'memory'
+
+function Get-ProcessWindows {
+    param([int]$OwnerProcessId)
+    $windows = [System.Collections.Generic.List[object]]::new()
+    $callback = [AdwaitaProbe+EnumWindowsProc] {
+        param([IntPtr]$handle, [IntPtr]$unused)
+        $owner = [uint32]0
+        [void][AdwaitaProbe]::GetWindowThreadProcessId($handle, [ref]$owner)
+        if ($owner -eq $OwnerProcessId) {
+            $windowTitle = [Text.StringBuilder]::new(512)
+            $className = [Text.StringBuilder]::new(256)
+            [void][AdwaitaProbe]::GetWindowTextW($handle, $windowTitle, $windowTitle.Capacity)
+            [void][AdwaitaProbe]::GetClassNameW($handle, $className, $className.Capacity)
+            $windows.Add([pscustomobject]@{
+                Handle = $handle
+                Title = $windowTitle.ToString()
+                Class = $className.ToString()
+                Visible = [AdwaitaProbe]::IsWindowVisible($handle)
+            })
+        }
+        return $true
+    }
+    [void][AdwaitaProbe]::EnumWindows($callback, [IntPtr]::Zero)
+    return $windows.ToArray()
+}
+
 foreach ($theme in @('dark','light')) {
     $env:FEDORAWIN_ADWAITA_THEME = $theme
-    $process = Start-Process -FilePath $exe -WorkingDirectory $out -PassThru
+    $stdout = Join-Path $out "adwaita-$theme.stdout.txt"
+    $stderr = Join-Path $out "adwaita-$theme.stderr.txt"
+    $process = Start-Process -FilePath $exe -WorkingDirectory $out -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     try {
         $hwnd = [IntPtr]::Zero
         for ($attempt=0; $attempt -lt 150; $attempt++) {
             if ($process.HasExited) { throw "Adwaita $theme exited: $($process.ExitCode)" }
-            $candidate = [AdwaitaProbe]::FindWindowW($null, $title)
-            if ($candidate -ne [IntPtr]::Zero -and [AdwaitaProbe]::IsWindowVisible($candidate)) {
-                $owner = [uint32]0
-                [void][AdwaitaProbe]::GetWindowThreadProcessId($candidate, [ref]$owner)
-                if ($owner -eq $process.Id) { $hwnd=$candidate; break }
-            }
+            $window = @(Get-ProcessWindows -OwnerProcessId $process.Id | Where-Object {
+                $_.Visible -and ($_.Title -eq $title -or $_.Class -match "gdk|gtk")
+            } | Select-Object -First 1)
+            if ($window.Count) { $hwnd=$window[0].Handle; break }
             Start-Sleep -Milliseconds 200
         }
-        if ($hwnd -eq [IntPtr]::Zero) { throw "No visible real Adwaita HWND ($theme)." }
+        if ($hwnd -eq [IntPtr]::Zero) {
+            $windows = @(Get-ProcessWindows -OwnerProcessId $process.Id | ForEach-Object {
+                "HWND=$($_.Handle) title=$($_.Title) class=$($_.Class) visible=$($_.Visible)"
+            }) -join "; "
+            $errors = try { (Get-Content -LiteralPath $stderr -Raw -ErrorAction Stop) } catch { "<unavailable>" }
+            $output = try { (Get-Content -LiteralPath $stdout -Raw -ErrorAction Stop) } catch { "<unavailable>" }
+            throw "No visible real Adwaita HWND ($theme) pid=$($process.Id) windows=$windows stderr=$errors stdout=$output"
+        }
         [void][AdwaitaProbe]::SetForegroundWindow($hwnd)
         Start-Sleep -Milliseconds 900
         $rect = New-Object AdwaitaProbe+RECT
