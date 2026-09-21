@@ -13,9 +13,12 @@
     "artifact_id": 10626646196
   },
   "optional_native_frame_engine": {
-    "status": "design_only_not_implemented",
+    "status": "same_process_attach_rollback_ci_passed_cross_process_not_implemented",
+    "source_sha": "7eec909cf7b2ed8c4a174a92a3dcc7f48fb04692",
+    "ci_run": 35592990502,
+    "artifact_id": 10635905605,
     "policy": "per-app opt-in; protect custom-chrome and OS apps; no System32 patching",
-    "rollback": "no OS reboot goal; app relaunch may be required after failure",
+    "rollback": "same-process no-restart verified; cross-process failure may require app relaunch",
     "docs": "frame-engine.html"
   }
 }
