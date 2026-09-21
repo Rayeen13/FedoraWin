@@ -11,5 +11,11 @@
     "ci_run": 35572296452,
     "captures": "real dark/light GTK4/libadwaita HWNDs; downloadable Actions artifact",
     "artifact_id": 10626646196
+  },
+  "optional_native_frame_engine": {
+    "status": "design_only_not_implemented",
+    "policy": "per-app opt-in; protect custom-chrome and OS apps; no System32 patching",
+    "rollback": "no OS reboot goal; app relaunch may be required after failure",
+    "docs": "frame-engine.html"
   }
 }

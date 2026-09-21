@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
-PUBLIC_PAGES = {"index.html", "docs.html", "gallery.html", "getting-started.html", "architecture.html", "status.html"}
+PUBLIC_PAGES = {"index.html", "docs.html", "gallery.html", "getting-started.html", "architecture.html", "status.html", "frame-engine.html"}
 
 
 class Collector(HTMLParser):
@@ -99,6 +99,11 @@ for required in [
 ]:
     if required not in index:
         errors.append(f"index.html: missing required content: {required}")
+
+frame_engine = (DOCS / "frame-engine.html").read_text(encoding="utf-8")
+for required in ("Design only", "not yet", "without restarting Windows", "Opera GX", "System32", "FRAME_ENGINE_RFC.md"):
+    if required.lower() not in frame_engine.lower():
+        errors.append(f"frame-engine.html: missing design and safety disclosure: {required}")
 
 docs_hub = (DOCS / "docs.html").read_text(encoding="utf-8")
 for required in [
