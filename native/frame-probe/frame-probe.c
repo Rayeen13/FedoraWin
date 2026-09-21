@@ -1,7 +1,6 @@
 /* Disposable, same-process Win32 Adwaita-style frame proof.
    Not a DLL, not GTK, not an injection into foreign processes. */
-#define UNICODE
-#define _UNICODE
+/* MSYS2 -municode already defines UNICODE and _UNICODE. */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
