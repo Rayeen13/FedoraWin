@@ -129,7 +129,7 @@ for key in [
         errors.append(f"gallery.html: missing runtime shot: {key}")
 
 
-for required in ("id=\"real-adwaita\"", "not yet wired into the production FedoraWin shell", "the 14 images above"):
+for required in ("id=\"real-adwaita\"", "not yet wired into the production FedoraWin shell", "the 14 images above", "assets/adwaita/adwaita-dark.png", "assets/adwaita/adwaita-light.png"):
     if required.lower() not in gallery.lower():
         errors.append(f"gallery.html: missing verified Adwaita separation: {required}")
 

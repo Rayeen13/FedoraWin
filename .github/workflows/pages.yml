@@ -10,7 +10,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  actions: read
+  contents: write
   pages: write
   id-token: write
 
@@ -88,6 +89,28 @@ jobs:
           name: pages-windows-preview
           path: docs/assets/runtime
 
+      - name: Import verified real GTK4/libadwaita screenshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/assets/adwaita
+          if [ ! -s docs/assets/adwaita/adwaita-dark.png ] || [ ! -s docs/assets/adwaita/adwaita-light.png ]; then
+            gh run download 35572296452 --repo Rayeen13/FedoraWin --name fedorawin-native-adwaita-evidence --dir docs/assets/adwaita
+          fi
+          echo 'e5526b58c95f32d2c59c758a7c3a6e305f5667c30bea6241016a5b6216e15264  docs/assets/adwaita/adwaita-dark.png' | sha256sum -c -
+          echo '6bfc8f9f6b20062d110507b68ef54aeca1855ab1cc31c12dc0269cdf51f6412c  docs/assets/adwaita/adwaita-light.png' | sha256sum -c -
+          git add docs/assets/adwaita/adwaita-dark.png docs/assets/adwaita/adwaita-light.png
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'docs(adwaita): persist verified native Windows captures'
+            git fetch origin main
+            git rebase origin/main
+            git push origin HEAD:main
+          fi
+
       - name: Validate Gallery JavaScript
         run: node --check docs/app.js
 
@@ -109,6 +132,8 @@ jobs:
           test -s docs/assets/runtime/date_menu.png
           test -s docs/assets/runtime/native_frame.png
           test -s docs/assets/runtime/native_frame_light.png
+          test -s docs/assets/adwaita/adwaita-dark.png
+          test -s docs/assets/adwaita/adwaita-light.png
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
