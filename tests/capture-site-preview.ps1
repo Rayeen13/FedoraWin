@@ -37,6 +37,13 @@ public static class FedoraWinCaptureNative {
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
     public static extern int GetWindowLong(IntPtr hwnd, int index);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter,
+        int x, int y, int width, int height, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hwnd);
+
     [DllImport("dwmapi.dll")]
     public static extern int DwmGetWindowAttribute(IntPtr hwnd, uint attribute, out int value, uint size);
 
@@ -365,7 +372,15 @@ $form.Controls.Add($label)
             [FedoraWinCaptureNative]::GetWindowLong($probeHwnd, -20) -ne $originalExStyle) {
             throw "FedoraWin changed native Win32 frame styles during the $Theme capture."
         }
-        Start-Sleep -Milliseconds 400
+        # The probe starts before the shell to establish its original Win32
+        # styles. Bring ONLY this disposable test window above the shell before
+        # pixel capture; otherwise a debug WebView can obscure its entire rect.
+        # HWND_TOPMOST; SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW.
+        if (-not [FedoraWinCaptureNative]::SetWindowPos($probeHwnd, [IntPtr]::new(-1), 0, 0, 0, 0, [uint32]0x43)) {
+            throw "Could not expose the real WinForms frame for $Theme screenshot capture."
+        }
+        [void][FedoraWinCaptureNative]::SetForegroundWindow($probeHwnd)
+        Start-Sleep -Milliseconds 750
         $nativeFramePath = Save-WindowCapture -Hwnd $probeHwnd -FileName "$Key.png"
         Assert-VisualCapture -Path $nativeFramePath -Key $Key
         $captures[$Key] = "$Key.png"
