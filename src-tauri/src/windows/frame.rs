@@ -155,9 +155,7 @@ unsafe fn restore_frame(hwnd: isize, mut original: OriginalFrame) {
         if let Some(value) = original.corner {
             // An application can switch to a self-drawn frame mid-session.
             // Respect a new DO_NOT_ROUND request instead of undoing its opt-out.
-            if read_attr::<i32>(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE)
-                == Some(DWMWCP_ROUND)
-            {
+            if read_attr::<i32>(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE) == Some(DWMWCP_ROUND) {
                 set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &value);
             }
         }
@@ -243,9 +241,7 @@ unsafe fn owns_standard_caption(hwnd: isize) -> bool {
         return false;
     }
     // Respect explicit app DWM opt-out, even if WS_CAPTION remains set.
-    if read_attr::<i32>(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE)
-        == Some(DWMWCP_DONOTROUND)
-    {
+    if read_attr::<i32>(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE) == Some(DWMWCP_DONOTROUND) {
         return false;
     }
     true
