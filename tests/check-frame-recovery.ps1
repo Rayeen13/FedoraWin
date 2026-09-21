@@ -15,6 +15,8 @@ public static class FedoraWinFrameProbe {
     public static extern int IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+    public static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("dwmapi.dll")]
     public static extern int DwmGetWindowAttribute(IntPtr hwnd, uint attribute, out int value, uint size);
 }
@@ -55,6 +57,25 @@ function Get-ProbeDiagnostics {
     return "exit=$exit; stderr=$errors; stdout=$output"
 }
 
+# Guard against turning Windows-owned caption buttons, hit testing, or native frame
+# styles into an imitation titlebar while applying reversible DWM colors.
+function Assert-NativeFrameIntact {
+    param(
+        [IntPtr]$Hwnd,
+        [int]$ExpectedStyle,
+        [int]$ExpectedExStyle,
+        [string]$Stage
+    )
+    if ([FedoraWinFrameProbe]::IsWindow($Hwnd) -eq 0) {
+        throw "Native HWND disappeared at $Stage."
+    }
+    $style = [FedoraWinFrameProbe]::GetWindowLong($Hwnd, -16)
+    $exStyle = [FedoraWinFrameProbe]::GetWindowLong($Hwnd, -20)
+    if ($style -ne $ExpectedStyle -or $exStyle -ne $ExpectedExStyle) {
+        throw "Native Win32 styles changed at $Stage (style: $style vs $ExpectedStyle; exstyle: $exStyle vs $ExpectedExStyle)."
+    }
+}
+
 function Read-DwmAttributes {
     param([IntPtr]$Hwnd)
     $attributes = [ordered]@{}
@@ -87,6 +108,13 @@ try {
     if ($hwnd -eq [IntPtr]::Zero) {
         throw "Real WinForms probe HWND is not visible in the runner window station: $(Get-ProbeDiagnostics)"
     }
+    $originalStyle = [FedoraWinFrameProbe]::GetWindowLong($hwnd, -16)
+    $originalExStyle = [FedoraWinFrameProbe]::GetWindowLong($hwnd, -20)
+    # WS_CAPTION and WS_SYSMENU: this must be a genuinely Windows-owned frame.
+    if (($originalStyle -band 0x00c00000) -ne 0x00c00000 -or
+        ($originalStyle -band 0x00080000) -eq 0) {
+        throw 'WinForms probe does not have a native caption and system menu.'
+    }
     $original = Read-DwmAttributes $hwnd
     if ($original.Count -lt 2) { throw 'DWM did not expose enough native attributes for a recovery test.' }
 
@@ -106,6 +134,7 @@ try {
         Start-Sleep -Milliseconds 100
     }
     if ($changed.Count -eq 0) { throw 'Native frame was never styled: cannot validate recovery.' }
+    Assert-NativeFrameIntact -Hwnd $hwnd -ExpectedStyle $originalStyle -ExpectedExStyle $originalExStyle -Stage 'after DWM styling'
     Write-Host "FRAME STYLED: DWM attributes $($changed -join ',') changed on a real HWND."
 
     Stop-Process -Id $shell.Id -Force -ErrorAction Stop
@@ -122,7 +151,8 @@ try {
     if (-not $restored) {
         throw "FRAME RECOVERY FAILED: original DWM attributes were not restored: $($pending -join ',')"
     }
-    Write-Host "FRAME RECOVERY PASSED: independently restored $($changed.Count) changed DWM attributes after force-killing FedoraWin.exe."
+    Assert-NativeFrameIntact -Hwnd $hwnd -ExpectedStyle $originalStyle -ExpectedExStyle $originalExStyle -Stage 'after force-kill recovery'
+    Write-Host "FRAME RECOVERY PASSED: independently restored $($changed.Count) changed DWM attributes after force-killing FedoraWin.exe; native Win32 frame styles were preserved."
 } finally {
     if ($shell -and -not $shell.HasExited) { Stop-Process -Id $shell.Id -Force -ErrorAction SilentlyContinue }
     if ($probe -and -not $probe.HasExited) { Stop-Process -Id $probe.Id -Force -ErrorAction SilentlyContinue }
