@@ -4,5 +4,12 @@
   "target": "GNOME 51",
   "updated": "2026-09-21",
   "runtime_gallery": "14 distinct Windows CI captures from FedoraWin.exe (including native dark/light frames)",
-  "frame_recovery": "Force-kill Windows CI passed with native Win32 styles intact; physical Windows validation still required"
+  "frame_recovery": "Force-kill Windows CI passed with native Win32 styles intact; physical Windows validation still required",
+  "native_adwaita": {
+    "status": "isolated Windows CI proof; not production integration",
+    "source_sha": "855cd4ba10b6aae501e88a6832ed9b19f743b99f",
+    "ci_run": 35572296452,
+    "captures": "real dark/light GTK4/libadwaita HWNDs; downloadable Actions artifact",
+    "artifact_id": 10626646196
+  }
 }

@@ -129,6 +129,10 @@ for key in [
         errors.append(f"gallery.html: missing runtime shot: {key}")
 
 
+for required in ("id=\"real-adwaita\"", "not yet wired into the production FedoraWin shell", "the 14 images above"):
+    if required.lower() not in gallery.lower():
+        errors.append(f"gallery.html: missing verified Adwaita separation: {required}")
+
 # Gallery controls must operate on the real runtime shots, not copied mock cards.
 for mode in ("list", "grid", "card", "carousel"):
     if f'data-gallery-view="{mode}"' not in gallery:
