@@ -183,9 +183,6 @@ fn palette(appearance: &AppearanceState) -> FramePalette {
             caption: Some(colorref(255, 255, 255)),
             text: Some(colorref(32, 32, 34)),
         },
-        // System means Windows remains authoritative for light/dark. FedoraWin still
-        // applies the GNOME-like corner/border treatment, but must not silently turn
-        // every real application frame dark when the OS is using its light theme.
         ThemeMode::System => FramePalette {
             dark: None,
             caption: None,
@@ -217,8 +214,6 @@ unsafe fn eligible(hwnd: isize) -> bool {
     {
         return false;
     }
-    // Leave Electron, UWP and other self-drawn/borderless titlebars alone.
-    // Third-party processes must keep ownership of custom frame hit testing.
     if GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CAPTION != WS_CAPTION {
         return false;
     }
@@ -248,8 +243,6 @@ struct EnumContext {
 extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
     let ctx = unsafe { &mut *(lparam as *mut EnumContext) };
     unsafe {
-        // A reset permanently closes this gate for the current process. Check
-        // again under the journal lock so an in-flight scan cannot restyle.
         let is_eligible = eligible(hwnd);
         let pid = window_pid(hwnd);
         let mut journal = originals()
@@ -259,8 +252,6 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
             return 0;
         }
         if !is_eligible {
-            // Apps may change from a native caption to a custom frame at runtime.
-            // Restore our changes instead of continuing to own that HWND.
             if let Some(original) = journal.remove(&hwnd) {
                 restore_frame(hwnd, original);
                 let _ = persist_originals(&journal);
@@ -276,23 +267,17 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
             .is_none_or(|original| original.pid != pid || original.created != created)
         {
             journal.insert(hwnd, snapshot_frame(hwnd, pid, created));
-            // Never apply an unjournaled attribute: the guardian must have the
-            // original HWND values on disk before our first DWM mutation.
             if persist_originals(&journal).is_err() {
                 journal.remove(&hwnd);
                 return 1;
             }
         }
         let original = journal.get_mut(&hwnd).expect("frame journal entry");
-        // Never replace Win32 caption buttons/hit-testing or fake a titlebar.
-        // Only successfully written DWM attributes enter the recovery journal.
         if let Some(dark) = ctx.palette.dark {
             if original.dark.is_some() {
                 original.changed_dark |= set_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark);
             }
         } else {
-            // Switching back to System must undo a previous explicit theme now,
-            // not merely stop updating the previously-forced frame colors.
             restore_colors(hwnd, original);
         }
         if original.corner.is_some() {
