@@ -11,6 +11,15 @@ test('foreign native caption buttons and hit testing remain Windows-owned', () =
   assert.doesNotMatch(frame, /SetWindowLongPtrW|SetWindowSubclass|SetWindowPos/);
 });
 
+test('custom application chrome and DWM opt-outs are excluded even with WS_CAPTION', () => {
+  assert.match(frame, /GetClassNameW\(hwnd, class_name\.as_mut_ptr\(\)/);
+  assert.match(frame, /if !owns_standard_caption\(hwnd\)/);
+  assert.match(frame, /chrome_widgetwin/);
+  assert.match(frame, /mozillawindowclass/);
+  assert.match(frame, /DWMWCP_DONOTROUND/);
+  assert.match(frame, /== Some\(DWMWCP_ROUND\)/);
+});
+
 test('DWM original values are journaled and restored only after successful writes', () => {
   for (const property of ['dark', 'corner', 'border', 'caption', 'text']) {
     assert.match(frame, new RegExp(`changed_${property}: bool`));

@@ -17,7 +17,7 @@ All surfaces use the same `ui/index.html` bundle with a `?view=` selector so sty
 
 ## Window frames
 
-FedoraWin never paints a second fake caption over an app. It applies reversible DWM attributes to eligible real top-level HWNDs. Borderless, layered, no-redirection-bitmap and tool windows are excluded; custom-drawn windows can still require an additional app-specific exclusion:
+FedoraWin never paints a second fake caption over an app. It applies reversible DWM attributes to eligible real top-level HWNDs. Borderless, layered, no-redirection-bitmap and tool windows are excluded. WS_CAPTION is not sufficient by itself: Chromium/Opera-style, Firefox, GTK, Qt, SDL, GLFW and other known self-drawn window classes are skipped even if they retain the caption style bit. Windows that explicitly request DWM DO_NOT_ROUND are also skipped. This is a conservative guard, **not perfect automatic detection of every custom frame**; broader class/owner validation and a per-window exclusion mechanism remain beta work. Third-party Win32 windows do not become GTK/libadwaita windows:
 
 - immersive dark/light mode
 - native caption color

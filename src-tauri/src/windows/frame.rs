@@ -22,6 +22,7 @@ const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
 const DWMWA_BORDER_COLOR: u32 = 34;
 const DWMWA_CAPTION_COLOR: u32 = 35;
 const DWMWA_TEXT_COLOR: u32 = 36;
+const DWMWCP_DONOTROUND: i32 = 1;
 const DWMWCP_ROUND: i32 = 2;
 const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;
 
@@ -33,6 +34,7 @@ extern "system" {
     fn IsIconic(hwnd: isize) -> i32;
     fn GetWindow(hwnd: isize, command: u32) -> isize;
     fn GetWindowLongPtrW(hwnd: isize, index: i32) -> isize;
+    fn GetClassNameW(hwnd: isize, class_name: *mut u16, capacity: i32) -> i32;
     fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
 }
 
@@ -151,7 +153,13 @@ unsafe fn restore_frame(hwnd: isize, mut original: OriginalFrame) {
     restore_colors(hwnd, &mut original);
     if original.changed_corner {
         if let Some(value) = original.corner {
-            set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &value);
+            // An application can switch to a self-drawn frame mid-session.
+            // Respect a new DO_NOT_ROUND request instead of undoing its opt-out.
+            if read_attr::<i32>(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE)
+                == Some(DWMWCP_ROUND)
+            {
+                set_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &value);
+            }
         }
     }
     if original.changed_border {
@@ -201,6 +209,48 @@ unsafe fn set_attr<T>(hwnd: isize, attribute: u32, value: &T) -> bool {
     ) == 0
 }
 
+// A Win32 WS_CAPTION bit is not evidence that the application actually
+// paints standard non-client chrome: Chromium and other frameworks may keep
+// this bit while rendering their own draggable region and controls. These
+// classes are a conservative veto, not an exhaustive "custom titlebar" test.
+fn has_known_self_drawn_chrome(class_name: &str) -> bool {
+    let name = class_name.to_ascii_lowercase();
+    [
+        "chrome_widgetwin",
+        "mozillawindowclass",
+        "gdk",
+        "gtk",
+        "qt",
+        "sdl",
+        "glfw",
+        "cascadia_hosting_window_class",
+        "winuidesktopwin32windowclass",
+        "applicationframewindow",
+        "windows.ui.core.corewindow",
+    ]
+    .iter()
+    .any(|prefix| name.starts_with(prefix))
+}
+
+unsafe fn owns_standard_caption(hwnd: isize) -> bool {
+    let mut class_name = [0u16; 256];
+    let length = GetClassNameW(hwnd, class_name.as_mut_ptr(), class_name.len() as i32);
+    if length <= 0 {
+        return false; // Unknown window class: fail closed.
+    }
+    let name = String::from_utf16_lossy(&class_name[..length as usize]);
+    if has_known_self_drawn_chrome(&name) {
+        return false;
+    }
+    // Respect explicit app DWM opt-out, even if WS_CAPTION remains set.
+    if read_attr::<i32>(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE)
+        == Some(DWMWCP_DONOTROUND)
+    {
+        return false;
+    }
+    true
+}
+
 unsafe fn eligible(hwnd: isize) -> bool {
     if hwnd == 0
         || IsWindowVisible(hwnd) == 0
@@ -217,6 +267,9 @@ unsafe fn eligible(hwnd: isize) -> bool {
     }
     // Leave custom/borderless titlebars and their hit testing to the owning application.
     if GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CAPTION != WS_CAPTION {
+        return false;
+    }
+    if !owns_standard_caption(hwnd) {
         return false;
     }
     let pid = window_pid(hwnd);
@@ -350,13 +403,33 @@ pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) -> Result<(), S
 
 #[cfg(test)]
 mod tests {
-    use super::palette;
+    use super::{has_known_self_drawn_chrome, palette};
     use crate::shell::{AppearanceState, ThemeMode};
 
     fn appearance(theme: ThemeMode) -> AppearanceState {
         AppearanceState {
             theme,
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn known_self_drawn_window_classes_are_not_restyled() {
+        for class in [
+            "Chrome_WidgetWin_1",
+            "MozillaWindowClass",
+            "gdkWin32Window",
+            "Qt661QWindowIcon",
+            "SDL_app",
+            "GLFW30",
+            "CASCADIA_HOSTING_WINDOW_CLASS",
+            "WinUIDesktopWin32WindowClass",
+            "ApplicationFrameWindow",
+        ] {
+            assert!(has_known_self_drawn_chrome(class), "{class}");
+        }
+        for class in ["WindowsForms10.Window.8.app.0.1234", "#32770", "Notepad"] {
+            assert!(!has_known_self_drawn_chrome(class), "{class}");
         }
     }
 
