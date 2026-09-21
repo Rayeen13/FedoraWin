@@ -2,7 +2,7 @@
   "project": "FedoraWin",
   "release": "0.4.0-dev",
   "target": "GNOME 51",
-  "updated": "2026-09-20",
-  "runtime_gallery": "Windows CI captures from the current FedoraWin.exe",
-  "frame_recovery": "Write-ahead independent guardian implemented; force-kill Windows CI verification pending"
+  "updated": "2026-09-21",
+  "runtime_gallery": "14 distinct Windows CI captures from FedoraWin.exe (including native dark/light frames)",
+  "frame_recovery": "Force-kill Windows CI passed with native Win32 styles intact; physical Windows validation still required"
 }

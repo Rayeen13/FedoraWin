@@ -92,7 +92,7 @@ for html_file in html_files:
 index = (DOCS / "index.html").read_text(encoding="utf-8")
 for required in [
     "GNOME 51 desktop.",
-    "15 MB measured idle",
+    "32 MB measured idle",
     "Power Mode",
     "./gallery.html",
     "data-runtime-shot=\"activities\"",
@@ -102,7 +102,7 @@ for required in [
 
 docs_hub = (DOCS / "docs.html").read_text(encoding="utf-8")
 for required in [
-    "15 MB verified idle",
+    "32 MB verified idle",
     "Safety & reversibility",
     "Workspace foundation",
     "./architecture.html",
@@ -123,6 +123,7 @@ for key in [
     "power_mode",
     "date_menu",
     "native_frame",
+    "native_frame_light",
 ]:
     if f'data-runtime-shot="{key}"' not in gallery:
         errors.append(f"gallery.html: missing runtime shot: {key}")
@@ -132,8 +133,8 @@ for key in [
 for mode in ("list", "grid", "card", "carousel"):
     if f'data-gallery-view="{mode}"' not in gallery:
         errors.append(f"gallery.html: missing {mode} view switch")
-if gallery.count('data-runtime-shot=') != 13:
-    errors.append("gallery.html: expected exactly 13 runtime screenshot elements")
+if gallery.count('data-runtime-shot=') != 14:
+    errors.append("gallery.html: expected exactly 14 runtime screenshot elements")
 for element_id in ("galleryGrid", "galleryPrevious", "galleryNext", "galleryPosition", "galleryCarouselControls"):
     if element_id not in parsed["gallery.html"].ids:
         errors.append(f"gallery.html: missing interactive element #{element_id}")
@@ -181,5 +182,5 @@ for required_file in [
 if errors:
     raise SystemExit("\n".join(f"ERROR: {error}" for error in errors))
 print(
-    f"Docs validation passed: {len(html_files)} HTML pages, links, metadata, docs hub and 13-surface, four-view gallery verified"
+    f"Docs validation passed: {len(html_files)} HTML pages, links, metadata, docs hub and 14-surface, four-view gallery verified"
 )
