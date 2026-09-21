@@ -369,7 +369,7 @@ $form.Controls.Add($label)
         $nativeFramePath = Save-WindowCapture -Hwnd $probeHwnd -FileName "$Key.png"
         Assert-VisualCapture -Path $nativeFramePath -Key $Key
         $captures[$Key] = "$Key.png"
-        Write-Host "FRAME CAPTURE $Key: real HWND, DWM theme $expectedDark, rounded corners, original Win32 styles intact."
+        Write-Host ("FRAME CAPTURE {0}: real HWND, DWM theme {1}, rounded corners, original Win32 styles intact." -f $Key, $expectedDark)
     } finally {
         if ($probeProcess -and -not $probeProcess.HasExited) { Stop-Process -Id $probeProcess.Id -Force -ErrorAction SilentlyContinue }
         if ($shellProcess -and -not $shellProcess.HasExited) { Stop-Process -Id $shellProcess.Id -Force -ErrorAction SilentlyContinue }
