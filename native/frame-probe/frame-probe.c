@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <dwmapi.h>
+#include <stdio.h>
 
 #define PROBE_CLASS L"FedoraWinNativeFrameProbe"
 #define MSG_STATE (WM_APP + 81)
@@ -234,13 +235,25 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE unused,
     cls.hCursor = LoadCursorW(NULL, IDC_ARROW);
     cls.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
     cls.lpszClassName = PROBE_CLASS;
-    if (!RegisterClassExW(&cls)) return 2;
+    fprintf(stderr, "WinMain started PID=%lu\n", (unsigned long)GetCurrentProcessId());
+    fflush(stderr);
+    if (!RegisterClassExW(&cls)) {
+        fprintf(stderr, "RegisterClassExW failed=%lu\n", (unsigned long)GetLastError());
+        fflush(stderr);
+        return 2;
+    }
     HWND hwnd = CreateWindowExW(0, PROBE_CLASS,
         L"FedoraWin Frame Probe - ORIGINAL", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, 850, 570,
         NULL, NULL, instance, NULL);
-    if (!hwnd) return 3;
-    ShowWindow(hwnd, show);
+    if (!hwnd) {
+        fprintf(stderr, "CreateWindowExW failed=%lu\n", (unsigned long)GetLastError());
+        fflush(stderr);
+        return 3;
+    }
+    fprintf(stderr, "Created actual HWND=%p, show=%d\n", (void *)hwnd, show);
+    fflush(stderr);
+    ShowWindow(hwnd, SW_SHOWNORMAL);
     UpdateWindow(hwnd);
     MSG msg;
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {

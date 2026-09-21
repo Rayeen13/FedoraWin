@@ -56,16 +56,26 @@ function Capture($hwnd, $label) {
     Check ((Get-Item -LiteralPath $path).Length -gt 5000) "Empty $label screen"
     return [pscustomobject]@{ Path=$path; Pixel=$pixel; Rect=$rect; Width=$width }
 }
-$process = Start-Process -FilePath $exe -WorkingDirectory $out -PassThru
+$stdout = Join-Path $out 'frame.stdout.txt'
+$stderr = Join-Path $out 'frame.stderr.txt'
+$process = Start-Process -FilePath $exe -WorkingDirectory $out -PassThru -WindowStyle Normal -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 $hwnd = [IntPtr]::Zero
 try {
   for ($i=0; $i -lt 100; $i++) {
-    if ($process.HasExited) { throw "Native probe exited early $($process.ExitCode)" }
+    $process.Refresh()
+    if ($process.HasExited) {
+      $err = try { Get-Content -LiteralPath $stderr -Raw -ErrorAction Stop } catch { '<unavailable>' }
+      throw "Native probe exited early $($process.ExitCode); stderr=$err"
+    }
     $hwnd = [FrameProbeApi]::FindWindowW('FedoraWinNativeFrameProbe', $null)
     if ($hwnd -ne [IntPtr]::Zero) { break }
     Start-Sleep -Milliseconds 200
   }
-  Check ($hwnd -ne [IntPtr]::Zero) 'Native HWND not found.'
+  if ($hwnd -eq [IntPtr]::Zero) {
+    $err = try { Get-Content -LiteralPath $stderr -Raw -ErrorAction Stop } catch { '<unavailable>' }
+    $app = try { Get-Process -Id $process.Id -ErrorAction Stop | Select-Object Id,ProcessName,MainWindowHandle,MainWindowTitle | Out-String } catch { '<process unavailable>' }
+    throw "Native HWND not found. PID=$($process.Id); process=$app; stderr=$err"
+  }
   $owner = [uint32]0
   [void][FrameProbeApi]::GetWindowThreadProcessId($hwnd,[ref]$owner)
   Check ($owner -eq $process.Id) 'Window owned by unexpected PID.'
