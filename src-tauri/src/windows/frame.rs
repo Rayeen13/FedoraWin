@@ -183,6 +183,7 @@ fn palette(appearance: &AppearanceState) -> FramePalette {
             caption: Some(colorref(255, 255, 255)),
             text: Some(colorref(32, 32, 34)),
         },
+        // System means Windows remains authoritative for light/dark and caption colors.
         ThemeMode::System => FramePalette {
             dark: None,
             caption: None,
@@ -214,6 +215,7 @@ unsafe fn eligible(hwnd: isize) -> bool {
     {
         return false;
     }
+    // Leave custom/borderless titlebars and their hit testing to the owning application.
     if GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CAPTION != WS_CAPTION {
         return false;
     }
@@ -248,6 +250,7 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
         let mut journal = originals()
             .lock()
             .unwrap_or_else(|error| error.into_inner());
+        // Recheck under the journal lock: a reset must close this gate even mid-scan.
         if !FRAME_WATCHER_ENABLED.load(Ordering::SeqCst) {
             return 0;
         }
@@ -267,11 +270,14 @@ extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
             .is_none_or(|original| original.pid != pid || original.created != created)
         {
             journal.insert(hwnd, snapshot_frame(hwnd, pid, created));
+            // Persist original DWM values before applying any changes to a foreign HWND.
             if persist_originals(&journal).is_err() {
                 journal.remove(&hwnd);
                 return 1;
             }
         }
+        // Never replace Win32 caption buttons/hit-testing or fake a titlebar.
+        // Only successfully written DWM attributes enter the in-memory recovery flags.
         let original = journal.get_mut(&hwnd).expect("frame journal entry");
         if let Some(dark) = ctx.palette.dark {
             if original.dark.is_some() {
