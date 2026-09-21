@@ -25,6 +25,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: PowerShell test script syntax
+        shell: pwsh
+        run: |
+          foreach ($script in @('tests/capture-site-preview.ps1', 'tests/check-frame-recovery.ps1', 'tests/check-memory-budget.ps1')) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script).Path, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count -gt 0) {
+              $parseErrors | ForEach-Object { Write-Host "PARSER ERROR: $_" }
+              throw "PowerShell syntax failed: $script"
+            }
+          }
       - name: UI syntax check
         run: node --check ui/app.js
       - name: Workspace ready syntax check
