@@ -34,6 +34,12 @@ public static class FedoraWinCaptureNative {
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int capacity);
 
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+    public static extern int GetWindowLong(IntPtr hwnd, int index);
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmGetWindowAttribute(IntPtr hwnd, uint attribute, out int value, uint size);
+
     public static bool AnyVisibleExplorerTaskbar() {
         bool visible = false;
         EnumWindows((hwnd, _) => {
@@ -298,12 +304,16 @@ Invoke-Capture -Key 'radio_pause' -View 'quick-settings' -WindowLabel 'quick-set
 Invoke-Capture -Key 'date_menu' -View 'date-menu' -WindowLabel 'date-menu' -Theme 'dark'
 
 function Invoke-NativeFrameCapture {
+    param(
+        [ValidateSet('dark', 'light')][string]$Theme,
+        [string]$Key
+    )
     $env:FEDORAWIN_CAPTURE_VIEW = 'panel'
     $env:FEDORAWIN_CAPTURE_MODE = ''
-    $env:FEDORAWIN_CAPTURE_THEME = 'dark'
-    $shellProcess = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
+    $env:FEDORAWIN_CAPTURE_THEME = $Theme
+    $shellProcess = $null
     $probeProcess = $null
-    $probeFile = Join-Path $output 'native-frame-probe.ps1'
+    $probeFile = Join-Path $output "native-frame-probe-$Theme.ps1"
     @'
 Add-Type -AssemblyName System.Windows.Forms
 $form = New-Object System.Windows.Forms.Form
@@ -321,15 +331,45 @@ $form.Controls.Add($label)
 '@ | Set-Content -LiteralPath $probeFile -Encoding UTF8
 
     try {
-        [void](Wait-Window -ProcessId $shellProcess.Id -Title 'FedoraWin — panel')
+        # Establish the WinForms HWND and its Windows-owned styles before FedoraWin
+        # launches. Otherwise an unstyled screenshot could be mistaken for DWM proof.
         $probeProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-STA','-File', $probeFile) -PassThru
         $probeHwnd = Wait-Window -ProcessId $probeProcess.Id -Title 'FedoraWin Native Frame Probe'
-        # DWM now owns the real caption buttons; there is no FedoraWin overlay window.
-        # Allow the frame watcher to observe and style the probe HWND before capture.
-        Start-Sleep -Milliseconds 1200
-        $nativeFramePath = Save-WindowCapture -Hwnd $probeHwnd -FileName 'native_frame.png'
-        Assert-VisualCapture -Path $nativeFramePath -Key 'native_frame'
-        $captures.native_frame = 'native_frame.png'
+        $originalStyle = [FedoraWinCaptureNative]::GetWindowLong($probeHwnd, -16)
+        $originalExStyle = [FedoraWinCaptureNative]::GetWindowLong($probeHwnd, -20)
+        if (($originalStyle -band 0x00c00000) -ne 0x00c00000 -or
+            ($originalStyle -band 0x00080000) -eq 0) {
+            throw 'Native frame capture probe does not have Windows-owned caption/system menu.'
+        }
+        $shellProcess = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
+        [void](Wait-Window -ProcessId $shellProcess.Id -Title 'FedoraWin — panel')
+        $expectedDark = if ($Theme -eq 'dark') { 1 } else { 0 }
+        $themeConfirmed = $false
+        for ($attempt = 0; $attempt -lt 80; $attempt++) {
+            if ($shellProcess.HasExited) { throw "FedoraWin exited before $Theme frame capture." }
+            $darkValue = -1
+            $cornerValue = -1
+            $darkResult = [FedoraWinCaptureNative]::DwmGetWindowAttribute($probeHwnd, 20, [ref]$darkValue, 4)
+            $cornerResult = [FedoraWinCaptureNative]::DwmGetWindowAttribute($probeHwnd, 33, [ref]$cornerValue, 4)
+            if ($darkResult -eq 0 -and $darkValue -eq $expectedDark -and
+                $cornerResult -eq 0 -and $cornerValue -eq 2) {
+                $themeConfirmed = $true
+                break
+            }
+            Start-Sleep -Milliseconds 200
+        }
+        if (-not $themeConfirmed) {
+            throw "Real HWND never reached the $Theme DWM theme and rounded-corner preference (dark=$darkValue; corner=$cornerValue)."
+        }
+        if ([FedoraWinCaptureNative]::GetWindowLong($probeHwnd, -16) -ne $originalStyle -or
+            [FedoraWinCaptureNative]::GetWindowLong($probeHwnd, -20) -ne $originalExStyle) {
+            throw "FedoraWin changed native Win32 frame styles during the $Theme capture."
+        }
+        Start-Sleep -Milliseconds 400
+        $nativeFramePath = Save-WindowCapture -Hwnd $probeHwnd -FileName "$Key.png"
+        Assert-VisualCapture -Path $nativeFramePath -Key $Key
+        $captures[$Key] = "$Key.png"
+        Write-Host "FRAME CAPTURE $Key: real HWND, DWM theme $expectedDark, rounded corners, original Win32 styles intact."
     } finally {
         if ($probeProcess -and -not $probeProcess.HasExited) { Stop-Process -Id $probeProcess.Id -Force -ErrorAction SilentlyContinue }
         if ($shellProcess -and -not $shellProcess.HasExited) { Stop-Process -Id $shellProcess.Id -Force -ErrorAction SilentlyContinue }
@@ -340,7 +380,8 @@ $form.Controls.Add($label)
     }
 }
 
-Invoke-NativeFrameCapture
+Invoke-NativeFrameCapture -Theme 'dark' -Key 'native_frame'
+Invoke-NativeFrameCapture -Theme 'light' -Key 'native_frame_light'
 
 $hashes = [ordered]@{}
 foreach ($entry in $captures.GetEnumerator()) {
@@ -360,6 +401,9 @@ if ($uniqueCaptureCount -lt 12) {
 }
 if ($hashes.quick_settings_dark -eq $hashes.quick_settings_light) {
     throw 'Quick Settings dark/light captures are identical.'
+}
+if ($hashes.native_frame -eq $hashes.native_frame_light) {
+    throw 'Native frame dark/light captures are identical.'
 }
 if ($hashes.power_mode -eq $hashes.quick_settings_dark) {
     throw 'Power Mode flyout capture did not produce a distinct surface.'
