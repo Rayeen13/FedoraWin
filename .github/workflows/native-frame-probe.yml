@@ -1,0 +1,50 @@
+name: Native frame attach/detach proof
+
+on:
+  push:
+    branches: [dev/gnome-native-20260914]
+    paths:
+      - 'native/frame-probe/**'
+      - '.github/workflows/native-frame-probe.yml'
+  pull_request:
+    paths:
+      - 'native/frame-probe/**'
+      - '.github/workflows/native-frame-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-win32-frame:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-gcc
+      - name: Build real native Win32 frame renderer
+        shell: msys2 {0}
+        run: |
+          mkdir -p native/frame-probe/out
+          gcc -std=c11 -Wall -Wextra -Werror -municode -mwindows \
+            native/frame-probe/frame-probe.c \
+            -o native/frame-probe/out/fedorawin-frame-probe.exe \
+            -ldwmapi -lgdi32 -luser32
+          test -s native/frame-probe/out/fedorawin-frame-probe.exe
+      - name: Test same-thread attach, hit tests, rollback and real pixels
+        shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./native/frame-probe/check-frame.ps1
+      - name: Upload real Windows frame captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedorawin-native-frame-probe
+          path: native/frame-probe/out/frame-*.png
+          if-no-files-found: warn
+          retention-days: 14
