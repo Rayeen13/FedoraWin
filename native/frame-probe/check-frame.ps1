@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
 using System;
+using System.Text;
 using System.Runtime.InteropServices;
 public static class FrameProbeApi {
   [StructLayout(LayoutKind.Sequential)]
@@ -11,6 +12,8 @@ public static class FrameProbeApi {
   public static extern IntPtr FindWindowW(string cls, string title);
   [DllImport("user32.dll")]
   public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+  public static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int capacity);
   [DllImport("user32.dll")]
   public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
   [DllImport("user32.dll")]
@@ -67,7 +70,7 @@ try {
       $err = try { Get-Content -LiteralPath $stderr -Raw -ErrorAction Stop } catch { '<unavailable>' }
       throw "Native probe exited early $($process.ExitCode); stderr=$err"
     }
-    $hwnd = [FrameProbeApi]::FindWindowW('FedoraWinNativeFrameProbe', $null)
+    $hwnd = $process.MainWindowHandle
     if ($hwnd -ne [IntPtr]::Zero) { break }
     Start-Sleep -Milliseconds 200
   }
@@ -79,6 +82,9 @@ try {
   $owner = [uint32]0
   [void][FrameProbeApi]::GetWindowThreadProcessId($hwnd,[ref]$owner)
   Check ($owner -eq $process.Id) 'Window owned by unexpected PID.'
+  $className = [Text.StringBuilder]::new(256)
+  [void][FrameProbeApi]::GetClassNameW($hwnd, $className, $className.Capacity)
+  Check ($className.ToString() -eq 'FedoraWinNativeFrameProbe') "Unexpected native class: $className"
   Check ((Send $hwnd ($WM_APP+81)) -eq 0) 'Expected original window on launch.'
   Check ((Send $hwnd ($WM_APP+82)) -eq 1) 'Expected original WNDPROC.'
   $original = Capture $hwnd 'original'
