@@ -35,6 +35,9 @@ static BOOL enable(HWND hwnd) {
         GetCurrentThreadId() != GetWindowThreadProcessId(hwnd, NULL) ||
         (GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CAPTION) != WS_CAPTION)
         return FALSE;
+    /* WM_CREATE predates ShowWindow, which sets WS_VISIBLE. Save the exact
+       live style immediately before attachment, not at window creation. */
+    original_style = GetWindowLongPtrW(hwnd, GWL_STYLE);
     SetLastError(0);
     LONG_PTR old = SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)frame_proc);
     if (!old) return FALSE;
