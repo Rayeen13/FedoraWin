@@ -18,10 +18,11 @@ MSYS2 UCRT64, from repository root:
 
 CI builds and starts the *actual executable*, sends F8 on the GUI thread,
 checks same-PID attach/detach/reattach and restored original WNDPROC and
-window styles, verifies headerbar drag, maximize and resize hit tests and
+window styles, verifies headerbar drag, minimize/maximize and resize hit tests,
+actual Windows system-command maximize/restore and minimize/restore,
 actual dark pixels, and compares the original and restored screenshots
-pixel-for-pixel. The first passing run is 35592649463; the expanded gate
-must pass separately before its additional checks count.
+pixel-for-pixel. Each new check counts as validated only after its own
+Windows CI run passes.
 
 This does not prove foreign-app injection, 32-bit compatibility, Windows 11
 Snap Layout hover, accessibility, data safety, DPI/multimonitor robustness,
