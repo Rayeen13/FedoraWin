@@ -20,6 +20,102 @@
   };
   ensureDocsLink();
 
+  // GNOME-inspired site navigation. This is website chrome, not an emulated
+  // system panel or evidence of a shipped FedoraWin desktop capability.
+  const sitePanel=document.createElement('div');
+  sitePanel.className='site-panel';
+  sitePanel.innerHTML=[
+    '<div class="site-panel__inside">',
+    '<button type="button" class="site-panel__activities" id="siteActivities" aria-controls="siteOverview" aria-expanded="false"><span class="site-panel__dot" aria-hidden="true"></span> Activities</button>',
+    '<time class="site-panel__clock" id="siteClock" aria-label="Your local date and time"></time>',
+    '<span class="site-panel__edition"><span class="site-panel__edition-dot" aria-hidden="true"></span> FedoraWin <span class="site-panel__edition-detail">· website preview</span></span>',
+    '</div>'
+  ].join('');
+  document.body.prepend(sitePanel);
+  const siteOverview=document.createElement('div');
+  siteOverview.className='site-overview';
+  siteOverview.id='siteOverview';
+  siteOverview.hidden=true;
+  siteOverview.setAttribute('role','dialog');
+  siteOverview.setAttribute('aria-modal','true');
+  siteOverview.setAttribute('aria-label','FedoraWin website Activities');
+  siteOverview.innerHTML=[
+    '<div class="site-overview__backdrop" data-close-overview></div>',
+    '<div class="site-overview__content">',
+      '<div class="site-overview__header"><div class="site-overview__heading"><img src="./assets/fedorawin-logo.svg" width="44" height="44" alt=""><div><strong>Activities</strong><span>Explore FedoraWin · website navigation</span></div></div><button class="site-overview__close" type="button" data-close-overview aria-label="Close Activities">×</button></div>',
+      '<div class="site-overview__intro">Your FedoraWin workspace <span>— GNOME 51 design target · pre-beta</span></div>',
+      '<div class="site-overview__tiles">',
+        '<a href="./gallery.html" class="site-overview__tile site-overview__tile--large"><img src="./assets/runtime/activities.png" alt="Actual FedoraWin.exe Activities screenshot"><span><b>Gallery</b><small>Browse real Windows CI captures ↗</small></span></a>',
+        '<a href="./status.html" class="site-overview__tile"><span class="site-overview__glyph" aria-hidden="true">◉</span><span><b>Development status</b><small>Verified progress & beta gates ↗</small></span></a>',
+        '<a href="./docs.html" class="site-overview__tile"><span class="site-overview__glyph" aria-hidden="true">▤</span><span><b>Documentation</b><small>Explore the implementation ↗</small></span></a>',
+        '<a href="./architecture.html" class="site-overview__tile"><span class="site-overview__glyph" aria-hidden="true">⌘</span><span><b>Architecture</b><small>Windows underneath ↗</small></span></a>',
+        '<a href="./getting-started.html" class="site-overview__tile"><span class="site-overview__glyph" aria-hidden="true">↗</span><span><b>Test FedoraWin</b><small>Pre-beta development build ↗</small></span></a>',
+      '</div>',
+      '<p class="site-overview__foot">This overview navigates the website; it does not control your Windows desktop. <span>Esc to close</span></p>',
+    '</div>'
+  ].join('');
+  document.body.append(siteOverview);
+  const activitiesButton=sitePanel.querySelector('#siteActivities');
+  const overviewClose=siteOverview.querySelector('.site-overview__close');
+  let overviewReturnFocus=null;
+  const closeSiteOverview=()=>{
+    if(siteOverview.hidden) return;
+    siteOverview.classList.remove('is-open');
+    siteOverview.hidden=true;
+    document.body.classList.remove('site-overview-open');
+    activitiesButton.setAttribute('aria-expanded','false');
+    overviewReturnFocus?.focus({preventScroll:true});
+    overviewReturnFocus=null;
+  };
+  const openSiteOverview=()=>{
+    if(!siteOverview.hidden){closeSiteOverview();return;}
+    overviewReturnFocus=document.activeElement;
+    siteOverview.hidden=false;
+    document.body.classList.add('site-overview-open');
+    activitiesButton.setAttribute('aria-expanded','true');
+    requestAnimationFrame(()=>siteOverview.classList.add('is-open'));
+    overviewClose.focus({preventScroll:true});
+  };
+  activitiesButton.addEventListener('click',openSiteOverview);
+  siteOverview.querySelectorAll('[data-close-overview]').forEach(node=>node.addEventListener('click',closeSiteOverview));
+  siteOverview.addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();closeSiteOverview();return;}
+    if(event.key!=='Tab') return;
+    const focusables=[...siteOverview.querySelectorAll('button,a[href]')].filter(el=>!el.hidden);
+    if(!focusables.length) return;
+    if(event.shiftKey&&document.activeElement===focusables[0]){event.preventDefault();focusables.at(-1).focus();}
+    else if(!event.shiftKey&&document.activeElement===focusables.at(-1)){event.preventDefault();focusables[0].focus();}
+  });
+  const siteClock=sitePanel.querySelector('#siteClock');
+  const updateSiteClock=()=>{
+    const now=new Date();
+    siteClock.dateTime=now.toISOString();
+    siteClock.textContent=now.toLocaleString(undefined,{weekday:'short',hour:'numeric',minute:'2-digit'});
+    siteClock.title=now.toLocaleString(undefined,{dateStyle:'full',timeStyle:'short'});
+  };
+  updateSiteClock();
+  setInterval(updateSiteClock,60000);
+
+  // A thin scroll indicator deliberately follows the page, not the mouse.
+  const pageProgress=document.createElement('div');
+  pageProgress.className='site-scroll-progress';
+  pageProgress.setAttribute('aria-hidden','true');
+  document.body.append(pageProgress);
+  let scrollQueued=false;
+  const updatePageProgress=()=>{
+    scrollQueued=false;
+    const total=document.documentElement.scrollHeight-window.innerHeight;
+    pageProgress.style.transform='scaleX('+(total>0?Math.min(1,Math.max(0,window.scrollY/total)):0)+')';
+  };
+  addEventListener('scroll',()=>{
+    if(scrollQueued) return;
+    scrollQueued=true;
+    requestAnimationFrame(updatePageProgress);
+  },{passive:true});
+  addEventListener('resize',updatePageProgress,{passive:true});
+  updatePageProgress();
+
+
   const theme=document.querySelector('#theme');
   const syncThemeLabel=()=> {
     if(!theme) return;
