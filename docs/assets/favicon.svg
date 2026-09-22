@@ -1,1 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop stop-color="#62a0ea"/><stop offset="1" stop-color="#1c71d8"/></linearGradient></defs><circle cx="32" cy="32" r="30" fill="url(#g)"/><path d="M39 16H29c-7 0-12 5-12 12v20h8V35h10v-7H25v-1c0-3 2-5 5-5h9v-6Z" fill="#fff"/><path d="M31 36h8v12h8V28h-8v8h-8Z" fill="#fff" opacity=".88"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+<title id="title">FedoraWin</title>
+<defs><linearGradient id="surface" x1="8" y1="8" x2="58" y2="59" gradientUnits="userSpaceOnUse"><stop stop-color="#62a0ea"/><stop offset="1" stop-color="#1c71d8"/></linearGradient></defs>
+<rect x="2" y="2" width="60" height="60" rx="19" fill="url(#surface)"/>
+<path d="M15 16h34v8H25v9h19v8H25v10H15V16Z" fill="#fff"/>
+<path d="m34 46 4 7 5-8 5 8 4-7" fill="none" stroke="#fff" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
