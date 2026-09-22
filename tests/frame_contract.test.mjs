@@ -51,6 +51,13 @@ test('frame guardian is initialized before the watcher can mutate foreign HWNDs'
   assert.match(runtime, /frame_recovery::maybe_run_guardian\(\)/);
 });
 
+test('a failed guardian startup cannot be mistaken for an initialized guardian on retry', () => {
+  assert.match(recovery, /static GUARDIAN_READY: AtomicBool = AtomicBool::new\(false\)/);
+  assert.match(recovery, /if JOURNAL_PATH\.get\(\)\.is_some\(\) \{\s*return if GUARDIAN_READY\.load\(Ordering::SeqCst\)/);
+  assert.match(recovery, /frame guardian initialization failed; refusing to style windows/);
+  assert.match(recovery, /\.spawn\(\)\s*\.map_err[\s\S]*?\?;\s*GUARDIAN_READY\.store\(true, Ordering::SeqCst\)/);
+});
+
 test('original DWM values are committed to disk before first styling', () => {
   assert.match(frame, /journal\.insert\(hwnd, snapshot_frame\(hwnd, pid, created\)\)/);
   assert.match(frame, /if persist_originals\(&journal\)\.is_err\(\)/);
