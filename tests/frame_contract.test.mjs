@@ -36,6 +36,12 @@ test('reset prevents in-flight and future watcher mutations', () => {
   assert.match(runtime, /windows::frame::reset_top_level_windows\(\)/);
 });
 
+test('normal rollback respects a target application overriding its DWM border', () => {
+  assert.match(frame, /if original\.changed_border \{/);
+  assert.match(frame, /read_attr::<u32>\(hwnd, DWMWA_BORDER_COLOR\) == Some\(DWMWA_COLOR_NONE\)/);
+  assert.match(frame, /if read_attr::<u32>\(hwnd, DWMWA_BORDER_COLOR\) == Some\(DWMWA_COLOR_NONE\) \{\s*set_attr\(hwnd, DWMWA_BORDER_COLOR, &value\)/);
+});
+
 test('System restores forced caption colors without changing real frames', () => {
   assert.match(frame, /ThemeMode::System => FramePalette/);
   assert.match(frame, /restore_colors\(hwnd, original\)/);
