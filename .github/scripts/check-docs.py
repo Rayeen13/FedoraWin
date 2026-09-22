@@ -216,6 +216,55 @@ for required in ("body.viewer-open", ".gallery-card[hidden]", ".lightbox.open", 
         errors.append(f"styles.css: GNOME-like gallery interaction missing {required}")
 
 
+
+# GNOME-inspired website framing must be a working, accessible site control,
+# distinct from the genuine Windows runtime screenshots and their provenance.
+for required in (
+    "sitePanel.innerHTML",
+    "siteOverview.innerHTML",
+    "aria-modal",
+    "siteOverview.hidden=true",
+    "closeSiteOverview",
+    "openSiteOverview",
+    "activitiesButton.addEventListener('click',openSiteOverview)",
+    "document.querySelector('#heroActivities')?.addEventListener('click',openSiteOverview)",
+    "siteClock.textContent",
+    "setInterval(updateSiteClock,60000)",
+    "requestAnimationFrame(updatePageProgress)",
+):
+    if required not in site_js:
+        errors.append(f"app.js: GNOME-inspired site interaction missing {required}")
+for required in (
+    ".site-panel",
+    ".site-overview",
+    ".site-overview[hidden]",
+    ".site-overview__tiles",
+    ".hero-dock",
+    ".hero-actions__overview",
+    ".gallery-cover__front",
+    "@keyframes site-rise",
+    "prefers-reduced-motion:reduce",
+):
+    if required not in site_css:
+        errors.append(f"styles.css: desktop-inspired theme missing {required}")
+for required in (
+    'id="heroActivities"',
+    'class="hero-dock"',
+    'src="./assets/runtime/activities.png"',
+):
+    if required not in index:
+        errors.append(f"index.html: missing GNOME-like homepage element {required}")
+for required in (
+    'class="wrap gallery-hero__grid"',
+    'gallery-cover__rear',
+    'gallery-cover__middle',
+    'gallery-cover__front',
+    'href="#galleryGrid"',
+):
+    if required not in gallery:
+        errors.append(f"gallery.html: missing real-capture album presentation {required}")
+
+
 if errors:
     raise SystemExit("\n".join(f"ERROR: {error}" for error in errors))
 print(
