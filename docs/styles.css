@@ -223,3 +223,12 @@ html[data-theme=light] .hero{background:radial-gradient(ellipse 70% 80% at 78% 5
  .hero-shot:hover .window,.site-overview__tile:hover{transform:none}
  .site-overview__content{opacity:1;transform:none}
 }
+
+
+/* A recognisable GNOME-style dash linking to actual website pages. */
+.hero-dock{position:relative;z-index:2;display:flex;gap:7px;align-items:center;justify-content:center;width:max-content;max-width:100%;margin:20px auto 0;padding:8px 11px;border:1px solid rgba(255,255,255,.12);border-radius:22px;background:rgba(32,34,43,.84);box-shadow:0 16px 42px rgba(4,8,18,.34);backdrop-filter:blur(20px)}
+.hero-dock a{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid transparent;color:#fff;font-size:25px;line-height:1;transition:transform .18s cubic-bezier(.2,.8,.2,1),background .18s,border-color .18s}
+.hero-dock a:hover,.hero-dock a:focus-visible{transform:translateY(-5px);background:rgba(98,160,234,.22);border-color:rgba(98,160,234,.4)}
+.hero-dock a:focus-visible{outline:2px solid #62a0ea;outline-offset:3px}
+.hero-dock a img{width:29px;height:29px;border-radius:9px}
+@media(prefers-reduced-motion:reduce){.hero-dock a{transition:none}.hero-dock a:hover,.hero-dock a:focus-visible{transform:none}}
