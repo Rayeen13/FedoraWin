@@ -13,6 +13,8 @@ public static class FrameProbeApi {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int capacity);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetSystemMenu(IntPtr hwnd, bool revert);
+  [DllImport("user32.dll")] public static extern uint GetMenuState(IntPtr menu, uint item, uint flags);
   [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
@@ -48,6 +50,9 @@ try {
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 1) 'Attach did not occur.';Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Original Win32 style bits changed.';$styled=Capture $hwnd 'attached';Check ($styled.Pixel.R-lt115 -and $styled.Pixel.G-lt115) 'Dark native header not painted.';Check ((Get-FileHash $original.Path).Hash-ne(Get-FileHash $styled.Path).Hash) 'Original and attached images identical.'
   $x=[int]($styled.Rect.Left+$styled.Width/2);$y=[int]($styled.Rect.Top+42);$param=[int64](($x-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($param)))-eq 2) 'Header dragging failed.'
   $maxX=[int]($styled.Rect.Right-70);$maxParam=[int64](($maxX-band 0xffff)-bor(($y-band 0xffff)-shl 16));$maxHit=Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($maxParam));Check ($maxHit-eq 9) "Maximize button hit target failed: hit=$maxHit"
+  # The replacement header must not discard Windows' real Alt+Space/system-menu command source.
+  $menu=[FrameProbeApi]::GetSystemMenu($hwnd,$false);Check ($menu-ne[IntPtr]::Zero) 'Native system menu missing while frame is attached.'
+  Check ([FrameProbeApi]::GetMenuState($menu,0xF060,0x00000000)-ne[uint32]::MaxValue) 'Native Close system-menu command missing.'
   $leftX=[int]($styled.Rect.Left+3);$leftParam=[int64](($leftX-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($leftParam)))-eq 10) 'Left resize border hit target failed.'
   # Exercise the actual Windows-owned maximize/restore system command path, not only hit-test geometry.
   [void](Send $hwnd $WM_NCLBUTTONDOWN 9 ([IntPtr]::new($maxParam)));Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsZoomed($hwnd)) 'Native maximize control did not maximize through WM_SYSCOMMAND.'
@@ -65,5 +70,12 @@ try {
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 0) 'Detach did not occur.';Check ((Send $hwnd ($WM_APP+82))-eq 1) 'Original WNDPROC not restored.';Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Original style bits not preserved.';Check (-not $process.HasExited) 'Target app died during detach.'
   $restored=Capture $hwnd 'restored';Check ($restored.Pixel.R-gt115) 'Windows caption not restored.';Check ((Get-FileHash $original.Path).Hash-eq(Get-FileHash $restored.Path).Hash) 'Restored frame differs pixel-for-pixel from original.'
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 1) 'Reattach failed.';[void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+82))-eq 1) 'Second restore failed.'
-  Write-Host "FRAME PROBE PASS: attach -> Windows system-command maximize/restore, caption double-click, and minimize/restore -> exact rollback -> reattach -> rollback; same PID=$($process.Id)."
+  # Finally exercise the actual close circle, rather than closing the test only from the harness.
+  [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 1) 'Final attach before native close failed.'
+  $closeX=[int]($styled.Rect.Right-30);$closeParam=[int64](($closeX-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($closeParam)))-eq 20) 'Native close button hit target failed.'
+  [void](Send $hwnd $WM_NCLBUTTONDOWN 20 ([IntPtr]::new($closeParam)))
+  Check ($process.WaitForExit(3000)) 'Native close button did not terminate the disposable window process.'
+  $process.Refresh();Check ($process.ExitCode-eq 0) "Native close exited with code $($process.ExitCode)."
+  Check (-not [FrameProbeApi]::IsWindow($hwnd)) 'Native close left a live HWND.'
+  Write-Host "FRAME PROBE PASS: attach -> native system menu and Windows maximize/minimize/double-click -> exact rollback -> reattach -> rollback -> native close; same PID=$($process.Id)."
 } finally { if($hwnd-ne[IntPtr]::Zero -and [FrameProbeApi]::IsWindow($hwnd)){[void](Send $hwnd $WM_CLOSE)};if(-not $process.WaitForExit(3000)){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue} }
