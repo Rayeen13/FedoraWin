@@ -3,7 +3,7 @@
   "release": "0.4.0-dev",
   "target": "GNOME 51",
   "updated": "2026-09-22",
-  "runtime_gallery": "14 distinct real FedoraWin.exe Windows captures from native commit 19bdc033609c51941e2797159cef503da6807733; DWM frames included, separate GTK/libadwaita proof not counted",
+  "runtime_gallery": "14 distinct real FedoraWin.exe Windows captures from native commit 47a76421b89cff42a089bcc2846cad925a95070b; separate GTK/libadwaita proof not counted",
   "frame_recovery": "Guardian initialization fail-closed regression contract and real force-kill recovery Windows CI passed; physical Windows validation still required",
   "native_adwaita": {
     "status": "isolated Windows CI proof; not production integration",
@@ -24,6 +24,9 @@
   },
   "frame_recovery_source_sha": "19bdc033609c51941e2797159cef503da6807733",
   "frame_recovery_ci_run": 35750778518,
-  "runtime_capture_ci_run": 35750725036,
-  "site_gallery": "keyboard arrows, swipe, escape and counter across real captures; GNOME-inspired visual refresh"
+  "runtime_capture_ci_run": 35760244716,
+  "site_gallery": "One ordered image viewer (keyboard, swipe, counter), synchronized carousel, real-photo cover and GNOME-inspired website Activities navigation; website UI is not a FedoraWin shell feature",
+  "runtime_gallery_sha": "47a76421b89cff42a089bcc2846cad925a95070b",
+  "shell_interaction": "Activities Escape clears a nonempty search before closing the overview; Windows CI passed",
+  "shell_ci_run": 35760250978
 }
