@@ -77,6 +77,7 @@
     overviewClose.focus({preventScroll:true});
   };
   activitiesButton.addEventListener('click',openSiteOverview);
+  document.querySelector('#heroActivities')?.addEventListener('click',openSiteOverview);
   siteOverview.querySelectorAll('[data-close-overview]').forEach(node=>node.addEventListener('click',closeSiteOverview));
   siteOverview.addEventListener('keydown',event=>{
     if(event.key==='Escape'){event.preventDefault();closeSiteOverview();return;}
