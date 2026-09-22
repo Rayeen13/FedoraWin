@@ -39,6 +39,7 @@ assert.match(js, /data-app-page/);
 assert.match(js, /dash-favorite/);
 assert.match(js, /event\.key === 'Enter'/);
 assert.match(js, /event\.key === 'Escape'/);
+assert.match(js, /if \(search\.value\) \{\s*\/\/ GNOME overview: first Escape clears a search; another exits Activities\.[\s\S]*?search\.value = '';\s*appPage = 0;\s*refreshActivitiesContent\(\);\s*return;\s*\}\s*await call\('toggle_activities'\)/);
 assert.match(js, /calendar-grid/);
 assert.match(js, /captureMode/);
 assert.match(js, /captureEvidence/);
