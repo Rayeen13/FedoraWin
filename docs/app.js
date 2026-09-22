@@ -104,6 +104,8 @@
       }
       if(caption) caption.textContent=entry.dataset.caption||entry.querySelector('span b')?.textContent||'FedoraWin';
       position.textContent=(active+1)+' / '+entries.length;
+      // Keep the single-card carousel in sync with the opened album image.
+      document.dispatchEvent(new CustomEvent('fedorawin:gallery-image-selected',{detail:{entry}}));
     };
     const close=()=>{
       if(!isOpen()) return;
@@ -111,7 +113,12 @@
       lightbox.setAttribute('aria-hidden','true');
       document.body.classList.remove('viewer-open');
       image?.removeAttribute('src');
-      opener?.focus({preventScroll:true});
+      if(opener?.hidden){
+        // Album navigation may hide the originally opened carousel card.
+        document.querySelector('#galleryGrid .gallery-card:not([hidden])')?.focus({preventScroll:true});
+      }else{
+        opener?.focus({preventScroll:true});
+      }
       lightbox.inert=true;
       active=-1;
     };
@@ -209,6 +216,10 @@
       try{localStorage.setItem(viewKey,view)}catch(_){}
       render();
     }));
+    document.addEventListener('fedorawin:gallery-image-selected',event=>{
+      const index=cards.indexOf(event.detail.entry);
+      if(index>=0) select(index);
+    });
     previous?.addEventListener('click',()=>select(active-1));
     next?.addEventListener('click',()=>select(active+1));
     gallery.addEventListener('keydown',event=>{
