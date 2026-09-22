@@ -14,6 +14,8 @@ public static class FrameProbeApi {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
   [DllImport("user32.dll", EntryPoint="SendMessageW")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
 }
@@ -51,8 +53,13 @@ try {
   [void](Send $hwnd $WM_NCLBUTTONDOWN 9 ([IntPtr]::new($maxParam)));Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsZoomed($hwnd)) 'Native maximize control did not maximize through WM_SYSCOMMAND.'
   [void](Send $hwnd $WM_NCLBUTTONDOWN 9 ([IntPtr]::new($maxParam)));Start-Sleep -Milliseconds 250;Check (-not [FrameProbeApi]::IsZoomed($hwnd)) 'Native maximize control did not restore through WM_SYSCOMMAND.'
   Check ((Send $hwnd ($WM_APP+83))-eq 1) 'System-command round trip changed original style bits.'
+  # Verify the adjacent GNOME-style minimize circle calls Windows-owned SC_MINIMIZE.
+  $minX=[int]($styled.Rect.Right-108);$minParam=[int64](($minX-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($minParam)))-eq 8) 'Minimize button hit target failed.'
+  [void](Send $hwnd $WM_NCLBUTTONDOWN 8 ([IntPtr]::new($minParam)));Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsIconic($hwnd)) 'Native minimize control did not minimize through WM_SYSCOMMAND.'
+  [void][FrameProbeApi]::ShowWindow($hwnd,9);Start-Sleep -Milliseconds 250;Check (-not [FrameProbeApi]::IsIconic($hwnd)) 'Original Win32 window did not restore from minimize.'
+  Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Minimize/restore changed original style bits.'
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 0) 'Detach did not occur.';Check ((Send $hwnd ($WM_APP+82))-eq 1) 'Original WNDPROC not restored.';Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Original style bits not preserved.';Check (-not $process.HasExited) 'Target app died during detach.'
   $restored=Capture $hwnd 'restored';Check ($restored.Pixel.R-gt115) 'Windows caption not restored.';Check ((Get-FileHash $original.Path).Hash-eq(Get-FileHash $restored.Path).Hash) 'Restored frame differs pixel-for-pixel from original.'
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 1) 'Reattach failed.';[void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+82))-eq 1) 'Second restore failed.'
-  Write-Host "FRAME PROBE PASS: attach -> Windows system-command maximize/restore -> exact rollback -> reattach -> rollback; same PID=$($process.Id)."
+  Write-Host "FRAME PROBE PASS: attach -> Windows system-command maximize/restore and minimize/restore -> exact rollback -> reattach -> rollback; same PID=$($process.Id)."
 } finally { if($hwnd-ne[IntPtr]::Zero -and [FrameProbeApi]::IsWindow($hwnd)){[void](Send $hwnd $WM_CLOSE)};if(-not $process.WaitForExit(3000)){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue} }
