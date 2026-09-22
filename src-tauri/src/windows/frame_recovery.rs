@@ -8,6 +8,7 @@ use std::mem::size_of;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -26,6 +27,9 @@ const DWMWCP_ROUND: i32 = 2;
 const DWMWA_COLOR_NONE: u32 = 0xffff_fffe;
 
 static JOURNAL_PATH: OnceLock<PathBuf> = OnceLock::new();
+// OnceLock tracks a selected journal path, not a successfully running guardian.
+// If persistence or spawn fails, this process must never treat a retry as ready.
+static GUARDIAN_READY: AtomicBool = AtomicBool::new(false);
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -132,7 +136,11 @@ pub fn remove_journal() {
 
 pub fn start_guardian() -> Result<(), String> {
     if JOURNAL_PATH.get().is_some() {
-        return Ok(());
+        return if GUARDIAN_READY.load(Ordering::SeqCst) {
+            Ok(())
+        } else {
+            Err("frame guardian initialization failed; refusing to style windows".into())
+        };
     }
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -153,6 +161,7 @@ pub fn start_guardian() -> Result<(), String> {
         .arg(&path)
         .spawn()
         .map_err(|e| format!("independent frame guardian did not start: {e}"))?;
+    GUARDIAN_READY.store(true, Ordering::SeqCst);
     Ok(())
 }
 
