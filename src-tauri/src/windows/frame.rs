@@ -162,7 +162,11 @@ unsafe fn restore_frame(hwnd: isize, mut original: OriginalFrame) {
     }
     if original.changed_border {
         if let Some(value) = original.border {
-            set_attr(hwnd, DWMWA_BORDER_COLOR, &value);
+            // The target app may have changed its own border during our session.
+            // Restore only when the current value is still FedoraWin's sentinel.
+            if read_attr::<u32>(hwnd, DWMWA_BORDER_COLOR) == Some(DWMWA_COLOR_NONE) {
+                set_attr(hwnd, DWMWA_BORDER_COLOR, &value);
+            }
         }
     }
 }
