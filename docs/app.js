@@ -59,26 +59,98 @@
     document.querySelectorAll('.reveal').forEach(el=>el.classList.add('visible'));
   }
 
+  // Treat every real executable capture as an ordered album. The source buttons
+  // are never cloned: runtime CI hydration updates their data-image URLs in place.
   const lightbox=document.querySelector('#lightbox');
   if(lightbox){
+    const entries=[...document.querySelectorAll('[data-image]')];
     const image=lightbox.querySelector('img');
     const caption=lightbox.querySelector('figcaption');
-    const close=()=> {
+    const closeButton=lightbox.querySelector(':scope > button');
+    const figure=lightbox.querySelector('figure');
+    const createButton=(className,label,text)=>{
+      const button=document.createElement('button');
+      button.type='button';
+      button.className=className;
+      button.setAttribute('aria-label',label);
+      button.textContent=text;
+      return button;
+    };
+    const previous=createButton('lightbox-nav lightbox-previous','Previous image','←');
+    const next=createButton('lightbox-nav lightbox-next','Next image','→');
+    const position=document.createElement('output');
+    position.className='lightbox-position';
+    position.setAttribute('aria-live','polite');
+    figure?.append(position);
+    figure?.before(previous);
+    figure?.after(next);
+    closeButton?.classList.add('lightbox-close');
+    closeButton?.setAttribute('aria-label','Close image viewer');
+    lightbox.setAttribute('role','dialog');
+    lightbox.setAttribute('aria-modal','true');
+    lightbox.setAttribute('aria-label','FedoraWin screenshot viewer');
+    lightbox.inert=true;
+    let active=-1;
+    let opener=null;
+    let touchX=null;
+    const isOpen=()=>lightbox.classList.contains('open');
+    const show=index=>{
+      if(!entries.length) return;
+      active=(index+entries.length)%entries.length;
+      const entry=entries[active];
+      if(image){
+        image.src=entry.dataset.image;
+        image.alt=entry.querySelector('img')?.alt||entry.dataset.caption||'FedoraWin screenshot';
+      }
+      if(caption) caption.textContent=entry.dataset.caption||entry.querySelector('span b')?.textContent||'FedoraWin';
+      position.textContent=(active+1)+' / '+entries.length;
+    };
+    const close=()=>{
+      if(!isOpen()) return;
       lightbox.classList.remove('open');
       lightbox.setAttribute('aria-hidden','true');
+      document.body.classList.remove('viewer-open');
       image?.removeAttribute('src');
+      opener?.focus({preventScroll:true});
+      lightbox.inert=true;
+      active=-1;
     };
-    document.querySelectorAll('[data-image]').forEach(el=>el.addEventListener('click',()=>{
-      if(image) image.src=el.dataset.image;
-      if(caption) caption.textContent=el.dataset.caption||'';
+    entries.forEach((entry,index)=>entry.addEventListener('click',()=>{
+      opener=entry;
+      show(index);
+      lightbox.inert=false;
       lightbox.classList.add('open');
       lightbox.setAttribute('aria-hidden','false');
-      lightbox.querySelector('button')?.focus();
+      document.body.classList.add('viewer-open');
+      closeButton?.focus({preventScroll:true});
     }));
-    lightbox.querySelector('button')?.addEventListener('click',close);
+    closeButton?.addEventListener('click',close);
+    previous.addEventListener('click',()=>show(active-1));
+    next.addEventListener('click',()=>show(active+1));
     lightbox.addEventListener('click',event=>{if(event.target===lightbox) close()});
+    lightbox.addEventListener('touchstart',event=>{
+      touchX=isOpen()&&event.touches.length===1?event.touches[0].clientX:null;
+    },{passive:true});
+    lightbox.addEventListener('touchend',event=>{
+      if(touchX===null||!isOpen()) return;
+      const delta=event.changedTouches[0].clientX-touchX;
+      touchX=null;
+      if(Math.abs(delta)>48) show(active+(delta<0?1:-1));
+    },{passive:true});
     addEventListener('keydown',event=>{
-      if(event.key==='Escape'){close();closeMenu();}
+      if(event.key==='Escape'){close();closeMenu();return;}
+      if(!isOpen()) return;
+      if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
+        event.preventDefault();
+        if(event.key==='Home') show(0);
+        else if(event.key==='End') show(entries.length-1);
+        else show(active+(event.key==='ArrowRight'?1:-1));
+      }
+      if(event.key==='Tab'){
+        const order=[closeButton,previous,next].filter(Boolean);
+        if(event.shiftKey&&document.activeElement===order[0]){event.preventDefault();order.at(-1).focus();}
+        else if(!event.shiftKey&&document.activeElement===order.at(-1)){event.preventDefault();order[0].focus();}
+      }
     });
   }else{
     addEventListener('keydown',event=>{if(event.key==='Escape') closeMenu()});
