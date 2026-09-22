@@ -182,11 +182,36 @@ for required_file in [
     "gallery.html",
     "status.html",
     "assets/favicon.svg",
+    "assets/fedorawin-logo.svg",
     "robots.txt",
     "sitemap.xml",
 ]:
     if not (DOCS / required_file).exists():
         errors.append(f"docs/{required_file} is missing")
+
+
+# The site keeps one FedoraWin identity on every public page; the generated
+# Windows captures must remain the sole source for production shell images.
+for page_name in PUBLIC_PAGES:
+    source = (DOCS / page_name).read_text(encoding="utf-8")
+    if 'src="./assets/fedorawin-logo.svg"' not in source:
+        errors.append(f"{page_name}: FedoraWin identity missing")
+for required in (
+    "lightbox-previous",
+    "lightbox-next",
+    "lightbox-position",
+    "show(active+(event.key==='ArrowRight'?1:-1))",
+    "image.src=entry.dataset.image",
+    "opener?.focus",
+    "touchend",
+    "Escape",
+):
+    if required not in site_js:
+        errors.append(f"app.js: unified image viewer missing {required}")
+for required in ("body.viewer-open", ".gallery-card[hidden]", ".lightbox.open", "prefers-reduced-motion"):
+    if required not in site_css:
+        errors.append(f"styles.css: GNOME-like gallery interaction missing {required}")
+
 
 if errors:
     raise SystemExit("\n".join(f"ERROR: {error}" for error in errors))
