@@ -413,6 +413,13 @@ async function renderActivities() {
   search.addEventListener('keydown', async event => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      if (search.value) {
+        // GNOME overview: first Escape clears a search; another exits Activities.
+        search.value = '';
+        appPage = 0;
+        refreshActivitiesContent();
+        return;
+      }
       await call('toggle_activities');
       return;
     }
