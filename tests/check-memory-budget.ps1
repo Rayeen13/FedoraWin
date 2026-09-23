@@ -72,6 +72,8 @@ $env:FEDORAWIN_CAPTURE_VIEW = 'panel'
 $env:FEDORAWIN_CAPTURE_MODE = ''
 $env:FEDORAWIN_CAPTURE_THEME = 'dark'
 $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
+$runtimeChecksPassed = $false
+$preservedExplorer = @()
 
 try {
     Start-Sleep -Seconds 3
@@ -130,6 +132,8 @@ try {
     if ($last -gt ($TargetIdleMb + 50)) {
         Write-Warning "FedoraWin is above the ~$TargetIdleMb MB idle target ($last MB). The build is under the hard ceiling but needs further trimming."
     }
+
+    $runtimeChecksPassed = $true
 } finally {
     $treeIds = if ($process) { @(Get-ProcessTreeIds -RootProcessId $process.Id) } else { @() }
     foreach ($id in ($treeIds | Sort-Object -Descending)) {
@@ -138,4 +142,16 @@ try {
     Remove-Item Env:FEDORAWIN_CAPTURE_VIEW -ErrorAction SilentlyContinue
     Remove-Item Env:FEDORAWIN_CAPTURE_MODE -ErrorAction SilentlyContinue
     Remove-Item Env:FEDORAWIN_CAPTURE_THEME -ErrorAction SilentlyContinue
+
+    if ($runtimeChecksPassed) {
+        # Re-check after FedoraWin has been torn down as well. This catches cleanup
+        # regressions that could terminate/restart Explorer only while unwinding.
+        Start-Sleep -Milliseconds 500
+        $explorerAfterShutdown = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+        $preservedAfterShutdown = @($explorerBefore | Where-Object { $explorerAfterShutdown -contains $_ })
+        if ($preservedAfterShutdown.Count -eq 0) {
+            throw 'FedoraWin shutdown did not preserve any pre-existing Explorer process.'
+        }
+        Write-Host ("Explorer shutdown preservation verified for PID(s): {0}" -f ($preservedAfterShutdown -join ', '))
+    }
 }
