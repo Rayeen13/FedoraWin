@@ -60,6 +60,14 @@ function Get-TreeWorkingSetMb {
     }
 }
 
+# Explorer remains the Windows shell. FedoraWin may reserve desktop work area and
+# present shell surfaces, but a beta candidate must never replace/restart Explorer.
+$explorerBefore = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+if ($explorerBefore.Count -eq 0) {
+    throw 'Explorer is not running before the FedoraWin smoke test; preservation cannot be verified.'
+}
+Write-Host ("Explorer baseline PID(s): {0}" -f ($explorerBefore -join ', '))
+
 $env:FEDORAWIN_CAPTURE_VIEW = 'panel'
 $env:FEDORAWIN_CAPTURE_MODE = ''
 $env:FEDORAWIN_CAPTURE_THEME = 'dark'
@@ -87,6 +95,13 @@ try {
         Start-Sleep -Milliseconds 350
     }
 
+    $explorerAfter = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+    $preservedExplorer = @($explorerBefore | Where-Object { $explorerAfter -contains $_ })
+    if ($preservedExplorer.Count -eq 0) {
+        throw 'FedoraWin did not preserve any pre-existing Explorer process during the runtime smoke test.'
+    }
+    Write-Host ("Explorer preservation verified for PID(s): {0}" -f ($preservedExplorer -join ', '))
+
     $peak = ($samples | Measure-Object -Property Megabytes -Maximum).Maximum
     $last = $samples[-1].Megabytes
     $processCount = ($samples | Measure-Object -Property ProcessCount -Maximum).Maximum
@@ -103,6 +118,9 @@ try {
         target_idle_mb = $TargetIdleMb
         hard_limit_mb = $HardLimitMb
         within_hard_limit = ($peak -le $HardLimitMb)
+        explorer_preserved = $true
+        explorer_baseline_pids = $explorerBefore
+        explorer_preserved_pids = $preservedExplorer
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $repoRoot 'memory-budget.json') -Encoding UTF8
 
     if ($peak -gt $HardLimitMb) {
