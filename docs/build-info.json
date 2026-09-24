@@ -2,8 +2,8 @@
   "project": "FedoraWin",
   "release": "0.4.0-dev",
   "target": "GNOME 51",
-  "updated": "2026-09-22",
-  "runtime_gallery": "14 distinct real FedoraWin.exe Windows captures from native commit 47a76421b89cff42a089bcc2846cad925a95070b; separate GTK/libadwaita proof not counted",
+  "updated": "2026-09-24",
+  "runtime_gallery": "14 distinct real FedoraWin.exe Windows captures from native commit 7d6985a1157fc731dc2782091292a21a3d207fa4; isolated GTK/libadwaita proof not counted",
   "frame_recovery": "Guardian initialization fail-closed regression contract and real force-kill recovery Windows CI passed; physical Windows validation still required",
   "native_adwaita": {
     "status": "isolated Windows CI proof; not production integration",
@@ -24,9 +24,23 @@
   },
   "frame_recovery_source_sha": "19bdc033609c51941e2797159cef503da6807733",
   "frame_recovery_ci_run": 35750778518,
-  "runtime_capture_ci_run": 35760244716,
+  "runtime_capture_ci_run": 35956413217,
   "site_gallery": "One ordered image viewer (keyboard, swipe, counter), synchronized carousel, real-photo cover and GNOME-inspired website Activities navigation; website UI is not a FedoraWin shell feature",
-  "runtime_gallery_sha": "47a76421b89cff42a089bcc2846cad925a95070b",
-  "shell_interaction": "Activities Escape clears a nonempty search before closing the overview; Windows CI passed",
-  "shell_ci_run": 35760250978
+  "runtime_gallery_sha": "7d6985a1157fc731dc2782091292a21a3d207fa4",
+  "shell_interaction": "AppBar registration/query/position failure rollback guarded; original Explorer PID survived FedoraWin teardown on Windows CI; physical hardware and long-session validation pending",
+  "shell_ci_run": 35956413217,
+  "latest_verified_native": {
+    "source_sha": "7d6985a1157fc731dc2782091292a21a3d207fa4",
+    "date": "2026-09-24",
+    "windows_ci": 35956413217,
+    "frame_ci": 35956416175,
+    "adwaita_ci": 35956416334,
+    "sampled_idle_mb": 32,
+    "sampled_peak_mb": 32,
+    "sampled_processes": 3,
+    "memory_ceiling_mb": 300,
+    "explorer_preserved_after_shutdown": true,
+    "production_adwaita_integration": false,
+    "physical_validation_complete": false
+  }
 }
