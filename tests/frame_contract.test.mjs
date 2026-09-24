@@ -78,3 +78,17 @@ test('force-kill guardian checks HWND process lifetime and respects external sty
   assert.match(recovery, /matches_our_style\(current\) && current != original/);
   assert.match(recovery, /restore_snapshot\(snapshot\)/);
 });
+
+const appbar = readFileSync(new URL('../src-tauri/src/windows/appbar.rs', import.meta.url), 'utf8');
+
+test('AppBar registration failures never proceed with a stale desktop reservation', () => {
+  assert.match(appbar, /if SHAppBarMessage\(ABM_NEW, &mut data\) == 0 \{\s*return Err/);
+  for (const message of ['QUERYPOS', 'SETPOS']) {
+    const failure = appbar.match(new RegExp(
+      `if SHAppBarMessage\\(ABM_${message}, &mut data\\) == 0 \\{([\\s\\S]*?)\\n        \\}`
+    ));
+    assert.ok(failure, `missing failure handling for ABM_${message}`);
+    assert.match(failure[1], /SHAppBarMessage\(ABM_REMOVE, &mut data\) != 0/);
+    assert.match(failure[1], /AppBar rollback also failed/);
+  }
+});
