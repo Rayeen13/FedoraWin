@@ -1,14 +1,14 @@
 {
   "source_branch": "dev/gnome-native-20260914",
-  "source_sha": "8cc32b79da5d2ac2f45130767e3e0ae6c043d10e",
-  "captured_utc": "2026-09-23T02:42:20.7538834Z",
+  "source_sha": "27b158b2fad612a3d385806fff6aa1a96297f4be",
+  "captured_utc": "2026-09-24T02:41:02.3517947Z",
   "runtime": "Native Rust/Win32 panel + lazy Tauri/WebView2",
   "launch_executable": "fedorawin.exe",
   "runner_os": "Windows",
-  "runner_name": "GitHub Actions 1000000686",
+  "runner_name": "GitHub Actions 1000000688",
   "runner_image": "win25-vs2026",
-  "github_run_id": "35811084038",
-  "github_run_number": "572",
+  "github_run_id": "35947902952",
+  "github_run_number": "574",
   "screen": {
     "width": 1024,
     "height": 768
@@ -30,19 +30,19 @@
     "native_frame_light": "native_frame_light.png"
   },
   "sha256": {
-    "panel": "683660c7d71773ccfefc31922c2f2fefb09992554083815ddeb1e4e8ff14f5e5",
-    "activities": "6f71a0dcfe6a318879caf223e84b013e91be867bcea8ad46ae7bd3a215aa61a2",
-    "apps": "3873a3e56645ac69fce5dac45264e067d37c42b4fd0b4e1d13f22e8c7bbbfae8",
-    "search_terminal": "0aef9b0d1a91526648ffbc37ecc76ad3ced5f202224a72289bed49ece9032103",
-    "quick_settings_dark": "72c60b61602c1142561b0497d910ddfb9f19dc60ae2f7842101934e94d9d0c91",
-    "quick_settings_light": "8bbf9b41214e20f4d927db39e711a40a64862edae8982ae84c2cea4245de63f5",
-    "appearance": "6e7ef8bf0b2c381348b2ea4b541861b2160ee449d4bd8afa1d38ec9df7269182",
-    "power_mode": "bfa7b7dae3361f91916acb23e0b858db6ed7172a8cc38a0ab64e761314388bb2",
-    "wifi": "01ab44196e2ea0b5fed692249439a8212d54948816923043bf19d454ad15f435",
-    "bluetooth": "6dc1844fc864d02f0bd9294441f4c14990e3712dfa95636d3cd7f67026dc97fc",
-    "radio_pause": "0536228e54b4e0dfe351d4588815f99c318b4702548eef22a55fabf65dc9c45f",
-    "date_menu": "e3def7380804270840104e42453e17343e23af97f73b8b6061de14aee9ff4321",
+    "panel": "3ef5c383a6237e22bf1955e70aee47e403882b2bf645db97b736a2a649a98791",
+    "activities": "01322def67140a9d08dad6b61e026d2f4c1165f6438c0bd7ca71b06cb451b4bd",
+    "apps": "b9de6bd538ba3773a163aeb45a1288f2b68d3a8ff26786902958ca808af1f7be",
+    "search_terminal": "b6ffda8e5280d924e701580d0b124da3a0b07f970b2cb3ab39c3b38649e69c9b",
+    "quick_settings_dark": "47d6bd4e51d7e33e07382879b70366cad38079f0c605e54a9ef08d57cfb493f7",
+    "quick_settings_light": "0d8c230a39a6df2075be716dba85b24c672f521e7b43153e082dd873c395075e",
+    "appearance": "3a70029c5364fa48c2f6d57e5c812e1c6f691f9e05ca92af7a7f30120b6f658d",
+    "power_mode": "90d0ce33ec721e8dcf80091d7a9c1883a3b88146f4c2df3192dd4875c247c615",
+    "wifi": "21a318011a135929b380d83356520777c0872450373653ab9731cac8fa1e9917",
+    "bluetooth": "27f0b41a76801b46f67fb2fdcf90604e7ba928d4753af5d4a5235cebab28505e",
+    "radio_pause": "06ee40ac540c5ebf4f5a53761f16a30b37f13706d861bd63a68c0a5738ade58b",
+    "date_menu": "00d277f5a8ad295852e65f0cb2c399a0f3d3a5372bf18b6106d38de8c5bd8e81",
     "native_frame": "ba70e07322be5b2db94b7d6bc7a86d48f70b0afb32757900f64827896585b2ae",
-    "native_frame_light": "88a71679e2e45ec4f04bfe7ddf5205ee1600c005dd18bf733805c2748bd96f53"
+    "native_frame_light": "17e95d57feb964fd3871bd6d80020e757ccc8f6dd17f87f7f7243cbfd615a53f"
   }
 }
