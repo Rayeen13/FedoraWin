@@ -99,22 +99,22 @@ pub fn reserve_top(hwnd: isize) -> Result<(), String> {
         }
         if SHAppBarMessage(ABM_QUERYPOS, &mut data) == 0 {
             let removed = SHAppBarMessage(ABM_REMOVE, &mut data) != 0;
-            return Err(if removed {
+            let message = if removed {
                 "SHAppBarMessage(ABM_QUERYPOS) failed; AppBar registration rolled back"
             } else {
                 "SHAppBarMessage(ABM_QUERYPOS) failed; AppBar rollback also failed"
-            }
-            .into());
+            };
+            return Err(message.into());
         }
         data.rect.bottom = data.rect.top + height_px;
         if SHAppBarMessage(ABM_SETPOS, &mut data) == 0 {
             let removed = SHAppBarMessage(ABM_REMOVE, &mut data) != 0;
-            return Err(if removed {
+            let message = if removed {
                 "SHAppBarMessage(ABM_SETPOS) failed; AppBar registration rolled back"
             } else {
                 "SHAppBarMessage(ABM_SETPOS) failed; AppBar rollback also failed"
-            }
-            .into());
+            };
+            return Err(message.into());
         }
     }
     Ok(())
