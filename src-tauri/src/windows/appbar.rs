@@ -90,11 +90,18 @@ pub fn reserve_top(hwnd: isize) -> Result<(), String> {
     };
 
     unsafe {
-        SHAppBarMessage(ABM_NEW, &mut data);
+        // Registration changes the Windows work area, so treat it transactionally:
+        // never continue after ABM_NEW fails and always unregister if positioning
+        // fails. This keeps a failed FedoraWin panel start from leaving a stale
+        // shell reservation behind in Explorer's desktop work area.
+        if SHAppBarMessage(ABM_NEW, &mut data) == 0 {
+            return Err("SHAppBarMessage(ABM_NEW) failed".into());
+        }
         SHAppBarMessage(ABM_QUERYPOS, &mut data);
         data.rect.bottom = data.rect.top + height_px;
         if SHAppBarMessage(ABM_SETPOS, &mut data) == 0 {
-            return Err("SHAppBarMessage(ABM_SETPOS) failed".into());
+            SHAppBarMessage(ABM_REMOVE, &mut data);
+            return Err("SHAppBarMessage(ABM_SETPOS) failed; AppBar registration rolled back".into());
         }
     }
     Ok(())
