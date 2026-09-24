@@ -254,3 +254,34 @@ html[data-theme=light] .hero{background:radial-gradient(ellipse 70% 80% at 78% 5
 @media(max-width:850px){.gallery-hero__grid{grid-template-columns:1fr}.gallery-cover{min-height:300px}.gallery-cover img{width:min(78%,440px);max-height:235px}.gallery-cover__label{bottom:0;right:6%}}
 @media(max-width:480px){.gallery-cover{min-height:220px}.gallery-cover img{width:82%;max-height:165px}.gallery-cover__label{bottom:-10px;right:0}}
 @media(prefers-reduced-motion:reduce){.gallery-cover img,.gallery-cover__jump{transition:none}.gallery-cover:hover .gallery-cover__rear{transform:translate(-9%,-20%) rotate(-10deg)}.gallery-cover:hover .gallery-cover__middle{transform:translate(10%,-6%) rotate(8deg)}.gallery-cover:hover .gallery-cover__front{transform:translate(0,15%) rotate(-2deg)}.gallery-cover__jump:hover{transform:none}}
+
+
+/* September 24 verified GNOME 51-inspired website composition.
+   Show real Windows pixels without a fake caption or unstable hover motion. */
+.hero-shot{perspective:none}
+.hero-shot .window{transform:none;border-radius:18px;border:1px solid color-mix(in srgb,var(--line) 80%,var(--blue));background:#1c1d21;box-shadow:0 18px 56px rgba(0,0,0,.32);transition:border-color .18s ease}
+.hero-shot:hover .window{transform:none;border-color:var(--blue2);box-shadow:0 18px 56px rgba(0,0,0,.32)}
+.hero-shot .window img{aspect-ratio:4/3;object-fit:contain;object-position:center;background:#1c1d21}
+.capture-label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.1);background:#27282e;color:#eeeef2;font-size:12px;font-weight:650}
+.capture-label span{display:flex;align-items:center;gap:9px;min-width:0}
+.capture-label i{width:8px;height:8px;flex:none;border-radius:50%;background:#57e389;box-shadow:0 0 0 3px rgba(87,227,137,.14)}
+.capture-label a{flex:none;color:#b6d5ff;border-radius:6px}
+.capture-label a:hover,.capture-label a:focus-visible{text-decoration:underline}
+.hero-shot .float-card{animation:none;border-radius:12px;box-shadow:0 9px 25px rgba(0,0,0,.22)}
+.hero-shot .fc-one,.hero-shot .fc-two{animation:none}
+.release-evidence{padding:clamp(38px,5vw,68px) 0;border-bottom:1px solid var(--line);background:var(--bg2)}
+.release-evidence__grid{display:grid;grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr);gap:clamp(20px,5vw,70px);align-items:center}
+.release-evidence small{font-size:11px;letter-spacing:.09em;font-weight:800;color:var(--blue2)}
+.release-evidence h2{margin:9px 0 12px;font-size:clamp(28px,3.4vw,42px);line-height:1.15;letter-spacing:-.035em}
+.release-evidence p{color:var(--muted);max-width:45ch}
+.release-evidence p a{color:var(--blue2);text-decoration:underline;text-underline-offset:3px}
+.release-evidence__facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.release-evidence__facts a{display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0;min-height:104px;padding:16px 18px;background:var(--card);border:1px solid var(--line);border-radius:15px;transition:border-color .18s ease}
+.release-evidence__facts a:hover,.release-evidence__facts a:focus-visible{border-color:var(--blue2)}
+.release-evidence__facts b{font-size:15px;line-height:1.35}
+.release-evidence__facts span{color:var(--muted);font-size:12px;line-height:1.5}
+.site-panel{background:#242429;box-shadow:0 1px 0 rgba(0,0,0,.25)}
+.site-overview__tile:hover{transform:none;box-shadow:0 10px 28px rgba(0,0,0,.17)}
+@media(max-width:850px){.release-evidence__grid{grid-template-columns:1fr}}
+@media(max-width:500px){.release-evidence__facts{grid-template-columns:1fr}.release-evidence__facts a{min-height:76px}.capture-label{flex-wrap:wrap}.hero-shot .window img{aspect-ratio:4/3}}
+@media(prefers-reduced-motion:reduce){.hero-shot .window,.release-evidence__facts a{transition:none}}
