@@ -87,6 +87,7 @@ assert.match(panel, /CreateWindowExW/);
 assert.match(panel, /FedoraWin — panel/);
 assert.match(panel, /WS_EX_NOACTIVATE/);
 assert.match(panel, /appbar::reserve_top/);
+assert.match(panel, /crate::windows::appbar::release\(hwnd\);[\s\S]*SetWindowPos[\s\S]*crate::windows::appbar::reserve_top\(hwnd\)\?/);
 assert.match(panel, /PanelAction::Activities/);
 assert.match(panel, /PanelAction::DateMenu/);
 assert.match(panel, /PanelAction::QuickSettings/);
