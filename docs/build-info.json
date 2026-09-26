@@ -2,8 +2,8 @@
   "project": "FedoraWin",
   "release": "0.4.0-dev",
   "target": "GNOME 51",
-  "updated": "2026-09-24",
-  "runtime_gallery": "14 distinct real FedoraWin.exe Windows captures from native commit 7d6985a1157fc731dc2782091292a21a3d207fa4; isolated GTK/libadwaita proof not counted",
+  "updated": "2026-09-26",
+  "runtime_gallery": "15 distinct real FedoraWin.exe Windows captures from native commit cfe4e74dfd32296456fcfb9a71d7f4a57484cf94, including full desktop with GNOME 51 Roundhex; separate GTK/libadwaita proof not counted",
   "frame_recovery": "Guardian initialization fail-closed regression contract and real force-kill recovery Windows CI passed; physical Windows validation still required",
   "native_adwaita": {
     "status": "isolated Windows CI proof; not production integration",
@@ -24,11 +24,11 @@
   },
   "frame_recovery_source_sha": "19bdc033609c51941e2797159cef503da6807733",
   "frame_recovery_ci_run": 35750778518,
-  "runtime_capture_ci_run": 35956413217,
+  "runtime_capture_ci_run": 36254554808,
   "site_gallery": "One ordered image viewer (keyboard, swipe, counter), synchronized carousel, real-photo cover and GNOME-inspired website Activities navigation; website UI is not a FedoraWin shell feature",
-  "runtime_gallery_sha": "7d6985a1157fc731dc2782091292a21a3d207fa4",
+  "runtime_gallery_sha": "cfe4e74dfd32296456fcfb9a71d7f4a57484cf94",
   "shell_interaction": "AppBar registration/query/position failure rollback guarded; original Explorer PID survived FedoraWin teardown on Windows CI; physical hardware and long-session validation pending",
-  "shell_ci_run": 35956413217,
+  "shell_ci_run": 36254554808,
   "latest_verified_native": {
     "source_sha": "7d6985a1157fc731dc2782091292a21a3d207fa4",
     "date": "2026-09-24",
@@ -42,5 +42,15 @@
     "explorer_preserved_after_shutdown": true,
     "production_adwaita_integration": false,
     "physical_validation_complete": false
+  },
+  "desktop_capture": {
+    "status": "windows_ci_verified",
+    "source_sha": "cfe4e74dfd32296456fcfb9a71d7f4a57484cf94",
+    "ci_run": 36254554808,
+    "file": "docs/assets/runtime/desktop.png",
+    "wallpaper": "GNOME 51 Roundhex / GNOME Backgrounds 51.0 adwaita-l.jxl",
+    "wallpaper_git_blob": "71e1e91496d82cbe82b9bf9121d4fe23ac81bb21",
+    "wallpaper_license": "CC BY-SA 3.0",
+    "wallpaper_scope": "temporary CI capture only; previous wallpaper restored"
   }
 }

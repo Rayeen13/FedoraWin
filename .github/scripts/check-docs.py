@@ -118,6 +118,7 @@ for required in [
 
 gallery = (DOCS / "gallery.html").read_text(encoding="utf-8")
 for key in [
+    "desktop",
     "panel",
     "activities",
     "apps",
@@ -134,7 +135,7 @@ for key in [
         errors.append(f"gallery.html: missing runtime shot: {key}")
 
 
-for required in ("id=\"real-adwaita\"", "not yet wired into the production FedoraWin shell", "the 14 images above", "assets/adwaita/adwaita-dark.png", "assets/adwaita/adwaita-light.png"):
+for required in ("id=\"real-adwaita\"", "not yet wired into the production FedoraWin shell", "the 15 images above", "assets/adwaita/adwaita-dark.png", "assets/adwaita/adwaita-light.png"):
     if required.lower() not in gallery.lower():
         errors.append(f"gallery.html: missing verified Adwaita separation: {required}")
 
@@ -142,8 +143,8 @@ for required in ("id=\"real-adwaita\"", "not yet wired into the production Fedor
 for mode in ("list", "grid", "card", "carousel"):
     if f'data-gallery-view="{mode}"' not in gallery:
         errors.append(f"gallery.html: missing {mode} view switch")
-if gallery.count('data-runtime-shot=') != 14:
-    errors.append("gallery.html: expected exactly 14 runtime screenshot elements")
+if gallery.count('data-runtime-shot=') != 15:
+    errors.append("gallery.html: expected exactly 15 runtime screenshot elements")
 for element_id in ("galleryGrid", "galleryPrevious", "galleryNext", "galleryPosition", "galleryCarouselControls"):
     if element_id not in parsed["gallery.html"].ids:
         errors.append(f"gallery.html: missing interactive element #{element_id}")
@@ -250,7 +251,7 @@ for required in (
 for required in (
     'id="heroActivities"',
     'class="hero-dock"',
-    'src="./assets/runtime/activities.png"',
+    'src="./assets/runtime/desktop.png"',
 ):
     if required not in index:
         errors.append(f"index.html: missing GNOME-like homepage element {required}")
@@ -268,5 +269,5 @@ for required in (
 if errors:
     raise SystemExit("\n".join(f"ERROR: {error}" for error in errors))
 print(
-    f"Docs validation passed: {len(html_files)} HTML pages, links, metadata, docs hub and 14-surface, four-view gallery verified"
+    f"Docs validation passed: {len(html_files)} HTML pages, links, metadata, docs hub and 15-surface, four-view gallery verified"
 )
