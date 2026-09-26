@@ -354,10 +354,47 @@ pub fn hwnd() -> Option<isize> {
     (hwnd != 0).then_some(hwnd)
 }
 
+fn restore_previous_layout(hwnd: isize, previous: Rect) -> Result<(), String> {
+    let width = (previous.right - previous.left).max(1);
+    let height = (previous.bottom - previous.top).max(1);
+    let position_restored = unsafe {
+        SetWindowPos(
+            hwnd,
+            HWND_TOPMOST,
+            previous.left,
+            previous.top,
+            width,
+            height,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        ) != 0
+    };
+    let appbar_restored = crate::windows::appbar::reserve_top(hwnd);
+
+    match (position_restored, appbar_restored) {
+        (true, Ok(())) => Ok(()),
+        (false, Ok(())) => Err(
+            "failed to restore native panel geometry after relayout failure; AppBar was re-reserved"
+                .into(),
+        ),
+        (true, Err(error)) => Err(format!(
+            "native panel geometry was restored but AppBar recovery failed: {error}"
+        )),
+        (false, Err(error)) => Err(format!(
+            "native panel geometry and AppBar recovery both failed: {error}"
+        )),
+    }
+}
+
 pub fn relayout(display: &DisplayInfo) -> Result<(), String> {
     let Some(hwnd) = hwnd() else {
         return Ok(());
     };
+
+    let mut previous = Rect::default();
+    if unsafe { GetWindowRect(hwnd, &mut previous) } == 0 {
+        return Err("GetWindowRect failed before native panel relayout".into());
+    }
+
     let (x, y, width, height) = panel_bounds(display);
     crate::windows::appbar::release(hwnd);
     let ok = unsafe {
@@ -372,9 +409,27 @@ pub fn relayout(display: &DisplayInfo) -> Result<(), String> {
         )
     };
     if ok == 0 {
-        return Err("SetWindowPos failed for native panel".into());
+        return match restore_previous_layout(hwnd, previous) {
+            Ok(()) => Err(
+                "SetWindowPos failed for native panel; previous layout was restored".into(),
+            ),
+            Err(rollback) => Err(format!(
+                "SetWindowPos failed for native panel; rollback failed: {rollback}"
+            )),
+        };
     }
-    crate::windows::appbar::reserve_top(hwnd)?;
+
+    if let Err(error) = crate::windows::appbar::reserve_top(hwnd) {
+        return match restore_previous_layout(hwnd, previous) {
+            Ok(()) => Err(format!(
+                "native panel AppBar reservation failed; previous layout was restored: {error}"
+            )),
+            Err(rollback) => Err(format!(
+                "native panel AppBar reservation failed: {error}; rollback failed: {rollback}"
+            )),
+        };
+    }
+
     unsafe {
         InvalidateRect(hwnd, std::ptr::null(), 0);
     }
@@ -520,6 +575,7 @@ extern "system" {
         height: i32,
         flags: u32,
     ) -> i32;
+    fn GetWindowRect(hwnd: isize, rect: *mut Rect) -> i32;
     fn GetClientRect(hwnd: isize, rect: *mut Rect) -> i32;
     fn GetMessageW(message: *mut Msg, hwnd: isize, min: u32, max: u32) -> i32;
     fn TranslateMessage(message: *const Msg) -> i32;
