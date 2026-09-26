@@ -364,8 +364,16 @@ fn start_display_topology_watcher(app: tauri::AppHandle) {
                 continue;
             }
             thread::sleep(Duration::from_millis(180));
-            let _ = relayout_shell_surfaces(&app);
-            last = windows::display::topology_signature().ok().or(Some(next));
+            match relayout_shell_surfaces(&app) {
+                Ok(()) => {
+                    last = windows::display::topology_signature().ok().or(Some(next));
+                }
+                Err(error) => {
+                    eprintln!(
+                        "FedoraWin display relayout failed; previous shell layout kept, retrying: {error}"
+                    );
+                }
+            }
         }
     });
 }

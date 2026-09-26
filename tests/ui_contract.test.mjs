@@ -192,6 +192,8 @@ assert.match(main, /— ready/);
 assert.match(main, /FedoraWin — \{label\}/);
 assert.match(main, /start_display_topology_watcher/);
 assert.match(main, /relayout_shell_surfaces/);
+assert.match(main, /match relayout_shell_surfaces\(&app\)[\s\S]*Ok\(\(\)\)[\s\S]*last = windows::display::topology_signature\(\)\.ok\(\)\.or\(Some\(next\)\)[\s\S]*Err\(error\)[\s\S]*previous shell layout kept, retrying/);
+assert.doesNotMatch(main, /let _ = relayout_shell_surfaces\(&app\)/);
 assert.doesNotMatch(main, /get_webview_window\("panel"\)/);
 assert.match(memorySmoke, /HardLimitMb = 300/);
 const captureScript = fs.readFileSync(new URL('./capture-site-preview.ps1', import.meta.url), 'utf8');
