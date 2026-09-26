@@ -1,19 +1,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod layout;
+mod osd;
+mod performance;
 mod shell;
 mod windows;
 
 use shell::{AppearanceState, ShellState};
 use std::sync::Arc;
-use tauri::{LogicalPosition, Manager, WebviewUrl, WebviewWindowBuilder};
-
-const PANEL_HEIGHT: f64 = 32.0;
+#[cfg(windows)]
+use std::{thread, time::Duration};
+use tauri::{LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 
 #[tauri::command]
 fn get_shell_state(state: tauri::State<'_, Arc<ShellState>>) -> shell::ShellSnapshot {
     state.snapshot()
 }
-
 #[tauri::command]
 fn set_appearance(
     state: tauri::State<'_, Arc<ShellState>>,
@@ -25,133 +27,486 @@ fn set_appearance(
     windows::frame::apply_to_top_level_windows(&snapshot.appearance).map_err(|e| e.to_string())?;
     Ok(snapshot)
 }
-
 #[tauri::command]
 fn toggle_activities(app: tauri::AppHandle) -> Result<(), String> {
     shell::toggle_activities(&app)
 }
-
+#[tauri::command]
+fn get_memory_snapshot() -> Result<performance::MemorySnapshot, String> {
+    performance::snapshot()
+}
 #[tauri::command]
 fn toggle_surface(app: tauri::AppHandle, label: String) -> Result<(), String> {
-    if !matches!(label.as_str(), "date-menu" | "quick-settings") {
-        return Err("unsupported shell surface".into());
-    }
-    let window = app
-        .get_webview_window(&label)
-        .ok_or_else(|| format!("{label} window is unavailable"))?;
-    let visible = window.is_visible().map_err(|e| e.to_string())?;
-    if visible {
-        window.hide().map_err(|e| e.to_string())?;
-    } else {
-        for other in ["date-menu", "quick-settings"] {
-            if other != label {
-                if let Some(w) = app.get_webview_window(other) {
-                    let _ = w.hide();
-                }
-            }
-        }
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    shell::toggle_surface(&app, &label)
 }
-
+#[tauri::command]
+async fn get_app_icon(app_id: String) -> Option<String> {
+    // Shell image handlers may be slow; never block the Tauri UI thread.
+    tauri::async_runtime::spawn_blocking(move || {
+        #[cfg(windows)]
+        {
+            windows::app_icons::icon_data_uri(&app_id)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = app_id;
+            None
+        }
+    })
+    .await
+    .ok()
+    .flatten()
+}
 #[tauri::command]
 fn list_apps() -> Result<Vec<windows::apps::AppEntry>, String> {
     windows::apps::list()
 }
-
+#[tauri::command]
+fn list_displays() -> Result<Vec<windows::display::DisplayInfo>, String> {
+    windows::display::enumerate()
+}
 #[tauri::command]
 fn launch_app(app_id: String) -> Result<(), String> {
     windows::apps::launch(&app_id)
 }
-
 #[tauri::command]
 fn list_windows() -> Result<Vec<windows::windows_list::WindowEntry>, String> {
     windows::windows_list::list()
 }
-
 #[tauri::command]
 fn activate_window(handle: String) -> Result<(), String> {
     windows::windows_list::activate(&handle)
 }
-
 #[tauri::command]
-fn set_wifi_enabled(enabled: bool) -> Result<(), String> {
-    windows::wifi::set_enabled(enabled).map_err(|e| e.to_string())
+fn close_window(handle: String) -> Result<(), String> {
+    windows::windows_list::close(&handle)
 }
-
+#[tauri::command]
+fn move_window_to_workspace(
+    state: tauri::State<'_, windows::virtual_desktop::WorkspaceMoveJournal>,
+    handle: String,
+    desktop_id: String,
+) -> Result<(), String> {
+    state.move_window(&handle, &desktop_id)
+}
+#[tauri::command]
+fn undo_workspace_move(
+    state: tauri::State<'_, windows::virtual_desktop::WorkspaceMoveJournal>,
+) -> Result<Option<String>, String> {
+    state.undo_last()
+}
+#[tauri::command]
+fn workspace_move_status(
+    state: tauri::State<'_, windows::virtual_desktop::WorkspaceMoveJournal>,
+) -> usize {
+    state.pending_count()
+}
+#[tauri::command]
+fn navigate_workspace(app: tauri::AppHandle, direction: i32) -> Result<(), String> {
+    shell::hide_activities(&app)?;
+    windows::virtual_desktop::navigate(direction)
+}
+#[tauri::command]
+fn sync_window_thumbnails(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, windows::thumbnails::ThumbnailManager>,
+    items: Vec<windows::thumbnails::ThumbnailPlacement>,
+) -> Result<usize, String> {
+    #[cfg(windows)]
+    {
+        let activities = app
+            .get_webview_window("activities")
+            .ok_or_else(|| "activities window is unavailable".to_string())?;
+        let hwnd = activities.hwnd().map_err(|e| e.to_string())?;
+        let scale = activities.scale_factor().map_err(|e| e.to_string())?;
+        return state.sync(hwnd.0 as isize, scale, &items);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, state, items);
+        Ok(0)
+    }
+}
+#[tauri::command]
+fn clear_window_thumbnails(
+    state: tauri::State<'_, windows::thumbnails::ThumbnailManager>,
+) -> Result<(), String> {
+    state.clear();
+    Ok(())
+}
+#[tauri::command]
+fn open_screenshot_overlay(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("quick-settings") {
+        window.close().map_err(|error| error.to_string())?;
+    }
+    windows::screenshot::open_overlay()
+}
+#[tauri::command]
+fn get_power_status() -> Result<windows::power::PowerStatus, String> {
+    windows::power::status()
+}
+#[tauri::command]
+fn get_power_mode() -> Result<windows::power::PowerMode, String> {
+    windows::power::configured_mode()
+}
+#[tauri::command]
+fn set_power_mode(
+    app: tauri::AppHandle,
+    osd_state: tauri::State<'_, osd::OsdState>,
+    mode: String,
+) -> Result<windows::power::PowerMode, String> {
+    let configured = windows::power::set_configured_mode(windows::power::PowerMode::parse(&mode)?)?;
+    let detail = match configured {
+        windows::power::PowerMode::BestEfficiency => "bestEfficiency",
+        windows::power::PowerMode::Balanced => "balanced",
+        windows::power::PowerMode::BestPerformance => "bestPerformance",
+    };
+    let _ = osd::show(&app, osd_state.inner(), "power", None, Some(detail));
+    Ok(configured)
+}
+#[tauri::command]
+fn get_bluetooth_status() -> Result<windows::bluetooth::BluetoothStatus, String> {
+    windows::bluetooth::status()
+}
+#[tauri::command]
+fn set_bluetooth_enabled(enabled: bool) -> Result<windows::bluetooth::BluetoothStatus, String> {
+    windows::bluetooth::set_enabled(enabled)
+}
+#[tauri::command]
+fn get_brightness_status() -> Result<windows::brightness::BrightnessStatus, String> {
+    windows::brightness::status()
+}
+#[tauri::command]
+fn set_brightness(
+    app: tauri::AppHandle,
+    osd_state: tauri::State<'_, osd::OsdState>,
+    value: u8,
+) -> Result<u8, String> {
+    let actual = windows::brightness::set(value)?;
+    let _ = osd::show(&app, osd_state.inner(), "brightness", Some(actual), None);
+    Ok(actual)
+}
+#[tauri::command]
+fn get_master_volume() -> Result<u8, String> {
+    windows::audio::get_master_volume()
+}
+#[tauri::command]
+fn set_master_volume(
+    app: tauri::AppHandle,
+    osd_state: tauri::State<'_, osd::OsdState>,
+    value: u8,
+) -> Result<u8, String> {
+    let actual = windows::audio::set_master_volume(value)?;
+    let _ = osd::show(&app, osd_state.inner(), "volume", Some(actual), None);
+    Ok(actual)
+}
+#[tauri::command]
+fn show_control_osd(
+    app: tauri::AppHandle,
+    osd_state: tauri::State<'_, osd::OsdState>,
+    kind: String,
+    value: Option<u8>,
+    detail: Option<String>,
+) -> Result<(), String> {
+    osd::show(&app, osd_state.inner(), &kind, value, detail.as_deref())
+}
+#[tauri::command]
+fn get_radio_pause_status(
+    manager: tauri::State<'_, windows::radio_pause::RadioPauseManager>,
+) -> Result<windows::radio_pause::RadioPauseStatus, String> {
+    manager.status()
+}
+#[tauri::command]
+fn set_radio_pause(
+    manager: tauri::State<'_, windows::radio_pause::RadioPauseManager>,
+    paused: bool,
+) -> Result<windows::radio_pause::RadioPauseStatus, String> {
+    manager.set_paused(paused)
+}
+#[tauri::command]
+fn get_wifi_status() -> Result<windows::wifi::WifiStatus, String> {
+    windows::wifi::status()
+}
+#[tauri::command]
+fn set_wifi_enabled(enabled: bool) -> Result<windows::wifi::WifiStatus, String> {
+    windows::wifi::set_enabled(enabled)
+}
 #[tauri::command]
 fn refresh_window_frames(state: tauri::State<'_, Arc<ShellState>>) -> Result<usize, String> {
     windows::frame::apply_to_top_level_windows(&state.snapshot().appearance)
         .map_err(|e| e.to_string())
 }
+#[tauri::command]
+fn mark_capture_ready(app: tauri::AppHandle, label: String) -> Result<String, String> {
+    if !matches!(
+        label.as_str(),
+        "activities" | "date-menu" | "quick-settings"
+    ) {
+        return Err("unsupported capture surface".into());
+    }
+    let window = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("{label} window is unavailable"))?;
+    window
+        .set_title(&format!("FedoraWin — {label} — ready"))
+        .map_err(|e| e.to_string())?;
+    Ok(label)
+}
 
 fn build_window(
-    app: &tauri::App,
+    app: &tauri::AppHandle,
     label: &str,
     view: &str,
-    width: f64,
-    height: f64,
+    geometry: layout::SurfaceGeometry,
     visible: bool,
-    position: LogicalPosition<f64>,
-) -> tauri::Result<()> {
-    let url = WebviewUrl::App(format!("index.html?view={view}").into());
-    let window = WebviewWindowBuilder::new(app, label, url)
-        .title("FedoraWin")
+    capture_mode: Option<&str>,
+) -> Result<tauri::WebviewWindow, String> {
+    let url = match capture_mode {
+        Some(mode) => format!("index.html?view={view}&capture={mode}"),
+        None => format!("index.html?view={view}"),
+    };
+    // Shell surfaces must composite into the desktop instead of exposing the
+    // rectangular WebView2 host behind rounded GNOME cards. Windows still owns
+    // all third-party application HWND frames; only our shell is transparent.
+    let window = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
+        .title(format!("FedoraWin — {label}"))
         .decorations(false)
+        .transparent(true)
+        .shadow(false)
         .resizable(false)
         .skip_taskbar(true)
         .always_on_top(true)
         .visible(visible)
-        .inner_size(width, height)
-        .build()?;
-    window.set_position(position)?;
+        .inner_size(geometry.width, geometry.height)
+        .build()
+        .map_err(|e| e.to_string())?;
+    window
+        .set_position(PhysicalPosition::new(geometry.x, geometry.y))
+        .map_err(|e| e.to_string())?;
+    Ok(window)
+}
+fn apply_surface_geometry(
+    window: &tauri::WebviewWindow,
+    geometry: layout::SurfaceGeometry,
+) -> Result<(), String> {
+    window
+        .set_size(LogicalSize::new(geometry.width, geometry.height))
+        .map_err(|e| e.to_string())?;
+    window
+        .set_position(PhysicalPosition::new(geometry.x, geometry.y))
+        .map_err(|e| e.to_string())
+}
+fn surface_geometry(label: &str) -> Result<layout::SurfaceGeometry, String> {
+    let display = windows::display::primary()?;
+    let l = layout::for_display(&display);
+    match label {
+        "activities" => Ok(l.activities),
+        "date-menu" => Ok(l.date_menu),
+        "quick-settings" => Ok(l.quick_settings),
+        _ => Err(format!("unsupported shell surface: {label}")),
+    }
+}
+fn ensure_shell_surface(
+    app: &tauri::AppHandle,
+    label: &str,
+    view: &str,
+    visible: bool,
+    capture_mode: Option<&str>,
+) -> Result<tauri::WebviewWindow, String> {
+    if let Some(window) = app.get_webview_window(label) {
+        apply_surface_geometry(&window, surface_geometry(label)?)?;
+        if visible {
+            window.show().map_err(|e| e.to_string())?;
+        }
+        return Ok(window);
+    }
+    build_window(
+        app,
+        label,
+        view,
+        surface_geometry(label)?,
+        visible,
+        capture_mode,
+    )
+}
+pub(crate) fn ensure_activities_window(
+    app: &tauri::AppHandle,
+) -> Result<tauri::WebviewWindow, String> {
+    ensure_shell_surface(app, "activities", "activities", false, None)
+}
+fn relayout_shell_surfaces(app: &tauri::AppHandle) -> Result<(), String> {
+    let display = windows::display::primary()?;
+    let l = layout::for_display(&display);
+    #[cfg(windows)]
+    windows::panel::relayout(&display)?;
+    for (label, g) in [
+        ("activities", l.activities),
+        ("date-menu", l.date_menu),
+        ("quick-settings", l.quick_settings),
+    ] {
+        if let Some(w) = app.get_webview_window(label) {
+            apply_surface_geometry(&w, g)?;
+        }
+    }
     Ok(())
+}
+#[cfg(windows)]
+fn start_display_topology_watcher(app: tauri::AppHandle) {
+    thread::spawn(move || {
+        let mut last = windows::display::topology_signature().ok();
+        loop {
+            thread::sleep(Duration::from_millis(900));
+            let next = match windows::display::topology_signature() {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            if last.as_ref() == Some(&next) {
+                continue;
+            }
+            thread::sleep(Duration::from_millis(180));
+            match relayout_shell_surfaces(&app) {
+                Ok(()) => {
+                    last = windows::display::topology_signature().ok().or(Some(next));
+                }
+                Err(error) => {
+                    eprintln!(
+                        "FedoraWin display relayout failed; previous shell layout kept, retrying: {error}"
+                    );
+                }
+            }
+        }
+    });
 }
 
 fn main() {
+    #[cfg(windows)]
+    if windows::frame_recovery::maybe_run_guardian() {
+        return;
+    }
+    #[cfg(windows)]
+    if windows::desktop_presentation::maybe_run_guardian() {
+        return;
+    }
     let state = Arc::new(ShellState::default());
-
-    tauri::Builder::default()
+    let capture_view = std::env::var("FEDORAWIN_CAPTURE_VIEW").ok();
+    let capture_mode = std::env::var("FEDORAWIN_CAPTURE_MODE").ok();
+    if let Ok(theme) = std::env::var("FEDORAWIN_CAPTURE_THEME") {
+        if let Ok(a) = AppearanceState::parse(&theme, "blue") {
+            let _ = state.set_appearance(a);
+        }
+    }
+    let app = tauri::Builder::default()
         .manage(state.clone())
+        .manage(osd::OsdState::default())
+        .manage(windows::radio_pause::RadioPauseManager::default())
+        .manage(windows::thumbnails::ThumbnailManager::default())
+        .manage(windows::virtual_desktop::WorkspaceMoveJournal::default())
         .invoke_handler(tauri::generate_handler![
             get_shell_state,
             set_appearance,
             toggle_activities,
             toggle_surface,
+            get_memory_snapshot,
             list_apps,
+            get_app_icon,
+            list_displays,
             launch_app,
             list_windows,
             activate_window,
+            close_window,
+            move_window_to_workspace,
+            undo_workspace_move,
+            workspace_move_status,
+            navigate_workspace,
+            sync_window_thumbnails,
+            clear_window_thumbnails,
+            open_screenshot_overlay,
+            get_power_status,
+            get_power_mode,
+            set_power_mode,
+            get_bluetooth_status,
+            set_bluetooth_enabled,
+            get_brightness_status,
+            set_brightness,
+            get_master_volume,
+            set_master_volume,
+            show_control_osd,
+            get_wifi_status,
             set_wifi_enabled,
-            refresh_window_frames
+            get_radio_pause_status,
+            set_radio_pause,
+            refresh_window_frames,
+            mark_capture_ready
         ])
         .setup(move |app| {
-            let monitor = app
-                .primary_monitor()?
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "primary monitor unavailable"))?;
-            let size = monitor.size();
-            let scale = monitor.scale_factor();
-            let logical_width = size.width as f64 / scale;
-            let logical_height = size.height as f64 / scale;
-
-            build_window(app, "panel", "panel", logical_width, PANEL_HEIGHT, true, LogicalPosition::new(0.0, 0.0))?;
-            build_window(app, "activities", "activities", logical_width, logical_height - PANEL_HEIGHT, false, LogicalPosition::new(0.0, PANEL_HEIGHT))?;
-            build_window(app, "date-menu", "date-menu", 760.0, 540.0, false, LogicalPosition::new(((logical_width - 760.0) / 2.0).max(0.0), PANEL_HEIGHT))?;
-            build_window(app, "quick-settings", "quick-settings", 408.0, 510.0, false, LogicalPosition::new((logical_width - 416.0).max(0.0), PANEL_HEIGHT))?;
-
+            let display = windows::display::primary().map_err(std::io::Error::other)?;
+            let l = layout::for_display(&display);
+            let capture = capture_mode.as_deref();
+            let av = capture_view.as_deref() == Some("activities");
+            let dv = capture_view.as_deref() == Some("date-menu");
+            let qv = capture_view.as_deref() == Some("quick-settings");
+            #[cfg(windows)]
+            windows::panel::start(app.handle().clone(), display.clone())
+                .map_err(std::io::Error::other)?;
+            #[cfg(windows)]
+            if let Err(error) = windows::desktop_presentation::start() {
+                // Failure to spawn recovery must never prevent access to Explorer.
+                eprintln!("FedoraWin DE kept the Windows taskbar: {error}");
+            }
+            #[cfg(not(windows))]
+            build_window(app.handle(), "panel", "panel", l.panel, true, capture)
+                .map_err(std::io::Error::other)?;
+            if av {
+                build_window(
+                    app.handle(),
+                    "activities",
+                    "activities",
+                    l.activities,
+                    true,
+                    capture,
+                )
+                .map_err(std::io::Error::other)?;
+            }
+            if dv {
+                build_window(
+                    app.handle(),
+                    "date-menu",
+                    "date-menu",
+                    l.date_menu,
+                    true,
+                    capture,
+                )
+                .map_err(std::io::Error::other)?;
+            }
+            if qv {
+                build_window(
+                    app.handle(),
+                    "quick-settings",
+                    "quick-settings",
+                    l.quick_settings,
+                    true,
+                    capture,
+                )
+                .map_err(std::io::Error::other)?;
+            }
             #[cfg(windows)]
             {
-                if let Some(panel) = app.get_webview_window("panel") {
-                    let hwnd = panel.hwnd()?;
-                    windows::appbar::reserve_top(hwnd.0 as isize)?;
+                if let Err(error) = windows::frame::start_frame_watcher(state.clone()) {
+                    // With no independent recovery helper, never style foreign HWNDs.
+                    eprintln!("Native frame styling disabled: {error}");
                 }
-                windows::frame::start_frame_watcher(state.clone());
+                let _ = windows::hotkeys::start_activities_hotkey(app.handle().clone());
+                let _ = windows::window_events::start(app.handle().clone());
+                start_display_topology_watcher(app.handle().clone());
             }
-
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("FedoraWin runtime failed");
+    app.run(|_, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            #[cfg(windows)]
+            windows::frame::reset_top_level_windows();
+        }
+    });
 }

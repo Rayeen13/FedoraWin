@@ -1,0 +1,52 @@
+name: Native Adwaita proof
+
+on:
+  push:
+    branches: [dev/gnome-native-20260914]
+    paths:
+      - 'native/adwaita/**'
+      - '.github/workflows/native-adwaita.yml'
+  pull_request:
+    paths:
+      - 'native/adwaita/**'
+      - '.github/workflows/native-adwaita.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-gtk4-adwaita:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-libadwaita
+      - name: Compile real libadwaita API
+        shell: msys2 {0}
+        run: |
+          mkdir -p native/adwaita/out
+          gcc -std=c11 -Wall -Wextra -Werror native/adwaita/adwaita-window.c \
+            -o native/adwaita/out/fedorawin-adwaita.exe \
+            $(pkg-config --cflags --libs libadwaita-1)
+          test -s native/adwaita/out/fedorawin-adwaita.exe
+      - name: Verify and capture real Adwaita HWND
+        shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./native/adwaita/check-window.ps1
+      - name: Upload real Windows captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedorawin-native-adwaita-evidence
+          path: native/adwaita/out/adwaita-*.png
+          if-no-files-found: warn
+          retention-days: 14

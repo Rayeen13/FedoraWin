@@ -2,13 +2,20 @@ name: Windows CI
 
 on:
   push:
-    branches: [main, feat/gnome-shell-native]
+    branches: [main, feat/gnome-shell-native, dev/gnome-native-20260914]
   pull_request:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-ci-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   native-shell:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -18,12 +25,120 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: PowerShell test script syntax
+        shell: pwsh
+        run: |
+          foreach ($script in @('tests/capture-site-preview.ps1', 'tests/check-frame-recovery.ps1', 'tests/check-memory-budget.ps1')) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script).Path, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count -gt 0) {
+              $parseErrors | ForEach-Object { Write-Host "PARSER ERROR: $_" }
+              throw "PowerShell syntax failed: $script"
+            }
+          }
+      - name: UI syntax check
+        run: node --check ui/app.js
+      - name: Workspace ready syntax check
+        run: node --check ui/workspace-ready.js
+      - name: Control flyout syntax check
+        run: node --check ui/control-flyouts.js
+      - name: Brightness syntax check
+        run: node --check ui/brightness.js
+      - name: Wi-Fi syntax check
+        run: node --check ui/wifi.js
+      - name: Bluetooth syntax check
+        run: node --check ui/bluetooth.js
+      - name: Wireless pause syntax check
+        run: node --check ui/radio-pause.js
+      - name: Power mode syntax check
+        run: node --check ui/power-mode.js
+      - name: OSD syntax check
+        run: node --check ui/osd.js
       - name: UI contract tests
-        run: node --test tests/ui_contract.test.mjs
+        run: node --test tests/ui_contract.test.mjs tests/gnome51_contract.test.mjs tests/osd_contract.test.mjs
+      - name: Native frame lifecycle contract tests
+        run: node --test tests/frame_contract.test.mjs
+      - name: Rust unit tests
+        working-directory: src-tauri
+        run: cargo test
       - name: Rust compile check
         working-directory: src-tauri
         run: cargo check
       - name: Rust format check
-        if: always()
         working-directory: src-tauri
         run: cargo fmt --all -- --check
+      - name: Build release runtime
+        working-directory: src-tauri
+        run: cargo build --release
+      - name: Force-kill native frame recovery test
+        shell: pwsh
+        run: ./tests/check-frame-recovery.ps1
+      - name: FedoraWin memory budget
+        shell: pwsh
+        run: ./tests/check-memory-budget.ps1
+      - name: Capture real FedoraWin gallery
+        shell: pwsh
+        env:
+          FEDORAWIN_SOURCE_BRANCH: ${{ github.ref_name }}
+        run: ./tests/capture-site-preview.ps1
+      - name: Upload memory budget
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedorawin-memory-budget
+          path: memory-budget.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload runtime gallery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedorawin-runtime-gallery
+          path: artifacts/site-preview
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload Windows preview executable
+        if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/dev/gnome-native-20260914' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedorawin-windows11-prebeta
+          path: src-tauri/target/release/fedorawin.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish runtime gallery to Pages branch
+        if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/dev/gnome-native-20260914' }}
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+
+          $site = Join-Path $env:RUNNER_TEMP 'fedorawin-pages'
+          if (Test-Path -LiteralPath $site) {
+            Remove-Item -LiteralPath $site -Recurse -Force
+          }
+          git worktree add --detach $site origin/main
+
+          try {
+            Push-Location $site
+            git switch -C main origin/main
+            $runtime = Join-Path $site 'docs\assets\runtime'
+            New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+            Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'artifacts\site-preview') -Filter '*.png' |
+              Copy-Item -Destination $runtime -Force
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'artifacts\site-preview\preview-metadata.json') -Destination $runtime -Force
+            git add docs/assets/runtime
+            git diff --cached --quiet
+            $changed = $LASTEXITCODE -ne 0
+            if ($changed) {
+              git commit -m "docs: refresh runtime FedoraWin gallery"
+              git push origin HEAD:main
+            } else {
+              Write-Host 'Runtime gallery is already current.'
+            }
+          } finally {
+            Pop-Location
+            git worktree remove $site --force
+          }

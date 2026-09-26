@@ -6,7 +6,9 @@ const GWL_EXSTYLE: i32 = -20;
 const WS_EX_TOOLWINDOW: isize = 0x00000080;
 const GW_OWNER: u32 = 4;
 const DWMWA_CLOAKED: u32 = 14;
+const DWM_CLOAKED_SHELL: i32 = 0x2;
 const SW_RESTORE: i32 = 9;
+const WM_CLOSE: u32 = 0x0010;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +16,8 @@ pub struct WindowEntry {
     pub handle: String,
     pub title: String,
     pub minimized: bool,
+    pub desktop_id: Option<String>,
+    pub on_current_workspace: bool,
 }
 
 #[link(name = "user32")]
@@ -29,6 +33,7 @@ extern "system" {
     fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
     fn ShowWindow(hwnd: isize, command: i32) -> i32;
     fn SetForegroundWindow(hwnd: isize) -> i32;
+    fn PostMessageW(hwnd: isize, message: u32, wparam: usize, lparam: isize) -> i32;
 }
 
 #[link(name = "dwmapi")]
@@ -54,7 +59,10 @@ unsafe fn eligible(hwnd: isize) -> bool {
         DWMWA_CLOAKED,
         &mut cloaked as *mut i32 as *mut c_void,
         size_of::<i32>() as u32,
-    ) == 0 && cloaked != 0 {
+    ) == 0
+        && cloaked != 0
+        && cloaked & DWM_CLOAKED_SHELL == 0
+    {
         return false;
     }
     GetWindowTextLengthW(hwnd) > 0
@@ -75,7 +83,9 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
         if written <= 0 {
             return 1;
         }
-        let title = String::from_utf16_lossy(&buffer[..written as usize]).trim().to_string();
+        let title = String::from_utf16_lossy(&buffer[..written as usize])
+            .trim()
+            .to_string();
         if title.is_empty() {
             return 1;
         }
@@ -83,22 +93,42 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
             handle: hwnd.to_string(),
             title,
             minimized: IsIconic(hwnd) != 0,
+            desktop_id: None,
+            on_current_workspace: true,
         });
     }
     1
 }
 
 pub fn list() -> Result<Vec<WindowEntry>, String> {
-    let mut windows = Vec::new();
-    let ok = unsafe { EnumWindows(enum_callback, &mut windows as *mut Vec<WindowEntry> as isize) };
+    let mut windows: Vec<WindowEntry> = Vec::new();
+    let ok = unsafe {
+        EnumWindows(
+            enum_callback,
+            &mut windows as *mut Vec<WindowEntry> as isize,
+        )
+    };
     if ok == 0 {
         return Err("EnumWindows failed".into());
     }
+
+    for window in &mut windows {
+        let Ok(hwnd) = window.handle.parse::<isize>() else {
+            continue;
+        };
+        if let Ok(workspace) = super::virtual_desktop::window_info(hwnd) {
+            window.desktop_id = Some(workspace.desktop_id);
+            window.on_current_workspace = workspace.on_current_workspace;
+        }
+    }
+
     Ok(windows)
 }
 
 pub fn activate(handle: &str) -> Result<(), String> {
-    let hwnd = handle.parse::<isize>().map_err(|_| "invalid window handle")?;
+    let hwnd = handle
+        .parse::<isize>()
+        .map_err(|_| "invalid window handle")?;
     unsafe {
         if hwnd == 0 || IsWindow(hwnd) == 0 {
             return Err("window is no longer available".into());
@@ -108,6 +138,21 @@ pub fn activate(handle: &str) -> Result<(), String> {
         }
         if SetForegroundWindow(hwnd) == 0 {
             return Err("Windows refused to foreground the requested window".into());
+        }
+    }
+    Ok(())
+}
+
+pub fn close(handle: &str) -> Result<(), String> {
+    let hwnd = handle
+        .parse::<isize>()
+        .map_err(|_| "invalid window handle")?;
+    unsafe {
+        if hwnd == 0 || IsWindow(hwnd) == 0 || !eligible(hwnd) {
+            return Err("window is no longer available".into());
+        }
+        if PostMessageW(hwnd, WM_CLOSE, 0, 0) == 0 {
+            return Err("Windows refused to close the requested window".into());
         }
     }
     Ok(())
