@@ -44,6 +44,12 @@ public static class FedoraWinCaptureNative {
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hwnd);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "SystemParametersInfoW")]
+    public static extern bool GetDesktopWallpaper(uint action, uint param, StringBuilder value, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "SystemParametersInfoW")]
+    public static extern bool SetDesktopWallpaper(uint action, uint param, string value, uint flags);
+
     [DllImport("dwmapi.dll")]
     public static extern int DwmGetWindowAttribute(IntPtr hwnd, uint attribute, out int value, uint size);
 
@@ -166,6 +172,39 @@ function Save-WindowCapture {
     $minimumBytes = if ($height -le 64) { 512 } else { 2048 }
     if ($file.Length -lt $minimumBytes) {
         throw "Capture '$FileName' is unexpectedly small ($($file.Length) bytes; minimum $minimumBytes for $($width)x$($height))."
+    }
+    return $path
+}
+
+
+function Save-DesktopCapture {
+    param([Parameter(Mandatory)][string]$FileName)
+
+    $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+    if ($bounds.Width -lt 320 -or $bounds.Height -lt 240) {
+        throw "Primary desktop bounds are unexpectedly small: $($bounds.Width)x$($bounds.Height)."
+    }
+
+    $path = Join-Path $output $FileName
+    $bitmap = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $graphics.CopyFromScreen(
+            $bounds.Left,
+            $bounds.Top,
+            0,
+            0,
+            (New-Object System.Drawing.Size($bounds.Width, $bounds.Height)),
+            [System.Drawing.CopyPixelOperation]::SourceCopy
+        )
+        $bitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    } finally {
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+
+    if ((Get-Item -LiteralPath $path).Length -lt 4096) {
+        throw "Desktop capture '$FileName' is unexpectedly small."
     }
     return $path
 }
@@ -297,6 +336,107 @@ function Invoke-Capture {
     }
 }
 
+
+function Convert-Gnome51Wallpaper {
+    $source = Join-Path $repoRoot 'assets\wallpapers\gnome-51-roundhex-light.jxl'
+    if (-not (Test-Path -LiteralPath $source)) {
+        throw 'GNOME 51 Roundhex wallpaper asset is missing.'
+    }
+
+    # Pin the exact light default wallpaper from GNOME Backgrounds 51.0.
+    $expectedBlob = '71e1e91496d82cbe82b9bf9121d4fe23ac81bb21'
+    $actualBlob = (& git -C $repoRoot hash-object $source).Trim()
+    if ($actualBlob -ne $expectedBlob) {
+        throw "GNOME 51 wallpaper integrity mismatch: expected $expectedBlob, got $actualBlob."
+    }
+
+    $bmp = Join-Path ([IO.Path]::GetTempPath()) ("fedorawin-gnome51-{0}.bmp" -f [Guid]::NewGuid().ToString('N'))
+    $magick = Get-Command magick -ErrorAction SilentlyContinue
+    if ($magick) {
+        & $magick.Source $source $bmp
+        if ($LASTEXITCODE -ne 0) { throw 'ImageMagick could not decode the GNOME 51 JXL wallpaper.' }
+    } else {
+        $ffmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
+        if (-not $ffmpeg) {
+            throw 'No JXL-capable wallpaper converter is available (magick/ffmpeg).'
+        }
+        & $ffmpeg.Source -hide_banner -loglevel error -y -i $source $bmp
+        if ($LASTEXITCODE -ne 0) { throw 'FFmpeg could not decode the GNOME 51 JXL wallpaper.' }
+    }
+    if (-not (Test-Path -LiteralPath $bmp)) {
+        throw 'GNOME 51 wallpaper conversion did not produce a bitmap.'
+    }
+    return $bmp
+}
+
+function Get-DesktopWallpaperPath {
+    $buffer = [System.Text.StringBuilder]::new(2048)
+    if (-not [FedoraWinCaptureNative]::GetDesktopWallpaper([uint32]0x73, [uint32]$buffer.Capacity, $buffer, 0)) {
+        throw 'Could not read the current Windows wallpaper before the desktop capture.'
+    }
+    return $buffer.ToString()
+}
+
+function Set-DesktopWallpaperPath {
+    param([AllowEmptyString()][string]$Path)
+    if (-not [FedoraWinCaptureNative]::SetDesktopWallpaper([uint32]0x14, 0, $Path, [uint32]0x02)) {
+        throw "Could not set Windows wallpaper for verified desktop capture: '$Path'."
+    }
+    Start-Sleep -Milliseconds 750
+}
+
+function Invoke-DesktopCapture {
+    $env:FEDORAWIN_CAPTURE_VIEW = 'panel'
+    $env:FEDORAWIN_CAPTURE_MODE = ''
+    $env:FEDORAWIN_CAPTURE_THEME = 'dark'
+    $process = $null
+    $wallpaperBmp = $null
+    $previousWallpaper = Get-DesktopWallpaperPath
+    try {
+        $wallpaperBmp = Convert-Gnome51Wallpaper
+        Set-DesktopWallpaperPath -Path $wallpaperBmp
+
+        $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
+        $panelHwnd = Wait-Window -ProcessId $process.Id -Title 'FedoraWin — panel' -TimeoutSeconds 35
+        Start-Sleep -Milliseconds 1400
+
+        if ([FedoraWinCaptureNative]::AnyVisibleExplorerTaskbar()) {
+            throw 'FedoraWin desktop capture still has a visible Explorer taskbar.'
+        }
+
+        $panelRect = New-Object FedoraWinCaptureNative+RECT
+        if (-not [FedoraWinCaptureNative]::GetWindowRect($panelHwnd, [ref]$panelRect)) {
+            throw 'Could not inspect the native panel before the desktop capture.'
+        }
+        if ($panelRect.Top -ne $screen.Top -or $panelRect.Right -le $panelRect.Left) {
+            throw "Native panel is not anchored to the captured desktop (top=$($panelRect.Top), desktopTop=$($screen.Top))."
+        }
+
+        $desktopPath = Save-DesktopCapture -FileName 'desktop.png'
+        Assert-VisualCapture -Path $desktopPath -Key 'desktop'
+        $captures['desktop'] = 'desktop.png'
+        Write-Host 'DESKTOP CAPTURE: real FedoraWin.exe native panel + GNOME 51 Roundhex wallpaper; Explorer process retained and taskbar presentation hidden.'
+    } finally {
+        if ($process -and -not $process.HasExited) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 350
+        }
+        try {
+            Set-DesktopWallpaperPath -Path $previousWallpaper
+        } catch {
+            Write-Error "Failed to restore the runner wallpaper after desktop capture: $_"
+        }
+        if ($wallpaperBmp) {
+            Remove-Item -LiteralPath $wallpaperBmp -Force -ErrorAction SilentlyContinue
+        }
+        Remove-Item Env:FEDORAWIN_CAPTURE_VIEW -ErrorAction SilentlyContinue
+        Remove-Item Env:FEDORAWIN_CAPTURE_MODE -ErrorAction SilentlyContinue
+        Remove-Item Env:FEDORAWIN_CAPTURE_THEME -ErrorAction SilentlyContinue
+    }
+}
+
+Invoke-DesktopCapture
+
 Invoke-Capture -Key 'panel' -View 'panel' -WindowLabel 'panel' -SettleMilliseconds 900
 Invoke-Capture -Key 'activities' -View 'activities' -WindowLabel 'activities' -SettleMilliseconds 1900
 Invoke-Capture -Key 'apps' -View 'activities' -WindowLabel 'activities' -Mode 'apps' -SettleMilliseconds 2100
@@ -411,7 +551,7 @@ foreach ($entry in $captures.GetEnumerator()) {
 }
 $uniqueCaptureCount = ($hashes.Values | Select-Object -Unique).Count
 Write-Host "Unique runtime gallery captures: $uniqueCaptureCount / $($captures.Count)"
-if ($uniqueCaptureCount -lt 12) {
+if ($uniqueCaptureCount -lt 13) {
     throw 'Runtime gallery captures are not sufficiently distinct.'
 }
 if ($hashes.quick_settings_dark -eq $hashes.quick_settings_light) {
@@ -451,6 +591,13 @@ if ($hashes.wifi -eq $hashes.bluetooth) {
     github_run_id = $env:GITHUB_RUN_ID
     github_run_number = $env:GITHUB_RUN_NUMBER
     screen = [ordered]@{ width = $screen.Width; height = $screen.Height }
+    wallpaper = [ordered]@{
+        name = 'GNOME 51 Roundhex'
+        source = 'GNOME/gnome-backgrounds 51.0 backgrounds/adwaita-l.jxl'
+        git_blob = '71e1e91496d82cbe82b9bf9121d4fe23ac81bb21'
+        license = 'CC BY-SA 3.0'
+        scope = 'verified desktop capture only; user wallpaper is not changed by FedoraWin runtime'
+    }
     screenshots = $captures
     sha256 = $hashes
 } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $output 'preview-metadata.json') -Encoding UTF8
