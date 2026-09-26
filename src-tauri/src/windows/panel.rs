@@ -410,9 +410,9 @@ pub fn relayout(display: &DisplayInfo) -> Result<(), String> {
     };
     if ok == 0 {
         return match restore_previous_layout(hwnd, previous) {
-            Ok(()) => Err(
-                "SetWindowPos failed for native panel; previous layout was restored".into(),
-            ),
+            Ok(()) => {
+                Err("SetWindowPos failed for native panel; previous layout was restored".into())
+            }
             Err(rollback) => Err(format!(
                 "SetWindowPos failed for native panel; rollback failed: {rollback}"
             )),
