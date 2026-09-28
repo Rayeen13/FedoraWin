@@ -22,6 +22,7 @@ const windowEvents = fs.readFileSync(new URL('../src-tauri/src/windows/window_ev
 const windowsList = fs.readFileSync(new URL('../src-tauri/src/windows/windows_list.rs', import.meta.url), 'utf8');
 const virtualDesktop = fs.readFileSync(new URL('../src-tauri/src/windows/virtual_desktop.rs', import.meta.url), 'utf8');
 const memorySmoke = fs.readFileSync(new URL('./check-memory-budget.ps1', import.meta.url), 'utf8');
+const taskbarRecovery = fs.readFileSync(new URL('./check-taskbar-recovery.ps1', import.meta.url), 'utf8');
 const windowsCi = fs.readFileSync(new URL('../.github/workflows/windows-ci.yml', import.meta.url), 'utf8');
 
 assert.match(js, /toggle_activities/);
@@ -239,6 +240,14 @@ assert.match(js, /acknowledged === view/);
 assert.match(memorySmoke, /TargetIdleMb = 100/);
 assert.match(memorySmoke, /Get-CimInstance Win32_Process/);
 assert.match(memorySmoke, /WorkingSet64/);
+assert.match(windowsCi, /Force-kill Explorer taskbar recovery test/);
+assert.match(windowsCi, /check-taskbar-recovery\.ps1/);
+assert.match(taskbarRecovery, /Shell_TrayWnd/);
+assert.match(taskbarRecovery, /Shell_SecondaryTrayWnd/);
+assert.match(taskbarRecovery, /GetWindowThreadProcessId/);
+assert.match(taskbarRecovery, /Stop-Process -Id \$shell\.Id -Force/);
+assert.match(taskbarRecovery, /TASKBAR RECOVERY PASSED/);
+assert.match(taskbarRecovery, /Explorer PID\(s\).*remained intact/);
 assert.match(windowsCi, /FedoraWin memory budget/);
 assert.match(windowsCi, /check-memory-budget\.ps1/);
 assert.doesNotMatch(main, /PhysicalPosition::new\(0,\s*0\)/);
