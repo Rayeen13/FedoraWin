@@ -28,7 +28,7 @@ jobs:
       - name: PowerShell test script syntax
         shell: pwsh
         run: |
-          foreach ($script in @('tests/capture-site-preview.ps1', 'tests/check-frame-recovery.ps1', 'tests/check-taskbar-recovery.ps1', 'tests/check-memory-budget.ps1')) {
+          foreach ($script in @('tests/capture-site-preview.ps1', 'tests/check-frame-recovery.ps1', 'tests/check-taskbar-recovery.ps1', 'tests/check-explorer-restart-recovery.ps1', 'tests/check-memory-budget.ps1')) {
             $tokens = $null
             $parseErrors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script).Path, [ref]$tokens, [ref]$parseErrors)
@@ -77,6 +77,9 @@ jobs:
       - name: Force-kill Explorer taskbar recovery test
         shell: pwsh
         run: ./tests/check-taskbar-recovery.ps1
+      - name: Explorer restart taskbar continuity test
+        shell: pwsh
+        run: ./tests/check-explorer-restart-recovery.ps1
       - name: FedoraWin memory budget
         shell: pwsh
         run: ./tests/check-memory-budget.ps1
