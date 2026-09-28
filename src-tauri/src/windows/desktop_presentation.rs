@@ -183,9 +183,8 @@ pub fn start() -> Result<(), String> {
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
         .as_nanos();
-    let journal = std::env::temp_dir().join(format!(
-        "fedorawin-taskbars-{parent_pid}-{nonce}.json"
-    ));
+    let journal =
+        std::env::temp_dir().join(format!("fedorawin-taskbars-{parent_pid}-{nonce}.json"));
     persist_handles(&journal, &windows)?;
 
     // Do not hide any taskbar if crash recovery cannot be started.
