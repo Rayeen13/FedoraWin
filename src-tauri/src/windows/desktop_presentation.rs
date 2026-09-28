@@ -1,15 +1,21 @@
 //! FedoraWin DE temporarily hides Explorer's presentation, without terminating the Windows shell process.
 //! A separate copy of this executable restores the original taskbar HWNDs
 //! even when the desktop process is force-killed. No registry or Shell change.
+use std::fs::{self, File};
+use std::io::Write;
+use std::os::windows::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const SW_HIDE: i32 = 0;
 const SW_SHOW: i32 = 5;
 const PROCESS_SYNCHRONIZE: u32 = 0x0010_0000;
 const WAIT_FOREVER: u32 = 0xffff_ffff;
 const WAIT_OBJECT_0: u32 = 0;
+const MOVEFILE_REPLACE_EXISTING: u32 = 1;
+const MOVEFILE_WRITE_THROUGH: u32 = 8;
 
 #[link(name = "user32")]
 extern "system" {
@@ -26,10 +32,18 @@ extern "system" {
     fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
     fn WaitForSingleObject(handle: isize, timeout: u32) -> u32;
     fn CloseHandle(handle: isize) -> i32;
+    fn MoveFileExW(source: *const u16, destination: *const u16, flags: u32) -> i32;
 }
 
 fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+fn wide_path(path: &Path) -> Vec<u16> {
+    path.as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }
 
 fn is_taskbar_class(class: &str) -> bool {
@@ -72,44 +86,81 @@ fn visible_taskbars() -> Vec<isize> {
 
 fn restore(windows: &[isize]) {
     for &hwnd in windows {
-        // Never reveal a newly-created, unrelated window after Explorer restarts.
+        // Only restore HWNDs that are still genuine Explorer taskbar classes.
         if valid_taskbar(hwnd) {
             unsafe { ShowWindow(hwnd, SW_SHOW) };
         }
     }
 }
 
-fn parse_handles(arg: &str) -> Vec<isize> {
-    arg.split(',')
-        .filter_map(|value| value.parse::<isize>().ok())
-        .filter(|&value| value > 0)
-        .collect()
+fn add_new_handles(known: &mut Vec<isize>, observed: &[isize]) -> bool {
+    let mut changed = false;
+    for &hwnd in observed {
+        if hwnd > 0 && !known.contains(&hwnd) {
+            known.push(hwnd);
+            changed = true;
+        }
+    }
+    changed
 }
 
-/// A watchdog executable only restores windows that FedoraWin itself hid.
-/// It does not create a panel, patch Explorer, or own desktop UI.
+fn persist_handles(path: &Path, windows: &[isize]) -> Result<(), String> {
+    let temporary = path.with_extension("pending");
+    let data = serde_json::to_vec(windows).map_err(|error| error.to_string())?;
+    let mut file = File::create(&temporary).map_err(|error| error.to_string())?;
+    file.write_all(&data).map_err(|error| error.to_string())?;
+    file.sync_all().map_err(|error| error.to_string())?;
+    drop(file);
+
+    let moved = unsafe {
+        MoveFileExW(
+            wide_path(&temporary).as_ptr(),
+            wide_path(path).as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if moved == 0 {
+        return Err(format!(
+            "atomic taskbar recovery journal replace failed: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    Ok(())
+}
+
+fn read_handles(path: &Path) -> Vec<isize> {
+    fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Vec<isize>>(&bytes).ok())
+        .unwrap_or_default()
+}
+
+/// A watchdog executable restores every taskbar HWND FedoraWin journaled before
+/// hiding it. The journal can grow when Explorer restarts while FedoraWin stays
+/// alive, so one guardian is enough for the whole FedoraWin session.
 pub fn maybe_run_guardian() -> bool {
-    let mut args = std::env::args();
+    let mut args = std::env::args_os();
     let _exe = args.next();
-    if args.next().as_deref() != Some("--restore-taskbar-after") {
+    if args.next().as_deref() != Some(std::ffi::OsStr::new("--restore-taskbar-after")) {
         return false;
     }
-    let pid = args.next().and_then(|arg| arg.parse::<u32>().ok());
-    let windows = args
+    let pid = args
         .next()
-        .map(|arg| parse_handles(&arg))
-        .unwrap_or_default();
-    if let Some(pid) = pid {
+        .and_then(|arg| arg.to_string_lossy().parse::<u32>().ok());
+    let path = args.next().map(PathBuf::from);
+    if let (Some(pid), Some(path)) = (pid, path) {
         let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
-        if process != 0 {
-            let finished = unsafe { WaitForSingleObject(process, WAIT_FOREVER) };
-            unsafe { CloseHandle(process) };
-            if finished == WAIT_OBJECT_0 {
-                restore(&windows);
-            }
+        let stopped = if process == 0 {
+            true
         } else {
-            // Parent already exited before this helper could obtain a handle.
-            restore(&windows);
+            let result = unsafe { WaitForSingleObject(process, WAIT_FOREVER) };
+            unsafe { CloseHandle(process) };
+            result == WAIT_OBJECT_0
+        };
+        if stopped {
+            restore(&read_handles(&path));
+            let _ = fs::remove_file(&path);
+            let _ = fs::remove_file(path.with_extension("pending"));
         }
     }
     true
@@ -128,32 +179,58 @@ pub fn start() -> Result<(), String> {
     let current_exe =
         std::env::current_exe().map_err(|error| format!("taskbar recovery executable: {error}"))?;
     let parent_pid = std::process::id();
-    let handles = windows
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(",");
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_nanos();
+    let journal = std::env::temp_dir().join(format!(
+        "fedorawin-taskbars-{parent_pid}-{nonce}.json"
+    ));
+    persist_handles(&journal, &windows)?;
+
     // Do not hide any taskbar if crash recovery cannot be started.
     Command::new(current_exe)
         .arg("--restore-taskbar-after")
         .arg(parent_pid.to_string())
-        .arg(handles)
+        .arg(&journal)
         .spawn()
-        .map_err(|error| format!("taskbar recovery could not start: {error}"))?;
+        .map_err(|error| {
+            let _ = fs::remove_file(&journal);
+            let _ = fs::remove_file(journal.with_extension("pending"));
+            format!("taskbar recovery could not start: {error}")
+        })?;
+
     for &hwnd in &windows {
         if valid_taskbar(hwnd) {
             unsafe { ShowWindow(hwnd, SW_HIDE) };
         }
     }
-    // Explorer may re-show its taskbar when the work area or display changes.
-    // Only re-hide the same original HWNDs; the guardian owns eventual restore.
+
+    // Explorer can create replacement taskbar HWNDs after a crash/restart.
+    // Journal every new genuine taskbar BEFORE hiding it, so the independent
+    // guardian can restore the replacement HWND if FedoraWin exits afterwards.
     thread::Builder::new()
         .name("fedorawin-desktop-presentation".into())
-        .spawn(move || loop {
-            thread::sleep(Duration::from_millis(950));
-            for &hwnd in &windows {
-                if valid_taskbar(hwnd) && unsafe { IsWindowVisible(hwnd) } != 0 {
-                    unsafe { ShowWindow(hwnd, SW_HIDE) };
+        .spawn(move || {
+            let mut known = windows;
+            loop {
+                thread::sleep(Duration::from_millis(950));
+                let observed = visible_taskbars();
+                let previous_len = known.len();
+                add_new_handles(&mut known, &observed);
+                if known.len() != previous_len {
+                    if let Err(error) = persist_handles(&journal, &known) {
+                        eprintln!(
+                            "FedoraWin left newly-created Explorer taskbars visible because recovery journaling failed: {error}"
+                        );
+                        known.truncate(previous_len);
+                    }
+                }
+
+                for &hwnd in &known {
+                    if valid_taskbar(hwnd) && unsafe { IsWindowVisible(hwnd) } != 0 {
+                        unsafe { ShowWindow(hwnd, SW_HIDE) };
+                    }
                 }
             }
         })
@@ -163,7 +240,7 @@ pub fn start() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_taskbar_class, parse_handles};
+    use super::{add_new_handles, is_taskbar_class};
 
     #[test]
     fn only_explorer_taskbar_classes() {
@@ -174,7 +251,10 @@ mod tests {
     }
 
     #[test]
-    fn malformed_watchdog_arguments_cannot_restore_arbitrary_handles() {
-        assert_eq!(parse_handles("10,bad,0,-4,20"), vec![10, 20]);
+    fn explorer_restart_adds_only_new_valid_handle_values() {
+        let mut known = vec![10, 20];
+        assert!(add_new_handles(&mut known, &[20, 30, 0, -4]));
+        assert_eq!(known, vec![10, 20, 30]);
+        assert!(!add_new_handles(&mut known, &[10, 20, 30]));
     }
 }
