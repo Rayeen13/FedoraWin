@@ -195,9 +195,19 @@ pub fn topology_signature() -> Result<Vec<DisplaySignature>, String> {
     Ok(enumerate()?.iter().map(DisplaySignature::from).collect())
 }
 
+pub fn topology_change_is_stable(
+    previous: Option<&[DisplaySignature]>,
+    observed: &[DisplaySignature],
+    confirmed: &[DisplaySignature],
+) -> bool {
+    previous != Some(observed) && observed == confirmed
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{DisplayInfo, DisplaySignature, RectInfo};
+    use super::{
+        topology_change_is_stable, DisplayInfo, DisplaySignature, RectInfo,
+    };
 
     fn display(bounds: RectInfo, dpi: u32) -> DisplayInfo {
         DisplayInfo {
@@ -254,6 +264,74 @@ mod tests {
         );
         assert_eq!(monitor.logical_width(), 5120.0);
         assert_eq!(monitor.bounds.width(), 5120);
+    }
+
+    #[test]
+    fn topology_change_requires_two_matching_observations() {
+        let primary = DisplaySignature::from(&display(
+            RectInfo {
+                left: 0,
+                top: 0,
+                right: 1920,
+                bottom: 1080,
+            },
+            96,
+        ));
+        let mut secondary_info = display(
+            RectInfo {
+                left: 1920,
+                top: 0,
+                right: 4480,
+                bottom: 1440,
+            },
+            144,
+        );
+        secondary_info.id = r"\\.\DISPLAY_SECONDARY".into();
+        secondary_info.primary = false;
+        let secondary = DisplaySignature::from(&secondary_info);
+
+        let previous = vec![primary.clone()];
+        let observed = vec![primary.clone(), secondary];
+
+        assert!(!topology_change_is_stable(
+            Some(&previous),
+            &observed,
+            &previous
+        ));
+        assert!(topology_change_is_stable(
+            Some(&previous),
+            &observed,
+            &observed
+        ));
+        assert!(!topology_change_is_stable(
+            Some(&observed),
+            &observed,
+            &observed
+        ));
+    }
+
+    #[test]
+    fn stable_dpi_change_is_detected() {
+        let before = vec![DisplaySignature::from(&display(
+            RectInfo {
+                left: 0,
+                top: 0,
+                right: 3840,
+                bottom: 2160,
+            },
+            96,
+        ))];
+        let after = vec![DisplaySignature::from(&display(
+            RectInfo {
+                left: 0,
+                top: 0,
+                right: 3840,
+                bottom: 2160,
+            },
+            144,
+        ))];
+
+        assert!(topology_change_is_stable(Some(&before), &after, &after));
     }
 
     #[test]
