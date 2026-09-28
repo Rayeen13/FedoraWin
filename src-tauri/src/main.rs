@@ -372,11 +372,8 @@ fn start_display_topology_watcher(app: tauri::AppHandle) {
                 Ok(signature) => signature,
                 Err(_) => continue,
             };
-            if !windows::display::topology_change_is_stable(
-                last.as_deref(),
-                &observed,
-                &confirmed,
-            ) {
+            if !windows::display::topology_change_is_stable(last.as_deref(), &observed, &confirmed)
+            {
                 continue;
             }
 
