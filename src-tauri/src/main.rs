@@ -356,17 +356,33 @@ fn start_display_topology_watcher(app: tauri::AppHandle) {
         let mut last = windows::display::topology_signature().ok();
         loop {
             thread::sleep(Duration::from_millis(900));
-            let next = match windows::display::topology_signature() {
-                Ok(s) => s,
+            let observed = match windows::display::topology_signature() {
+                Ok(signature) => signature,
                 Err(_) => continue,
             };
-            if last.as_ref() == Some(&next) {
+            if last.as_deref() == Some(observed.as_slice()) {
                 continue;
             }
+
+            // Windows can expose a short-lived topology while a monitor is being
+            // connected, disconnected or changing DPI. Do not move the AppBar or
+            // shell surfaces until the same topology is observed twice.
             thread::sleep(Duration::from_millis(180));
+            let confirmed = match windows::display::topology_signature() {
+                Ok(signature) => signature,
+                Err(_) => continue,
+            };
+            if !windows::display::topology_change_is_stable(
+                last.as_deref(),
+                &observed,
+                &confirmed,
+            ) {
+                continue;
+            }
+
             match relayout_shell_surfaces(&app) {
                 Ok(()) => {
-                    last = windows::display::topology_signature().ok().or(Some(next));
+                    last = Some(confirmed);
                 }
                 Err(error) => {
                     eprintln!(
