@@ -205,9 +205,7 @@ pub fn topology_change_is_stable(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        topology_change_is_stable, DisplayInfo, DisplaySignature, RectInfo,
-    };
+    use super::{topology_change_is_stable, DisplayInfo, DisplaySignature, RectInfo};
 
     fn display(bounds: RectInfo, dpi: u32) -> DisplayInfo {
         DisplayInfo {
