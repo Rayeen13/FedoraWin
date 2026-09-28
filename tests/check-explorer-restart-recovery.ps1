@@ -122,8 +122,8 @@ try {
         ($baselineHandles -join ','))
 
     # CI fault injection only: product code never calls Stop-Process on Explorer.
-    foreach ($pid in $baselineExplorer) {
-        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    foreach ($explorerPid in $baselineExplorer) {
+        Stop-Process -Id $explorerPid -Force -ErrorAction SilentlyContinue
     }
 
     for ($attempt = 0; $attempt -lt 120; $attempt++) {
