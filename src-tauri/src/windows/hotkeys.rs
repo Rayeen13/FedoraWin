@@ -5,7 +5,9 @@ use std::time::Duration;
 
 const ACTIVITIES_HOTKEY_ID: i32 = 0x4657;
 const MOD_ALT: u32 = 0x0001;
+const MOD_WIN: u32 = 0x0008;
 const MOD_NOREPEAT: u32 = 0x4000;
+const ACTIVITIES_MODIFIERS: u32 = MOD_ALT | MOD_NOREPEAT;
 const VK_F1: u32 = 0x70;
 const WM_HOTKEY: u32 = 0x0312;
 
@@ -39,14 +41,23 @@ fn is_activities_hotkey(message: &Msg) -> bool {
     message.message == WM_HOTKEY && message.wparam == ACTIVITIES_HOTKEY_ID as usize
 }
 
+fn validate_shell_hotkey_modifiers(modifiers: u32) -> Result<(), &'static str> {
+    if modifiers & MOD_WIN != 0 {
+        Err("FedoraWin must not reserve Windows-key shortcuts")
+    } else {
+        Ok(())
+    }
+}
+
 pub fn start_activities_hotkey(app: tauri::AppHandle) -> Result<(), String> {
+    validate_shell_hotkey_modifiers(ACTIVITIES_MODIFIERS).map_err(str::to_string)?;
     let (status_tx, status_rx) = mpsc::sync_channel(1);
 
     thread::Builder::new()
         .name("fedorawin-hotkeys".into())
         .spawn(move || {
             let registered =
-                unsafe { RegisterHotKey(0, ACTIVITIES_HOTKEY_ID, MOD_ALT | MOD_NOREPEAT, VK_F1) }
+                unsafe { RegisterHotKey(0, ACTIVITIES_HOTKEY_ID, ACTIVITIES_MODIFIERS, VK_F1) }
                     != 0;
 
             let _ = status_tx.send(registered);
@@ -81,7 +92,18 @@ pub fn start_activities_hotkey(app: tauri::AppHandle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_activities_hotkey, Msg, Point, ACTIVITIES_HOTKEY_ID, WM_HOTKEY};
+    use super::{
+        is_activities_hotkey, validate_shell_hotkey_modifiers, Msg, Point, ACTIVITIES_HOTKEY_ID,
+        ACTIVITIES_MODIFIERS, MOD_ALT, MOD_NOREPEAT, MOD_WIN, WM_HOTKEY,
+    };
+
+    #[test]
+    fn activities_hotkey_never_claims_windows_key() {
+        assert_eq!(ACTIVITIES_MODIFIERS, MOD_ALT | MOD_NOREPEAT);
+        assert_eq!(ACTIVITIES_MODIFIERS & MOD_WIN, 0);
+        assert!(validate_shell_hotkey_modifiers(ACTIVITIES_MODIFIERS).is_ok());
+        assert!(validate_shell_hotkey_modifiers(MOD_WIN).is_err());
+    }
 
     #[test]
     fn matches_only_our_activities_hotkey() {
