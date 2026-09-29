@@ -35,8 +35,8 @@ function Capture($hwnd,$label) {
   $rect=New-Object FrameProbeApi+RECT; if(-not [FrameProbeApi]::GetWindowRect($hwnd,[ref]$rect)){throw "No $label bounds"}
   $width=$rect.Right-$rect.Left; $height=$rect.Bottom-$rect.Top; Check ($width-ge 550 -and $height-ge 350) "Unexpected $label bounds: $width x $height"
   $bmp=[Drawing.Bitmap]::new($width,$height); $graphics=[Drawing.Graphics]::FromImage($bmp)
-  try{$graphics.CopyFromScreen($rect.Left,$rect.Top,0,0,[Drawing.Size]::new($width,$height));$path=Join-Path $out "frame-$label.png";$bmp.Save($path,[Drawing.Imaging.ImageFormat]::Png);$pixel=$bmp.GetPixel([int]($width/2),38)}finally{$graphics.Dispose();$bmp.Dispose()}
-  Check ((Get-Item -LiteralPath $path).Length-gt 5000) "Empty $label screen"; return [pscustomobject]@{Path=$path;Pixel=$pixel;Rect=$rect;Width=$width}
+  try{$graphics.CopyFromScreen($rect.Left,$rect.Top,0,0,[Drawing.Size]::new($width,$height));$path=Join-Path $out "frame-$label.png";$bmp.Save($path,[Drawing.Imaging.ImageFormat]::Png);$pixel=$bmp.GetPixel([int]($width/2),38);$topPixel=$bmp.GetPixel([int]($width/2),6)}finally{$graphics.Dispose();$bmp.Dispose()}
+  Check ((Get-Item -LiteralPath $path).Length-gt 5000) "Empty $label screen"; return [pscustomobject]@{Path=$path;Pixel=$pixel;TopPixel=$topPixel;Rect=$rect;Width=$width}
 }
 $stdout=Join-Path $out 'frame.stdout.txt'; $stderr=Join-Path $out 'frame.stderr.txt'
 $process=Start-Process -FilePath $exe -WorkingDirectory $out -PassThru -WindowStyle Normal -RedirectStandardOutput $stdout -RedirectStandardError $stderr
@@ -47,7 +47,7 @@ try {
   $owner=[uint32]0;[void][FrameProbeApi]::GetWindowThreadProcessId($hwnd,[ref]$owner);Check ($owner-eq$process.Id) 'Window owned by unexpected PID.'
   $className=[Text.StringBuilder]::new(256);[void][FrameProbeApi]::GetClassNameW($hwnd,$className,$className.Capacity);Check ($className.ToString()-eq'FedoraWinNativeFrameProbe') "Unexpected native class: $className"
   Check ((Send $hwnd ($WM_APP+81))-eq 0) 'Expected original window on launch.';Check ((Send $hwnd ($WM_APP+82))-eq 1) 'Expected original WNDPROC.';$original=Capture $hwnd 'original'
-  [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 1) 'Attach did not occur.';Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Original Win32 style bits changed.';$styled=Capture $hwnd 'attached';Check ($styled.Pixel.R-lt115 -and $styled.Pixel.G-lt115) 'Dark native header not painted.';Check ((Get-FileHash $original.Path).Hash-ne(Get-FileHash $styled.Path).Hash) 'Original and attached images identical.'
+  [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 1) 'Attach did not occur.';Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Original Win32 style bits changed.';$styled=Capture $hwnd 'attached';Check ($styled.Pixel.R-lt115 -and $styled.Pixel.G-lt115) 'Dark native header not painted.';Check ($styled.TopPixel.R-lt115 -and $styled.TopPixel.G-lt115 -and $styled.TopPixel.B-lt115) 'Native renderer did not cover the top resize strip.';Check ((Get-FileHash $original.Path).Hash-ne(Get-FileHash $styled.Path).Hash) 'Original and attached images identical.'
   $x=[int]($styled.Rect.Left+$styled.Width/2);$y=[int]($styled.Rect.Top+42);$param=[int64](($x-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($param)))-eq 2) 'Header dragging failed.'
   $maxX=[int]($styled.Rect.Right-70);$maxParam=[int64](($maxX-band 0xffff)-bor(($y-band 0xffff)-shl 16));$maxHit=Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($maxParam));Check ($maxHit-eq 9) "Maximize button hit target failed: hit=$maxHit"
   # The replacement header must not discard Windows' real Alt+Space/system-menu command source.

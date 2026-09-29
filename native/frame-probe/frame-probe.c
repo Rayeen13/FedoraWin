@@ -11,6 +11,7 @@
 #define MSG_STATE (WM_APP + 81)
 #define MSG_RESTORED (WM_APP + 82)
 #define MSG_STYLE (WM_APP + 83)
+#define HEADER_HEIGHT_DIP 46
 
 static WNDPROC previous_proc = NULL;
 static LONG_PTR original_style = 0;
@@ -68,51 +69,68 @@ static void paint(HWND hwnd) {
     HDC dc = BeginPaint(hwnd, &ps);
     RECT rect;
     GetClientRect(hwnd, &rect);
-    HBRUSH base = CreateSolidBrush(RGB(39, 39, 43));
+    HBRUSH base = CreateSolidBrush(RGB(34, 34, 38));
     FillRect(dc, &rect, base);
     DeleteObject(base);
-    int header = pixels(hwnd, 55);
+    int header = pixels(hwnd, HEADER_HEIGHT_DIP);
     RECT bar = {0, 0, rect.right, header};
-    HBRUSH surface = CreateSolidBrush(RGB(46, 46, 50));
+    HBRUSH surface = CreateSolidBrush(RGB(34, 34, 38));
     FillRect(dc, &bar, surface);
     DeleteObject(surface);
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(249, 249, 250));
-    HFONT font = CreateFontW(-pixels(hwnd, 16), 0, 0, 0, FW_SEMIBOLD,
+
+    WCHAR title_text[256] = L"FedoraWin";
+    GetWindowTextW(hwnd, title_text,
+                   (int)(sizeof(title_text) / sizeof(title_text[0])));
+    HFONT font = CreateFontW(-pixels(hwnd, 13), 0, 0, 0, FW_SEMIBOLD,
         FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
     HFONT old_font = (HFONT)SelectObject(dc, font);
-    RECT title = {pixels(hwnd, 20), 0, rect.right - pixels(hwnd, 165), header};
-    DrawTextW(dc, L"FedoraWin    Native frame test", -1, &title,
-              DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    RECT title = {pixels(hwnd, 132), 0, rect.right - pixels(hwnd, 132), header};
+    DrawTextW(dc, title_text, -1, &title,
+              DT_SINGLELINE | DT_VCENTER | DT_CENTER | DT_END_ELLIPSIS);
     SelectObject(dc, old_font);
     DeleteObject(font);
 
-    HBRUSH circle = CreateSolidBrush(RGB(94, 94, 101));
-    HPEN pen = CreatePen(PS_SOLID, 2, RGB(250, 250, 251));
+    HBRUSH circle = CreateSolidBrush(RGB(56, 56, 59));
     HBRUSH old_brush = (HBRUSH)SelectObject(dc, circle);
-    HPEN old_pen = (HPEN)SelectObject(dc, pen);
+    HPEN old_pen = (HPEN)SelectObject(dc, GetStockObject(NULL_PEN));
     int span = pixels(hwnd, 38);
     int cy = header / 2;
     for (int i = 0; i < 3; ++i) {
         int cx = rect.right - pixels(hwnd, 12) - span / 2 - span * i;
-        int radius = pixels(hwnd, 13);
+        int radius = pixels(hwnd, 12);
         Ellipse(dc, cx - radius, cy - radius, cx + radius, cy + radius);
+    }
+    SelectObject(dc, old_pen);
+
+    HPEN icon_pen = CreatePen(PS_SOLID, pixels(hwnd, 1), RGB(255, 255, 255));
+    old_pen = (HPEN)SelectObject(dc, icon_pen);
+    for (int i = 0; i < 3; ++i) {
+        int cx = rect.right - pixels(hwnd, 12) - span / 2 - span * i;
         int mark = pixels(hwnd, 4);
         if (i == 0) {
             MoveToEx(dc, cx-mark, cy-mark, NULL); LineTo(dc, cx+mark, cy+mark);
             MoveToEx(dc, cx+mark, cy-mark, NULL); LineTo(dc, cx-mark, cy+mark);
         } else if (i == 1) {
-            Rectangle(dc, cx-mark, cy-mark, cx+mark+1, cy+mark+1);
+            MoveToEx(dc, cx-mark, cy-mark, NULL); LineTo(dc, cx+mark, cy-mark);
+            LineTo(dc, cx+mark, cy+mark); LineTo(dc, cx-mark, cy+mark);
+            LineTo(dc, cx-mark, cy-mark);
         } else {
             MoveToEx(dc, cx-mark, cy, NULL); LineTo(dc, cx+mark+1, cy);
         }
     }
     SelectObject(dc, old_pen);
     SelectObject(dc, old_brush);
-    DeleteObject(pen);
+    DeleteObject(icon_pen);
     DeleteObject(circle);
+
     SetTextColor(dc, RGB(220, 220, 226));
+    HFONT body_font = CreateFontW(-pixels(hwnd, 14), 0, 0, 0, FW_NORMAL,
+        FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+    old_font = (HFONT)SelectObject(dc, body_font);
     RECT info = {pixels(hwnd, 30), header + pixels(hwnd, 30),
                  rect.right - pixels(hwnd, 30), rect.bottom};
     DrawTextW(dc,
@@ -120,6 +138,8 @@ static void paint(HWND hwnd) {
       L"F8 again: attach a real native Win32 headerbar on the same GUI thread.\r\n\r\n"
       L"No foreign window or operating system frame is modified.",
       -1, &info, DT_LEFT | DT_TOP | DT_WORDBREAK);
+    SelectObject(dc, old_font);
+    DeleteObject(body_font);
     EndPaint(hwnd, &ps);
 }
 
@@ -139,7 +159,7 @@ static LRESULT frame_hit(HWND hwnd, LPARAM lp) {
     if (edge && x >= w-edge) return HTRIGHT;
     if (edge && y < edge) return HTTOP;
     if (edge && y >= h-edge) return HTBOTTOM;
-    if (y < pixels(hwnd, 55) + edge) {
+    if (y < pixels(hwnd, HEADER_HEIGHT_DIP) + edge) {
         int size = pixels(hwnd, 38);
         int offset = w-x-pixels(hwnd, 12);
         if (offset >= 0 && offset < size) return HTCLOSE;
@@ -164,7 +184,10 @@ static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             NCCALCSIZE_PARAMS *p = (NCCALCSIZE_PARAMS *)lp;
             LONG top = p->rgrc[0].top;
             LRESULT result = CallWindowProcW(previous_proc, hwnd, msg, wp, lp);
-            p->rgrc[0].top = top + (IsZoomed(hwnd) ? 0 : pixels(hwnd, 8));
+            /* Paint through the top resize strip so the attached frame has no
+               visible Windows caption sliver. frame_hit() still returns HTTOP
+               and corner resize codes for the first 8 DIPs. */
+            p->rgrc[0].top = top;
             return result;
         }
         break;
