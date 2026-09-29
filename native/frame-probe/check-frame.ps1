@@ -8,6 +8,8 @@ using System.Runtime.InteropServices;
 public static class FrameProbeApi {
   [StructLayout(LayoutKind.Sequential)]
   public struct RECT { public int Left, Top, Right, Bottom; }
+  [StructLayout(LayoutKind.Sequential)]
+  public struct POINT { public int X, Y; }
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindowW(string cls, string title);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassNameW(IntPtr hwnd, StringBuilder name, int capacity);
@@ -19,6 +21,8 @@ public static class FrameProbeApi {
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll", EntryPoint="SendMessageW")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
 }
 '@
@@ -35,12 +39,14 @@ function Capture($hwnd,$label) {
   $rect=New-Object FrameProbeApi+RECT; if(-not [FrameProbeApi]::GetWindowRect($hwnd,[ref]$rect)){throw "No $label bounds"}
   $width=$rect.Right-$rect.Left; $height=$rect.Bottom-$rect.Top; Check ($width-ge 550 -and $height-ge 350) "Unexpected $label bounds: $width x $height"
   $bmp=[Drawing.Bitmap]::new($width,$height); $graphics=[Drawing.Graphics]::FromImage($bmp)
-  try{$graphics.CopyFromScreen($rect.Left,$rect.Top,0,0,[Drawing.Size]::new($width,$height));$path=Join-Path $out "frame-$label.png";$bmp.Save($path,[Drawing.Imaging.ImageFormat]::Png);$pixel=$bmp.GetPixel([int]($width/2),38);$topPixel=$bmp.GetPixel([int]($width/2),6)}finally{$graphics.Dispose();$bmp.Dispose()}
-  Check ((Get-Item -LiteralPath $path).Length-gt 5000) "Empty $label screen"; return [pscustomobject]@{Path=$path;Pixel=$pixel;TopPixel=$topPixel;Rect=$rect;Width=$width}
+  try{$graphics.CopyFromScreen($rect.Left,$rect.Top,0,0,[Drawing.Size]::new($width,$height));$path=Join-Path $out "frame-$label.png";$bmp.Save($path,[Drawing.Imaging.ImageFormat]::Png);$pixel=$bmp.GetPixel([int]($width/2),38);$topPixel=$bmp.GetPixel([int]($width/2),6);$maxPixel=$bmp.GetPixel($width-70,23)}finally{$graphics.Dispose();$bmp.Dispose()}
+  Check ((Get-Item -LiteralPath $path).Length-gt 5000) "Empty $label screen"; return [pscustomobject]@{Path=$path;Pixel=$pixel;TopPixel=$topPixel;MaxPixel=$maxPixel;Rect=$rect;Width=$width}
 }
 $stdout=Join-Path $out 'frame.stdout.txt'; $stderr=Join-Path $out 'frame.stderr.txt'
 $process=Start-Process -FilePath $exe -WorkingDirectory $out -PassThru -WindowStyle Normal -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 $hwnd=[IntPtr]::Zero
+$cursorBefore=New-Object FrameProbeApi+POINT
+[void][FrameProbeApi]::GetCursorPos([ref]$cursorBefore)
 try {
   for($i=0;$i-lt 100;$i++){ $process.Refresh(); if($process.HasExited){$err=try{Get-Content $stderr -Raw}catch{'<unavailable>'};throw "Native probe exited early $($process.ExitCode); stderr=$err"};$hwnd=$process.MainWindowHandle;if($hwnd-ne[IntPtr]::Zero){break};Start-Sleep -Milliseconds 200 }
   if($hwnd-eq[IntPtr]::Zero){throw "Native HWND not found. PID=$($process.Id)"}
@@ -50,6 +56,11 @@ try {
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 1) 'Attach did not occur.';Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Original Win32 style bits changed.';$styled=Capture $hwnd 'attached';Check ($styled.Pixel.R-lt115 -and $styled.Pixel.G-lt115) 'Dark native header not painted.';Check ($styled.TopPixel.R-lt115 -and $styled.TopPixel.G-lt115 -and $styled.TopPixel.B-lt115) 'Native renderer did not cover the top resize strip.';Check ((Get-FileHash $original.Path).Hash-ne(Get-FileHash $styled.Path).Hash) 'Original and attached images identical.'
   $x=[int]($styled.Rect.Left+$styled.Width/2);$y=[int]($styled.Rect.Top+42);$param=[int64](($x-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($param)))-eq 2) 'Header dragging failed.'
   $maxX=[int]($styled.Rect.Right-70);$maxParam=[int64](($maxX-band 0xffff)-bor(($y-band 0xffff)-shl 16));$maxHit=Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($maxParam));Check ($maxHit-eq 9) "Maximize button hit target failed: hit=$maxHit"
+  # Real pointer movement must drive hover feedback without changing hit testing.
+  [void][FrameProbeApi]::SetCursorPos($maxX,[int]($styled.Rect.Top+23));Start-Sleep -Milliseconds 250
+  $hovered=Capture $hwnd 'hover-max';Check ($hovered.MaxPixel.R-gt$styled.MaxPixel.R) 'Maximize hover did not brighten the native Adwaita control.'
+  [void][FrameProbeApi]::SetCursorPos($x,[int]($styled.Rect.Top+140));Start-Sleep -Milliseconds 250
+  $unhovered=Capture $hwnd 'hover-cleared';Check ($unhovered.MaxPixel.ToArgb()-eq$styled.MaxPixel.ToArgb()) 'Maximize hover did not restore after pointer leave.'
   # The replacement header must not discard Windows' real Alt+Space/system-menu command source.
   $menu=[FrameProbeApi]::GetSystemMenu($hwnd,$false);Check ($menu-ne[IntPtr]::Zero) 'Native system menu missing while frame is attached.'
   Check ([FrameProbeApi]::GetMenuState($menu,0xF060,0x00000000)-ne[uint32]::MaxValue) 'Native Close system-menu command missing.'
@@ -78,4 +89,4 @@ try {
   $process.Refresh();Check ($process.ExitCode-eq 0) "Native close exited with code $($process.ExitCode)."
   Check (-not [FrameProbeApi]::IsWindow($hwnd)) 'Native close left a live HWND.'
   Write-Host "FRAME PROBE PASS: attach -> native system menu and Windows maximize/minimize/double-click -> exact rollback -> reattach -> rollback -> native close; same PID=$($process.Id)."
-} finally { if($hwnd-ne[IntPtr]::Zero -and [FrameProbeApi]::IsWindow($hwnd)){[void](Send $hwnd $WM_CLOSE)};if(-not $process.WaitForExit(3000)){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue} }
+} finally { [void][FrameProbeApi]::SetCursorPos($cursorBefore.X,$cursorBefore.Y);if($hwnd-ne[IntPtr]::Zero -and [FrameProbeApi]::IsWindow($hwnd)){[void](Send $hwnd $WM_CLOSE)};if(-not $process.WaitForExit(3000)){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue} }
