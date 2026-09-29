@@ -81,15 +81,26 @@ try {
     Write-Host ("Explorer preservation verified for PID(s): {0}" -f ($preservedExplorer -join ', '))
 
     $peak = ($samples | Measure-Object -Property Megabytes -Maximum).Maximum
-    $last = $samples[-1].Megabytes
+    # Use the median of the final three samples as the idle estimate. A WebView2
+    # utility process can appear/disappear between snapshots, so the final sample
+    # alone is too sensitive to one short-lived child-process transition.
+    $idleSamples = @(
+        $samples |
+            Select-Object -Last 3 |
+            ForEach-Object { [int]$_.Megabytes } |
+            Sort-Object
+    )
+    $idle = $idleSamples[[int][Math]::Floor($idleSamples.Count / 2)]
     $processCount = ($samples | Measure-Object -Property ProcessCount -Maximum).Maximum
-    Write-Host "FedoraWin idle working set: $last MB"
+    Write-Host ("FedoraWin idle working set (median of final {0} samples): {1} MB" -f $idleSamples.Count, $idle)
     Write-Host "FedoraWin sampled peak: $peak MB"
     Write-Host "Target idle budget: ~$TargetIdleMb MB"
     Write-Host "Hard memory ceiling: $HardLimitMb MB"
 
     [ordered]@{
-        idle_working_set_mb = $last
+        idle_working_set_mb = $idle
+        idle_sample_count = $idleSamples.Count
+        idle_samples_mb = $idleSamples
         sampled_peak_mb = $peak
         process_count_peak = $processCount
         target_idle_mb = $TargetIdleMb
@@ -103,7 +114,7 @@ try {
     } | ConvertTo-Json | Set-Content -LiteralPath $evidencePath -Encoding UTF8
 
     if ($peak -gt $HardLimitMb) { throw "FedoraWin exceeded the $HardLimitMb MB hard memory ceiling (sampled peak: $peak MB)." }
-    if ($last -gt ($TargetIdleMb + 50)) { Write-Warning "FedoraWin is above the ~$TargetIdleMb MB idle target ($last MB). The build is under the hard ceiling but needs further trimming." }
+    if ($idle -gt ($TargetIdleMb + 50)) { Write-Warning "FedoraWin is above the ~$TargetIdleMb MB idle target ($idle MB). The build is under the hard ceiling but needs further trimming." }
     $runtimeChecksPassed = $true
 } finally {
     $treeIds = if ($process) { @(Get-ProcessTreeIds -RootProcessId $process.Id) } else { @() }
