@@ -16,6 +16,7 @@
 static WNDPROC previous_proc = NULL;
 static LONG_PTR original_style = 0;
 static BOOL frame_enabled = FALSE;
+static int hovered_control = HTNOWHERE;
 
 static LRESULT CALLBACK regular_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
@@ -31,6 +32,27 @@ static void recalculate(HWND hwnd) {
     RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME);
 }
 
+static void repaint_header(HWND hwnd) {
+    RECT client;
+    if (!GetClientRect(hwnd, &client)) return;
+    RECT header = {0, 0, client.right, pixels(hwnd, HEADER_HEIGHT_DIP)};
+    RedrawWindow(hwnd, &header, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+}
+
+static int control_for_index(int index) {
+    if (index == 0) return HTCLOSE;
+    if (index == 1) return HTMAXBUTTON;
+    return HTMINBUTTON;
+}
+
+static void set_hovered_control(HWND hwnd, int hit) {
+    int next = (hit == HTCLOSE || hit == HTMAXBUTTON || hit == HTMINBUTTON)
+        ? hit : HTNOWHERE;
+    if (hovered_control == next) return;
+    hovered_control = next;
+    repaint_header(hwnd);
+}
+
 static BOOL enable(HWND hwnd) {
     if (frame_enabled || previous_proc ||
         GetCurrentThreadId() != GetWindowThreadProcessId(hwnd, NULL) ||
@@ -44,6 +66,7 @@ static BOOL enable(HWND hwnd) {
     if (!old) return FALSE;
     previous_proc = (WNDPROC)old;
     frame_enabled = TRUE;
+    hovered_control = HTNOWHERE;
     SetWindowTextW(hwnd, L"FedoraWin Frame Probe - ATTACHED");
     recalculate(hwnd);
     return TRUE;
@@ -59,6 +82,7 @@ static BOOL disable(HWND hwnd) {
     if (old != (LONG_PTR)frame_proc) return FALSE;
     previous_proc = NULL;
     frame_enabled = FALSE;
+    hovered_control = HTNOWHERE;
     SetWindowTextW(hwnd, L"FedoraWin Frame Probe - ORIGINAL");
     recalculate(hwnd);
     return TRUE;
@@ -93,15 +117,20 @@ static void paint(HWND hwnd) {
     SelectObject(dc, old_font);
     DeleteObject(font);
 
-    HBRUSH circle = CreateSolidBrush(RGB(56, 56, 59));
-    HBRUSH old_brush = (HBRUSH)SelectObject(dc, circle);
+    HBRUSH old_brush = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
     HPEN old_pen = (HPEN)SelectObject(dc, GetStockObject(NULL_PEN));
     int span = pixels(hwnd, 38);
     int cy = header / 2;
     for (int i = 0; i < 3; ++i) {
         int cx = rect.right - pixels(hwnd, 12) - span / 2 - span * i;
         int radius = pixels(hwnd, 12);
+        COLORREF fill = hovered_control == control_for_index(i)
+            ? RGB(76, 76, 81) : RGB(56, 56, 59);
+        HBRUSH circle = CreateSolidBrush(fill);
+        HBRUSH prior = (HBRUSH)SelectObject(dc, circle);
         Ellipse(dc, cx - radius, cy - radius, cx + radius, cy + radius);
+        SelectObject(dc, prior);
+        DeleteObject(circle);
     }
     SelectObject(dc, old_pen);
 
@@ -124,7 +153,6 @@ static void paint(HWND hwnd) {
     SelectObject(dc, old_pen);
     SelectObject(dc, old_brush);
     DeleteObject(icon_pen);
-    DeleteObject(circle);
 
     SetTextColor(dc, RGB(220, 220, 226));
     HFONT body_font = CreateFontW(-pixels(hwnd, 14), 0, 0, 0, FW_NORMAL,
@@ -198,6 +226,23 @@ static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
              result == HTCLOSE)) return result;
         return frame_hit(hwnd, lp);
     }
+    case WM_NCMOUSEMOVE: {
+        set_hovered_control(hwnd, (int)wp);
+        if (hovered_control != HTNOWHERE) {
+            TRACKMOUSEEVENT tracking = {0};
+            tracking.cbSize = sizeof(tracking);
+            tracking.dwFlags = TME_LEAVE | TME_NONCLIENT;
+            tracking.hwndTrack = hwnd;
+            TrackMouseEvent(&tracking);
+        }
+        break;
+    }
+    case WM_NCMOUSELEAVE:
+        set_hovered_control(hwnd, HTNOWHERE);
+        break;
+    case WM_ACTIVATE:
+        if (LOWORD(wp) == WA_INACTIVE) set_hovered_control(hwnd, HTNOWHERE);
+        break;
     case WM_NCLBUTTONDOWN:
         if (wp == HTCLOSE || wp == HTMINBUTTON || wp == HTMAXBUTTON) {
             WPARAM action = wp == HTCLOSE ? SC_CLOSE :
@@ -212,6 +257,7 @@ static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         WNDPROC old = previous_proc;
         previous_proc = NULL;
         frame_enabled = FALSE;
+        hovered_control = HTNOWHERE;
         return old ? CallWindowProcW(old, hwnd, msg, wp, lp) : 0;
     }
     }
