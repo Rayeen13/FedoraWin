@@ -132,6 +132,10 @@ try {
   [void](Send $hwnd $WM_NCLBUTTONDOWN 8 ([IntPtr]::new($minParam)));[void](Send $hwnd $WM_LBUTTONUP);Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsIconic($hwnd)) 'Native minimize control did not minimize on release through WM_SYSCOMMAND.'
   [void][FrameProbeApi]::ShowWindow($hwnd,9);Start-Sleep -Milliseconds 250;Check (-not [FrameProbeApi]::IsIconic($hwnd)) 'Original Win32 window did not restore from minimize.'
   Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Minimize/restore changed original style bits.'
+  # Normalize pointer state before comparing the restored Windows frame pixel-for-pixel.
+  # Otherwise the real Windows caption can legitimately render a hover state under the
+  # pointer after detach even though every original frame/style value was restored.
+  [void][FrameProbeApi]::SetCursorPos($x,[int]($styled.Rect.Top+140));Start-Sleep -Milliseconds 150
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 0) 'Detach did not occur.';Check ((Send $hwnd ($WM_APP+82))-eq 1) 'Original WNDPROC not restored.';Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Original style bits not preserved.';Check (-not $process.HasExited) 'Target app died during detach.'
   $restored=Capture $hwnd 'restored';Check ($restored.Pixel.R-gt115) 'Windows caption not restored.';Check ((Get-FileHash $original.Path).Hash-eq(Get-FileHash $restored.Path).Hash) 'Restored frame differs pixel-for-pixel from original.'
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 1) 'Reattach failed.';[void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+82))-eq 1) 'Second restore failed.'
