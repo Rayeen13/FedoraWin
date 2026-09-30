@@ -17,6 +17,8 @@ static WNDPROC previous_proc = NULL;
 static LONG_PTR original_style = 0;
 static BOOL frame_enabled = FALSE;
 static int hovered_control = HTNOWHERE;
+static int pressed_control = HTNOWHERE;
+static BOOL pressed_inside = FALSE;
 
 static LRESULT CALLBACK regular_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
@@ -45,11 +47,27 @@ static int control_for_index(int index) {
     return HTMINBUTTON;
 }
 
+static BOOL is_frame_control(int hit) {
+    return hit == HTCLOSE || hit == HTMAXBUTTON || hit == HTMINBUTTON;
+}
+
+static WPARAM command_for_control(HWND hwnd, int hit) {
+    if (hit == HTCLOSE) return SC_CLOSE;
+    if (hit == HTMINBUTTON) return SC_MINIMIZE;
+    return IsZoomed(hwnd) ? SC_RESTORE : SC_MAXIMIZE;
+}
+
 static void set_hovered_control(HWND hwnd, int hit) {
-    int next = (hit == HTCLOSE || hit == HTMAXBUTTON || hit == HTMINBUTTON)
-        ? hit : HTNOWHERE;
+    int next = is_frame_control(hit) ? hit : HTNOWHERE;
     if (hovered_control == next) return;
     hovered_control = next;
+    repaint_header(hwnd);
+}
+
+static void clear_pressed_control(HWND hwnd) {
+    if (pressed_control == HTNOWHERE && !pressed_inside) return;
+    pressed_control = HTNOWHERE;
+    pressed_inside = FALSE;
     repaint_header(hwnd);
 }
 
@@ -67,6 +85,8 @@ static BOOL enable(HWND hwnd) {
     previous_proc = (WNDPROC)old;
     frame_enabled = TRUE;
     hovered_control = HTNOWHERE;
+    pressed_control = HTNOWHERE;
+    pressed_inside = FALSE;
     SetWindowTextW(hwnd, L"FedoraWin Frame Probe - ATTACHED");
     recalculate(hwnd);
     return TRUE;
@@ -83,6 +103,9 @@ static BOOL disable(HWND hwnd) {
     previous_proc = NULL;
     frame_enabled = FALSE;
     hovered_control = HTNOWHERE;
+    pressed_control = HTNOWHERE;
+    pressed_inside = FALSE;
+    if (GetCapture() == hwnd) ReleaseCapture();
     SetWindowTextW(hwnd, L"FedoraWin Frame Probe - ORIGINAL");
     recalculate(hwnd);
     return TRUE;
@@ -124,8 +147,11 @@ static void paint(HWND hwnd) {
     for (int i = 0; i < 3; ++i) {
         int cx = rect.right - pixels(hwnd, 12) - span / 2 - span * i;
         int radius = pixels(hwnd, 12);
-        COLORREF fill = hovered_control == control_for_index(i)
-            ? RGB(76, 76, 81) : RGB(56, 56, 59);
+        int control = control_for_index(i);
+        COLORREF fill = pressed_control == control && pressed_inside
+            ? RGB(100, 100, 105)
+            : hovered_control == control
+                ? RGB(76, 76, 81) : RGB(56, 56, 59);
         HBRUSH circle = CreateSolidBrush(fill);
         HBRUSH prior = (HBRUSH)SelectObject(dc, circle);
         Ellipse(dc, cx - radius, cy - radius, cx + radius, cy + radius);
@@ -258,10 +284,50 @@ static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         break;
     }
     case WM_NCMOUSELEAVE:
-        set_hovered_control(hwnd, HTNOWHERE);
+        if (pressed_control == HTNOWHERE) set_hovered_control(hwnd, HTNOWHERE);
+        break;
+    case WM_MOUSEMOVE:
+        if (pressed_control != HTNOWHERE && GetCapture() == hwnd) {
+            POINT cursor;
+            if (GetCursorPos(&cursor)) {
+                int hit = frame_hit(hwnd, MAKELPARAM(cursor.x, cursor.y));
+                BOOL inside = hit == pressed_control;
+                set_hovered_control(hwnd, inside ? pressed_control : HTNOWHERE);
+                if (pressed_inside != inside) {
+                    pressed_inside = inside;
+                    repaint_header(hwnd);
+                }
+            }
+            return 0;
+        }
+        break;
+    case WM_LBUTTONUP:
+        if (pressed_control != HTNOWHERE && GetCapture() == hwnd) {
+            int control = pressed_control;
+            BOOL activate = pressed_inside;
+            ReleaseCapture();
+            clear_pressed_control(hwnd);
+            if (activate) {
+                PostMessageW(hwnd, WM_SYSCOMMAND,
+                             command_for_control(hwnd, control), 0);
+            }
+            return 0;
+        }
+        break;
+    case WM_CANCELMODE:
+    case WM_CAPTURECHANGED:
+        if (pressed_control != HTNOWHERE) {
+            if (GetCapture() == hwnd) ReleaseCapture();
+            clear_pressed_control(hwnd);
+            return 0;
+        }
         break;
     case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE) set_hovered_control(hwnd, HTNOWHERE);
+        if (LOWORD(wp) == WA_INACTIVE) {
+            set_hovered_control(hwnd, HTNOWHERE);
+            if (GetCapture() == hwnd) ReleaseCapture();
+            clear_pressed_control(hwnd);
+        }
         break;
     case WM_NCRBUTTONUP:
         if (wp == HTCAPTION) {
@@ -270,11 +336,12 @@ static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         break;
     case WM_NCLBUTTONDOWN:
-        if (wp == HTCLOSE || wp == HTMINBUTTON || wp == HTMAXBUTTON) {
-            WPARAM action = wp == HTCLOSE ? SC_CLOSE :
-                wp == HTMINBUTTON ? SC_MINIMIZE :
-                IsZoomed(hwnd) ? SC_RESTORE : SC_MAXIMIZE;
-            PostMessageW(hwnd, WM_SYSCOMMAND, action, 0);
+        if (is_frame_control((int)wp)) {
+            pressed_control = (int)wp;
+            pressed_inside = TRUE;
+            set_hovered_control(hwnd, (int)wp);
+            SetCapture(hwnd);
+            repaint_header(hwnd);
             return 0;
         }
         break;
@@ -284,6 +351,9 @@ static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         previous_proc = NULL;
         frame_enabled = FALSE;
         hovered_control = HTNOWHERE;
+        pressed_control = HTNOWHERE;
+        pressed_inside = FALSE;
+        if (GetCapture() == hwnd) ReleaseCapture();
         return old ? CallWindowProcW(old, hwnd, msg, wp, lp) : 0;
     }
     }
