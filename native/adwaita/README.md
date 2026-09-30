@@ -1,9 +1,10 @@
 # Real native Adwaita proof on Windows
 
-This is an **optional FedoraWin-owned GTK4/libadwaita window**, not
-DWM recoloring or an HTML/CSS imitation. GTK's Win32 backend owns the HWND;
-the real AdwApplicationWindow, AdwToolbarView, AdwHeaderBar, AdwWindowTitle
-and AdwStatusPage own the interface and controls.
+This directory contains **FedoraWin-owned GTK4/libadwaita windows**, not
+DWM recoloring or HTML/CSS imitations. GTK's Win32 backend owns each HWND.
+The baseline proof remains deliberately small, and the Preferences candidate
+uses real AdwApplicationWindow, AdwToolbarView, AdwHeaderBar,
+AdwPreferencesPage, AdwPreferencesGroup and AdwActionRow widgets.
 
 In an MSYS2 UCRT64 shell, from the FedoraWin repo root:
 
@@ -13,15 +14,23 @@ mkdir -p native/adwaita/out
 gcc -std=c11 -Wall -Wextra -Werror native/adwaita/adwaita-window.c \
   -o native/adwaita/out/fedorawin-adwaita.exe \
   $(pkg-config --cflags --libs libadwaita-1)
-FEDORAWIN_ADWAITA_THEME=dark ./native/adwaita/out/fedorawin-adwaita.exe
+gcc -std=c11 -Wall -Wextra -Werror native/adwaita/preferences-window.c \
+  -o native/adwaita/out/fedorawin-preferences.exe \
+  $(pkg-config --cflags --libs libadwaita-1)
+FEDORAWIN_ADWAITA_THEME=dark ./native/adwaita/out/fedorawin-preferences.exe
 ```
 
 Use FEDORAWIN_ADWAITA_THEME=light or omit it for system mode.
-Run with UCRT64 DLLs on PATH. This native window is an **isolated proof**,
-not yet connected to the production shell or beta installer. It must pass
-the separate Windows build-and-HWND test before its screenshots count.
-Do not claim GTK4 + dependencies fit the 300 MB shell budget without
-measuring the complete process tree.
+Run with UCRT64 DLLs on PATH. The Preferences executable is the first
+**FedoraWin-owned candidate surface** intended to replace Fluent-looking
+configuration UI for Beta. It is not yet wired into the production shell or
+beta installer, so do not present it as shipped integration. Windows CI must
+build and capture both dark/light HWNDs and record the temporary process
+working set before the surface counts as verified.
+
+The temporary GTK surface has its own 300 MB CI ceiling. That measurement is
+separate from the stricter idle-shell process-tree budget and does not include
+future installer/dependency disk-size validation.
 
 The existing lightweight Rust/Win32 panel stays GTK-free at idle.
 Foreign applications keep their original Win32 caption buttons and
