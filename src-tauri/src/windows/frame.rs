@@ -226,7 +226,10 @@ const SELF_DRAWN_CLASS_PREFIXES: [(&str, &str); 11] = [
     ("qt", "Qt custom chrome"),
     ("sdl", "SDL custom chrome"),
     ("glfw", "GLFW custom chrome"),
-    (\n        "cascadia_hosting_window_class",\n        "Windows Terminal custom chrome",\n    ),
+    (
+        "cascadia_hosting_window_class",
+        "Windows Terminal custom chrome",
+    ),
     ("winuidesktopwin32windowclass", "WinUI custom chrome"),
     ("applicationframewindow", "Windows application frame"),
     ("windows.ui.core.corewindow", "Windows CoreWindow"),
