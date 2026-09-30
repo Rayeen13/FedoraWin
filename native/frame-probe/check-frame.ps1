@@ -24,6 +24,7 @@ public static class FrameProbeApi {
   [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll", EntryPoint="SendMessageW")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
+  [DllImport("user32.dll", EntryPoint="PostMessageW")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
 }
 '@
 $out = Join-Path $PSScriptRoot 'out'
@@ -31,7 +32,7 @@ $exe = Join-Path $out 'fedorawin-frame-probe.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "No real native frame probe: $exe" }
 if (-not $env:MSYS2_ROOT) { throw 'MSYS2_ROOT missing.' }
 $env:PATH = "$(Join-Path $env:MSYS2_ROOT 'ucrt64\bin');$env:PATH"
-$WM_APP = 0x8000; $WM_KEYDOWN = 0x0100; $WM_NCHITTEST = 0x0084; $WM_NCLBUTTONDOWN = 0x00A1; $WM_NCLBUTTONDBLCLK = 0x00A3; $WM_CLOSE = 0x0010
+$WM_APP = 0x8000; $WM_KEYDOWN = 0x0100; $WM_NCHITTEST = 0x0084; $WM_NCLBUTTONDOWN = 0x00A1; $WM_NCLBUTTONDBLCLK = 0x00A3; $WM_NCRBUTTONUP = 0x00A5; $WM_CANCELMODE = 0x001F; $WM_CLOSE = 0x0010
 function Send([IntPtr]$h, [uint32]$message, [int]$w = 0, [IntPtr]$l = [IntPtr]::Zero) { return [FrameProbeApi]::SendMessage($h,$message,[IntPtr]::new($w),$l).ToInt64() }
 function Check($condition,$message) { if (-not $condition) { throw $message } }
 function Capture($hwnd,$label) {
@@ -64,6 +65,16 @@ try {
   # The replacement header must not discard Windows' real Alt+Space/system-menu command source.
   $menu=[FrameProbeApi]::GetSystemMenu($hwnd,$false);Check ($menu-ne[IntPtr]::Zero) 'Native system menu missing while frame is attached.'
   Check ([FrameProbeApi]::GetMenuState($menu,0xF060,0x00000000)-ne[uint32]::MaxValue) 'Native Close system-menu command missing.'
+  # A real caption right-click must still enter Windows' native system-menu loop.
+  # Post instead of SendMessage because DefWindowProc owns the modal menu loop.
+  Check ([FrameProbeApi]::PostMessage($hwnd,$WM_NCRBUTTONUP,[IntPtr]::new(2),[IntPtr]::new($param))) 'Could not post native caption right-click.'
+  $menuWindow=[IntPtr]::Zero
+  for($i=0;$i-lt 30;$i++){ $menuWindow=[FrameProbeApi]::FindWindowW('#32768',$null); if($menuWindow-ne[IntPtr]::Zero){break}; Start-Sleep -Milliseconds 50 }
+  Check ($menuWindow-ne[IntPtr]::Zero) 'Caption right-click did not open the Windows-owned system menu.'
+  Check ([FrameProbeApi]::PostMessage($hwnd,$WM_CANCELMODE,[IntPtr]::Zero,[IntPtr]::Zero)) 'Could not cancel native system menu.'
+  for($i=0;$i-lt 30 -and [FrameProbeApi]::FindWindowW('#32768',$null)-ne[IntPtr]::Zero;$i++){ Start-Sleep -Milliseconds 50 }
+  Check ([FrameProbeApi]::FindWindowW('#32768',$null)-eq[IntPtr]::Zero) 'Windows-owned system menu did not close cleanly.'
+  Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Caption context menu changed original style bits.'
   $leftX=[int]($styled.Rect.Left+3);$leftParam=[int64](($leftX-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($leftParam)))-eq 10) 'Left resize border hit target failed.'
   # Exercise the actual Windows-owned maximize/restore system command path, not only hit-test geometry.
   [void](Send $hwnd $WM_NCLBUTTONDOWN 9 ([IntPtr]::new($maxParam)));Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsZoomed($hwnd)) 'Native maximize control did not maximize through WM_SYSCOMMAND.'
