@@ -50,11 +50,21 @@ $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($probeCod
 $probe = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-STA','-EncodedCommand', $encoded) -RedirectStandardOutput $probeStdout -RedirectStandardError $probeStderr -PassThru
 $shell = $null
 
+function Read-LogText {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return '<missing>' }
+    $text = Get-Content -LiteralPath $Path -Raw
+    if ([string]::IsNullOrWhiteSpace($text)) { return '<empty>' }
+    return $text.Trim()
+}
+
 function Get-ProbeDiagnostics {
+    $probe.Refresh()
     $exit = if ($probe.HasExited) { $probe.ExitCode } else { 'running' }
-    $errors = if (Test-Path -LiteralPath $probeStderr) { (Get-Content -LiteralPath $probeStderr -Raw).Trim() } else { '' }
-    $output = if (Test-Path -LiteralPath $probeStdout) { (Get-Content -LiteralPath $probeStdout -Raw).Trim() } else { '' }
-    return "exit=$exit; stderr=$errors; stdout=$output"
+    $errors = Read-LogText $probeStderr
+    $output = Read-LogText $probeStdout
+    $ready = if (Test-Path -LiteralPath $probeReady) { Read-LogText $probeReady } else { '<missing>' }
+    return "exit=$exit; ready=$ready; stderr=$errors; stdout=$output"
 }
 
 # Guard against turning Windows-owned caption buttons, hit testing, or native frame
