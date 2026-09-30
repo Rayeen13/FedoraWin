@@ -2,7 +2,7 @@
   "project": "FedoraWin",
   "release": "0.4.0-dev",
   "target": "GNOME 51",
-  "updated": "2026-09-26",
+  "updated": "2026-09-30",
   "runtime_gallery": "15 distinct real FedoraWin.exe Windows captures from native commit cfe4e74dfd32296456fcfb9a71d7f4a57484cf94, including full desktop with GNOME 51 Roundhex; separate GTK/libadwaita proof not counted",
   "frame_recovery": "Guardian initialization fail-closed regression contract and real force-kill recovery Windows CI passed; physical Windows validation still required",
   "native_adwaita": {
@@ -13,14 +13,16 @@
     "artifact_id": 10626646196
   },
   "optional_native_frame_engine": {
-    "status": "same_process_caption_menu_close_max_min_rollback_ci_passed_cross_process_not_implemented",
-    "source_sha": "383ff5cabb3d12d481cdbc32a7f467f112a6714f",
-    "ci_run": 35695503395,
-    "artifact_id": null,
-    "policy": "per-app opt-in; protect custom-chrome and OS apps; no System32 patching",
-    "rollback": "same-process no-restart verified; cross-process failure may require app relaunch",
+    "status": "same_process_adwaita_frame_caption_controls_hover_context_menu_exact_rollback_ci_passed_cross_process_not_implemented",
+    "source_sha": "a8a15cdef080b5b5d6672fde7753a55c7fa87dec",
+    "ci_run": 36740446489,
+    "full_windows_ci_run": 36740446411,
+    "full_windows_ci_status": "pending_at_site_update",
+    "pull_request": 6,
+    "policy": "Tauri where practical; Win32 owns Windows behavior; GTK4/libadwaita for FedoraWin-owned native GNOME surfaces; per-app injection only as an opt-in fallback after compatibility gates; never patch Windows Update/servicing binaries or user data",
+    "rollback": "same-process attach/detach/reattach and exact original WNDPROC/frame rollback verified; cross-process engine remains unimplemented",
     "docs": "frame-engine.html",
-    "tests": "real Win32 system menu, close, maximize/restore, minimize/restore, caption double-click, exact attach/rollback in disposable app"
+    "tests": "real Win32 hit testing, hover, caption context system menu, close, maximize/restore, minimize/restore, caption double-click, exact attach/rollback in disposable app"
   },
   "frame_recovery_source_sha": "19bdc033609c51941e2797159cef503da6807733",
   "frame_recovery_ci_run": 35750778518,
@@ -30,16 +32,17 @@
   "shell_interaction": "AppBar registration/query/position failure rollback guarded; original Explorer PID survived FedoraWin teardown on Windows CI; physical hardware and long-session validation pending",
   "shell_ci_run": 36254554808,
   "latest_verified_native": {
-    "source_sha": "7d6985a1157fc731dc2782091292a21a3d207fa4",
-    "date": "2026-09-24",
-    "windows_ci": 35956413217,
-    "frame_ci": 35956416175,
-    "adwaita_ci": 35956416334,
-    "sampled_idle_mb": 32,
-    "sampled_peak_mb": 32,
+    "source_sha": "c938054aca1d630afe0a68611712294d6e1b8665",
+    "date": "2026-09-29",
+    "windows_ci": 36559926316,
+    "frame_ci": 36559926299,
+    "adwaita_ci": 36559926214,
+    "sampled_idle_mb": 33,
+    "sampled_peak_mb": 33,
     "sampled_processes": 3,
     "memory_ceiling_mb": 300,
     "explorer_preserved_after_shutdown": true,
+    "explorer_restart_continuity": true,
     "production_adwaita_integration": false,
     "physical_validation_complete": false
   },
@@ -52,5 +55,14 @@
     "wallpaper_git_blob": "71e1e91496d82cbe82b9bf9121d4fe23ac81bb21",
     "wallpaper_license": "CC BY-SA 3.0",
     "wallpaper_scope": "temporary CI capture only; previous wallpaper restored"
+  },
+  "beta_gate": {
+    "label": "pre-beta",
+    "authentic_gnome_visuals_required": true,
+    "fluent_ui_allowed_as_final_beta_surface": false,
+    "fedorawin_owned_windows": "GTK4/libadwaita where Tauri/WebView cannot match GNOME 51 faithfully",
+    "windows_behavior_backend": "Rust + Win32/DWM",
+    "injection": "only narrowly scoped opt-in fallback for compatible third-party apps after VM/CI recovery gates",
+    "update_and_data_safety": "must not modify Windows Update/servicing/component-store binaries, boot files, or user data"
   }
 }
