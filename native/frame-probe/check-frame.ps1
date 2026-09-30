@@ -24,6 +24,7 @@ public static class FrameProbeApi {
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int cx, int cy, uint flags);
   [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extraInfo);
   [DllImport("user32.dll")] public static extern bool GetWindowPlacement(IntPtr hwnd, ref WINDOWPLACEMENT placement);
   [DllImport("user32.dll")] public static extern bool SetWindowPlacement(IntPtr hwnd, ref WINDOWPLACEMENT placement);
@@ -41,8 +42,8 @@ $env:PATH = "$(Join-Path $env:MSYS2_ROOT 'ucrt64\bin');$env:PATH"
 $WM_APP = 0x8000; $WM_KEYDOWN = 0x0100; $WM_MOUSEMOVE = 0x0200; $WM_LBUTTONUP = 0x0202; $WM_NCHITTEST = 0x0084; $WM_NCLBUTTONDOWN = 0x00A1; $WM_NCLBUTTONDBLCLK = 0x00A3; $WM_NCRBUTTONUP = 0x00A5; $WM_CANCELMODE = 0x001F; $WM_CLOSE = 0x0010; $VK_LWIN = 0x5B; $VK_LEFT = 0x25; $KEYEVENTF_KEYUP = 0x0002
 function Send([IntPtr]$h, [uint32]$message, [int]$w = 0, [IntPtr]$l = [IntPtr]::Zero) { return [FrameProbeApi]::SendMessage($h,$message,[IntPtr]::new($w),$l).ToInt64() }
 function Check($condition,$message) { if (-not $condition) { throw $message } }
-function Capture($hwnd,$label) {
-  [void][FrameProbeApi]::SetForegroundWindow($hwnd); Start-Sleep -Milliseconds 250
+function Capture($hwnd,$label,[bool]$focus=$true) {
+  if($focus){[void][FrameProbeApi]::SetForegroundWindow($hwnd); Start-Sleep -Milliseconds 250}
   $rect=New-Object FrameProbeApi+RECT; if(-not [FrameProbeApi]::GetWindowRect($hwnd,[ref]$rect)){throw "No $label bounds"}
   $width=$rect.Right-$rect.Left; $height=$rect.Bottom-$rect.Top; Check ($width-ge 550 -and $height-ge 350) "Unexpected $label bounds: $width x $height"
   $bmp=[Drawing.Bitmap]::new($width,$height); $graphics=[Drawing.Graphics]::FromImage($bmp)
@@ -51,6 +52,8 @@ function Capture($hwnd,$label) {
 }
 $stdout=Join-Path $out 'frame.stdout.txt'; $stderr=Join-Path $out 'frame.stderr.txt'
 $process=Start-Process -FilePath $exe -WorkingDirectory $out -PassThru -WindowStyle Normal -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+$otherProcess=$null
+$otherHwnd=[IntPtr]::Zero
 $hwnd=[IntPtr]::Zero
 $cursorBefore=New-Object FrameProbeApi+POINT
 [void][FrameProbeApi]::GetCursorPos([ref]$cursorBefore)
@@ -68,6 +71,27 @@ try {
   $hovered=Capture $hwnd 'hover-max';Check ($hovered.MaxPixel.R-gt$styled.MaxPixel.R) 'Maximize hover did not brighten the native Adwaita control.'
   [void][FrameProbeApi]::SetCursorPos($x,[int]($styled.Rect.Top+140));Start-Sleep -Milliseconds 250
   $unhovered=Capture $hwnd 'hover-cleared';Check ($unhovered.MaxPixel.ToArgb()-eq$styled.MaxPixel.ToArgb()) 'Maximize hover did not restore after pointer leave.'
+  # A real foreground transition must dim the GNOME frame and restore it when focus returns.
+  # Use a second native process rather than synthesizing WM_ACTIVATE.
+  $otherStdout=Join-Path $out 'frame-secondary.stdout.txt';$otherStderr=Join-Path $out 'frame-secondary.stderr.txt'
+  $otherProcess=Start-Process -FilePath $exe -WorkingDirectory $out -PassThru -WindowStyle Normal -RedirectStandardOutput $otherStdout -RedirectStandardError $otherStderr
+  for($i=0;$i-lt 100;$i++){ $otherProcess.Refresh();if($otherProcess.HasExited){throw "Secondary native probe exited early $($otherProcess.ExitCode)"};$otherHwnd=$otherProcess.MainWindowHandle;if($otherHwnd-ne[IntPtr]::Zero){break};Start-Sleep -Milliseconds 100 }
+  Check ($otherHwnd-ne[IntPtr]::Zero) 'Secondary native HWND not found.'
+  # Keep the secondary window small and away from the first window's right-side controls.
+  Check ([FrameProbeApi]::SetWindowPos($otherHwnd,[IntPtr]::Zero,8,8,300,180,0x0004)) 'Could not position secondary focus window.'
+  [void][FrameProbeApi]::SetCursorPos($x,[int]($styled.Rect.Top+140))
+  [void][FrameProbeApi]::SetForegroundWindow($otherHwnd);Start-Sleep -Milliseconds 300
+  Check ([FrameProbeApi]::GetForegroundWindow()-eq$otherHwnd) 'Secondary window did not become foreground.'
+  $inactive=Capture $hwnd 'inactive' $false
+  Check ($inactive.MaxPixel.R-lt$styled.MaxPixel.R) 'Inactive GNOME frame did not dim its native window controls.'
+  Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Focus loss changed original style bits.'
+  [void][FrameProbeApi]::SetForegroundWindow($hwnd);Start-Sleep -Milliseconds 300
+  Check ([FrameProbeApi]::GetForegroundWindow()-eq$hwnd) 'Primary window did not regain foreground.'
+  $activeAgain=Capture $hwnd 'active-restored' $false
+  Check ($activeAgain.MaxPixel.ToArgb()-eq$styled.MaxPixel.ToArgb()) 'GNOME frame did not restore its active control appearance.'
+  Check ([FrameProbeApi]::PostMessage($otherHwnd,$WM_CLOSE,[IntPtr]::Zero,[IntPtr]::Zero)) 'Could not close secondary focus window.'
+  Check ($otherProcess.WaitForExit(3000)) 'Secondary focus window did not exit.'
+  $otherHwnd=[IntPtr]::Zero
   # The replacement header must not discard Windows' real Alt+Space/system-menu command source.
   $menu=[FrameProbeApi]::GetSystemMenu($hwnd,$false);Check ($menu-ne[IntPtr]::Zero) 'Native system menu missing while frame is attached.'
   Check ([FrameProbeApi]::GetMenuState($menu,0xF060,0x00000000)-ne[uint32]::MaxValue) 'Native Close system-menu command missing.'
@@ -147,5 +171,11 @@ try {
   Check ($process.WaitForExit(3000)) 'Native close button did not terminate the disposable window process on release.'
   $process.Refresh();Check ($process.ExitCode-eq 0) "Native close exited with code $($process.ExitCode)."
   Check (-not [FrameProbeApi]::IsWindow($hwnd)) 'Native close left a live HWND.'
-  Write-Host "FRAME PROBE PASS: attach -> native system menu -> Win+Left Snap -> pressed/cancel/release controls -> Windows maximize/minimize/double-click -> exact rollback -> reattach -> rollback -> native close; same PID=$($process.Id)."
-} finally { [void][FrameProbeApi]::SetCursorPos($cursorBefore.X,$cursorBefore.Y);if($hwnd-ne[IntPtr]::Zero -and [FrameProbeApi]::IsWindow($hwnd)){[void](Send $hwnd $WM_CLOSE)};if(-not $process.WaitForExit(3000)){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue} }
+  Write-Host "FRAME PROBE PASS: attach -> real active/inactive focus lifecycle -> native system menu -> Win+Left Snap -> pressed/cancel/release controls -> Windows maximize/minimize/double-click -> exact rollback -> reattach -> rollback -> native close; same PID=$($process.Id)."
+} finally {
+  [void][FrameProbeApi]::SetCursorPos($cursorBefore.X,$cursorBefore.Y)
+  if($otherHwnd-ne[IntPtr]::Zero -and [FrameProbeApi]::IsWindow($otherHwnd)){[void][FrameProbeApi]::PostMessage($otherHwnd,$WM_CLOSE,[IntPtr]::Zero,[IntPtr]::Zero)}
+  if($otherProcess-ne$null -and -not $otherProcess.WaitForExit(2000)){Stop-Process -Id $otherProcess.Id -Force -ErrorAction SilentlyContinue}
+  if($hwnd-ne[IntPtr]::Zero -and [FrameProbeApi]::IsWindow($hwnd)){[void](Send $hwnd $WM_CLOSE)}
+  if(-not $process.WaitForExit(3000)){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue}
+}

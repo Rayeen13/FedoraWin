@@ -19,6 +19,7 @@ static BOOL frame_enabled = FALSE;
 static int hovered_control = HTNOWHERE;
 static int pressed_control = HTNOWHERE;
 static BOOL pressed_inside = FALSE;
+static BOOL frame_active = TRUE;
 
 static LRESULT CALLBACK regular_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
@@ -87,6 +88,7 @@ static BOOL enable(HWND hwnd) {
     hovered_control = HTNOWHERE;
     pressed_control = HTNOWHERE;
     pressed_inside = FALSE;
+    frame_active = GetForegroundWindow() == hwnd;
     SetWindowTextW(hwnd, L"FedoraWin Frame Probe - ATTACHED");
     recalculate(hwnd);
     return TRUE;
@@ -105,6 +107,7 @@ static BOOL disable(HWND hwnd) {
     hovered_control = HTNOWHERE;
     pressed_control = HTNOWHERE;
     pressed_inside = FALSE;
+    frame_active = TRUE;
     if (GetCapture() == hwnd) ReleaseCapture();
     SetWindowTextW(hwnd, L"FedoraWin Frame Probe - ORIGINAL");
     recalculate(hwnd);
@@ -125,7 +128,8 @@ static void paint(HWND hwnd) {
     FillRect(dc, &bar, surface);
     DeleteObject(surface);
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, RGB(249, 249, 250));
+    SetTextColor(dc, frame_active ? RGB(249, 249, 250)
+                                  : RGB(176, 176, 181));
 
     WCHAR title_text[256] = L"FedoraWin";
     GetWindowTextW(hwnd, title_text,
@@ -148,10 +152,12 @@ static void paint(HWND hwnd) {
         int cx = rect.right - pixels(hwnd, 12) - span / 2 - span * i;
         int radius = pixels(hwnd, 12);
         int control = control_for_index(i);
-        COLORREF fill = pressed_control == control && pressed_inside
-            ? RGB(100, 100, 105)
-            : hovered_control == control
-                ? RGB(76, 76, 81) : RGB(56, 56, 59);
+        COLORREF fill = !frame_active
+            ? RGB(46, 46, 50)
+            : pressed_control == control && pressed_inside
+                ? RGB(100, 100, 105)
+                : hovered_control == control
+                    ? RGB(76, 76, 81) : RGB(56, 56, 59);
         HBRUSH circle = CreateSolidBrush(fill);
         HBRUSH prior = (HBRUSH)SelectObject(dc, circle);
         Ellipse(dc, cx - radius, cy - radius, cx + radius, cy + radius);
@@ -160,7 +166,9 @@ static void paint(HWND hwnd) {
     }
     SelectObject(dc, old_pen);
 
-    HPEN icon_pen = CreatePen(PS_SOLID, pixels(hwnd, 1), RGB(255, 255, 255));
+    HPEN icon_pen = CreatePen(
+        PS_SOLID, pixels(hwnd, 1),
+        frame_active ? RGB(255, 255, 255) : RGB(166, 166, 171));
     old_pen = (HPEN)SelectObject(dc, icon_pen);
     for (int i = 0; i < 3; ++i) {
         int cx = rect.right - pixels(hwnd, 12) - span / 2 - span * i;
@@ -322,13 +330,19 @@ static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         break;
-    case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE) {
+    case WM_ACTIVATE: {
+        BOOL next_active = LOWORD(wp) != WA_INACTIVE;
+        if (!next_active) {
             set_hovered_control(hwnd, HTNOWHERE);
             if (GetCapture() == hwnd) ReleaseCapture();
             clear_pressed_control(hwnd);
         }
+        if (frame_active != next_active) {
+            frame_active = next_active;
+            repaint_header(hwnd);
+        }
         break;
+    }
     case WM_NCRBUTTONUP:
         if (wp == HTCAPTION) {
             show_caption_system_menu(hwnd, lp);
@@ -353,6 +367,7 @@ static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         hovered_control = HTNOWHERE;
         pressed_control = HTNOWHERE;
         pressed_inside = FALSE;
+        frame_active = TRUE;
         if (GetCapture() == hwnd) ReleaseCapture();
         return old ? CallWindowProcW(old, hwnd, msg, wp, lp) : 0;
     }
