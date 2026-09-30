@@ -99,7 +99,7 @@ Research references:
 
 ## Release gates before any user-facing switch
 
-- First same-process prototype in a disposable Windows app: automated attach/detach/reattach passed; appearance and cross-app integration remain unfinished.
+- First same-process prototype in a disposable Windows app: automated attach/detach/reattach, native caption hit testing, Windows-owned minimize/maximize, double-click, hover, and caption right-click system-menu behavior are CI-gated; appearance and cross-app integration remain unfinished.
 - Attach, disable, detach, reattach and force-kill cases on 64-bit and, separately,
   32-bit where supported; no OS reboot, and document when app relaunch is needed.
 - Prove Win+arrow Snap, Windows Snap Layouts, border/corner resizing, caption drag,
