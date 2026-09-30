@@ -6,21 +6,28 @@
   "runtime_gallery": "15 distinct real FedoraWin.exe Windows captures from native commit cfe4e74dfd32296456fcfb9a71d7f4a57484cf94, including full desktop with GNOME 51 Roundhex; separate GTK/libadwaita proof not counted",
   "frame_recovery": "Guardian initialization fail-closed regression contract and real force-kill recovery Windows CI passed; physical Windows validation still required",
   "native_adwaita": {
-    "status": "isolated Windows CI proof; not production integration",
-    "source_sha": "855cd4ba10b6aae501e88a6832ed9b19f743b99f",
-    "ci_run": 35572296452,
-    "captures": "real dark/light GTK4/libadwaita HWNDs; downloadable Actions artifact",
-    "artifact_id": 10626646196
+    "status": "FedoraWin-owned Preferences candidate merged; production launcher/packaging still in progress",
+    "source_sha": "592c868a92e42b375f45f8ffb9a9d8dffd107d9d",
+    "verified_pr_head": "ca8081a9f84baaf7302bf2e9aa56f36feb2a1980",
+    "native_adwaita_ci_run": 36750526155,
+    "full_windows_ci_run": 36750526232,
+    "captures": "real dark/light FedoraWin Preferences HWNDs at 810x670 plus baseline Adwaita proof",
+    "preferences_working_set_mb": {
+      "dark": 78.9,
+      "light": 66.9
+    },
+    "temporary_surface_ceiling_mb": 300,
+    "production_default": false
   },
   "optional_native_frame_engine": {
-    "status": "same_process_system_menu_snap_pressed_lifecycle_ci_passed_cross_process_not_implemented",
-    "source_sha": "c856494a340cd12726bff086aec0a02ccf4d126d",
+    "status": "same_process_active_alt_space_snap_pressed_lifecycle_ci_passed_cross_process_not_implemented",
+    "source_sha": "0bf06460eb02409a4c3e1ac4727b355a9750be94",
     "ci_run": 36741085461,
     "artifact_id": null,
     "policy": "per-app opt-in; protect custom-chrome and OS apps; no Windows Update, System32, WinSxS, servicing-stack or user-data patching",
     "rollback": "same-process no-restart verified; cross-process failure may require target-app relaunch",
     "docs": "frame-engine.html",
-    "tests": "real Win32 caption right-click system menu, Win+Left Snap, hover, pressed/cancel/release controls, close, maximize/restore, minimize/restore, caption double-click, hit testing and exact attach/rollback",
+    "tests": "real active/inactive focus state, Alt+Space and caption right-click Windows system menu, Win+Left Snap, hover, pressed/cancel/release controls, close, maximize/restore, minimize/restore, caption double-click, hit testing and exact attach/rollback",
     "full_windows_ci_for_source": {
       "status": "passed_on_pr_head_before_merge",
       "source_sha": "f0fbfa0697a6b2326d1ab2ffc309f924a0b8ddde",
@@ -64,22 +71,21 @@
     "requirement": "FedoraWin-owned windows must present authentic GNOME 51 behavior and visuals, using GTK4/libadwaita where Tauri cannot provide the required fidelity; Fluent-looking FedoraWin-owned windows are a beta blocker.",
     "safety": "Windows Update, servicing, recovery and user data must remain untouched; invasive integration is opt-in, reversible and VM-gated.",
     "remaining": [
-      "active/inactive native frame focus-state validation",
+      "broader accessibility validation beyond verified Alt+Space behavior",
       "Windows Snap Layout flyout validation on maximize hover",
       "mixed-DPI and multi-monitor physical validation",
-      "accessibility and keyboard validation",
       "force-kill/recovery coverage for any future opt-in cross-process helper",
-      "production GTK4/libadwaita integration for FedoraWin-owned windows"
+      "package and launch the merged GTK4/libadwaita Preferences candidate from the production shell"
     ]
   },
   "latest_native_frame_probe": {
-    "source_sha": "c856494a340cd12726bff086aec0a02ccf4d126d",
+    "source_sha": "0bf06460eb02409a4c3e1ac4727b355a9750be94",
     "date": "2026-09-30",
-    "pr": 9,
-    "verified_pr_head": "9be6dc04a0d1e1c24fdf49428fda08eff329ba79",
-    "windows_ci_run": 36748066338,
-    "frame_workflow_run": 36748066355,
+    "pr": 12,
+    "verified_pr_head": "e6ae71f2f9526877040b5c9bdda239cd49f81813",
+    "windows_ci_run": 36750978080,
+    "frame_workflow_run": 36750978298,
     "conclusion": "success",
-    "scope": "same-process disposable Win32 frame; press/cancel/release, Win+Left Snap and exact rollback verified; cross-process attachment remains unimplemented"
+    "scope": "same-process disposable Win32 frame; active/inactive focus, Alt+Space, Win+Left Snap, press/cancel/release and exact rollback verified; cross-process attachment remains unimplemented"
   }
 }
