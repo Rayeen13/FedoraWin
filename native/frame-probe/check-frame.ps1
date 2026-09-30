@@ -38,7 +38,7 @@ $exe = Join-Path $out 'fedorawin-frame-probe.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "No real native frame probe: $exe" }
 if (-not $env:MSYS2_ROOT) { throw 'MSYS2_ROOT missing.' }
 $env:PATH = "$(Join-Path $env:MSYS2_ROOT 'ucrt64\bin');$env:PATH"
-$WM_APP = 0x8000; $WM_KEYDOWN = 0x0100; $WM_NCHITTEST = 0x0084; $WM_NCLBUTTONDOWN = 0x00A1; $WM_NCLBUTTONDBLCLK = 0x00A3; $WM_NCRBUTTONUP = 0x00A5; $WM_CANCELMODE = 0x001F; $WM_CLOSE = 0x0010; $VK_LWIN = 0x5B; $VK_LEFT = 0x25; $KEYEVENTF_KEYUP = 0x0002
+$WM_APP = 0x8000; $WM_KEYDOWN = 0x0100; $WM_MOUSEMOVE = 0x0200; $WM_LBUTTONUP = 0x0202; $WM_NCHITTEST = 0x0084; $WM_NCLBUTTONDOWN = 0x00A1; $WM_NCLBUTTONDBLCLK = 0x00A3; $WM_NCRBUTTONUP = 0x00A5; $WM_CANCELMODE = 0x001F; $WM_CLOSE = 0x0010; $VK_LWIN = 0x5B; $VK_LEFT = 0x25; $KEYEVENTF_KEYUP = 0x0002
 function Send([IntPtr]$h, [uint32]$message, [int]$w = 0, [IntPtr]$l = [IntPtr]::Zero) { return [FrameProbeApi]::SendMessage($h,$message,[IntPtr]::new($w),$l).ToInt64() }
 function Check($condition,$message) { if (-not $condition) { throw $message } }
 function Capture($hwnd,$label) {
@@ -106,28 +106,46 @@ try {
   Check ([FrameProbeApi]::GetWindowRect($hwnd,[ref]$restoredSnapRect)) 'Could not read restored pre-Snap bounds.'
   Check ($restoredSnapRect.Left-eq$styled.Rect.Left -and $restoredSnapRect.Top-eq$styled.Rect.Top -and $restoredSnapRect.Right-eq$styled.Rect.Right -and $restoredSnapRect.Bottom-eq$styled.Rect.Bottom) 'Pre-Snap window placement was not restored exactly.'
   $leftX=[int]($styled.Rect.Left+3);$leftParam=[int64](($leftX-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($leftParam)))-eq 10) 'Left resize border hit target failed.'
-  # Exercise the actual Windows-owned maximize/restore system command path, not only hit-test geometry.
-  [void](Send $hwnd $WM_NCLBUTTONDOWN 9 ([IntPtr]::new($maxParam)));Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsZoomed($hwnd)) 'Native maximize control did not maximize through WM_SYSCOMMAND.'
-  [void](Send $hwnd $WM_NCLBUTTONDOWN 9 ([IntPtr]::new($maxParam)));Start-Sleep -Milliseconds 250;Check (-not [FrameProbeApi]::IsZoomed($hwnd)) 'Native maximize control did not restore through WM_SYSCOMMAND.'
-  Check ((Send $hwnd ($WM_APP+83))-eq 1) 'System-command round trip changed original style bits.'
+  # GNOME-style controls must expose a real pressed lifecycle and only execute on release.
+  [void][FrameProbeApi]::SetCursorPos($maxX,[int]($styled.Rect.Top+23));Start-Sleep -Milliseconds 100
+  [void](Send $hwnd $WM_NCLBUTTONDOWN 9 ([IntPtr]::new($maxParam)));Start-Sleep -Milliseconds 100
+  $pressed=Capture $hwnd 'pressed-max';Check ($pressed.MaxPixel.R-gt$hovered.MaxPixel.R) 'Maximize press did not expose a stronger native pressed state.'
+  # Dragging off while captured cancels the command instead of maximizing accidentally.
+  [void][FrameProbeApi]::SetCursorPos($x,[int]($styled.Rect.Top+140));[void](Send $hwnd $WM_MOUSEMOVE);Start-Sleep -Milliseconds 100
+  $pressCancelled=Capture $hwnd 'pressed-max-cancelled';Check ($pressCancelled.MaxPixel.ToArgb()-eq$styled.MaxPixel.ToArgb()) 'Pressed maximize state did not clear when pointer left the control.'
+  [void](Send $hwnd $WM_LBUTTONUP);Start-Sleep -Milliseconds 200;Check (-not [FrameProbeApi]::IsZoomed($hwnd)) 'Cancelled maximize press still executed a system command.'
+  # Press + release inside the control must execute the Windows-owned system command.
+  [void][FrameProbeApi]::SetCursorPos($maxX,[int]($styled.Rect.Top+23));Start-Sleep -Milliseconds 100
+  [void](Send $hwnd $WM_NCLBUTTONDOWN 9 ([IntPtr]::new($maxParam)));[void](Send $hwnd $WM_LBUTTONUP);Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsZoomed($hwnd)) 'Native maximize control did not maximize on release through WM_SYSCOMMAND.'
+  $zoomRect=New-Object FrameProbeApi+RECT;Check ([FrameProbeApi]::GetWindowRect($hwnd,[ref]$zoomRect)) 'Could not read maximized bounds.'
+  $zoomMaxX=[int]($zoomRect.Right-70);$zoomMaxY=[int]($zoomRect.Top+23);$zoomMaxParam=[int64](($zoomMaxX-band 0xffff)-bor((($zoomRect.Top+42)-band 0xffff)-shl 16))
+  [void][FrameProbeApi]::SetCursorPos($zoomMaxX,$zoomMaxY);Start-Sleep -Milliseconds 100
+  [void](Send $hwnd $WM_NCLBUTTONDOWN 9 ([IntPtr]::new($zoomMaxParam)));[void](Send $hwnd $WM_LBUTTONUP);Start-Sleep -Milliseconds 250;Check (-not [FrameProbeApi]::IsZoomed($hwnd)) 'Native maximize control did not restore on release through WM_SYSCOMMAND.'
+  Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Pressed system-command round trip changed original style bits.'
   # Caption double-click must still reach DefWindowProc and toggle the real Win32 window state.
   [void](Send $hwnd $WM_NCLBUTTONDBLCLK 2 ([IntPtr]::new($param)));Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsZoomed($hwnd)) 'Native caption double-click did not maximize.'
   [void](Send $hwnd $WM_NCLBUTTONDBLCLK 2 ([IntPtr]::new($param)));Start-Sleep -Milliseconds 250;Check (-not [FrameProbeApi]::IsZoomed($hwnd)) 'Native caption double-click did not restore.'
   Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Caption double-click changed original style bits.'
   # Verify the adjacent GNOME-style minimize circle calls Windows-owned SC_MINIMIZE.
   $minX=[int]($styled.Rect.Right-108);$minParam=[int64](($minX-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($minParam)))-eq 8) 'Minimize button hit target failed.'
-  [void](Send $hwnd $WM_NCLBUTTONDOWN 8 ([IntPtr]::new($minParam)));Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsIconic($hwnd)) 'Native minimize control did not minimize through WM_SYSCOMMAND.'
+  [void][FrameProbeApi]::SetCursorPos($minX,[int]($styled.Rect.Top+23));Start-Sleep -Milliseconds 100
+  [void](Send $hwnd $WM_NCLBUTTONDOWN 8 ([IntPtr]::new($minParam)));[void](Send $hwnd $WM_LBUTTONUP);Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsIconic($hwnd)) 'Native minimize control did not minimize on release through WM_SYSCOMMAND.'
   [void][FrameProbeApi]::ShowWindow($hwnd,9);Start-Sleep -Milliseconds 250;Check (-not [FrameProbeApi]::IsIconic($hwnd)) 'Original Win32 window did not restore from minimize.'
   Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Minimize/restore changed original style bits.'
+  # Normalize pointer state before comparing the restored Windows frame pixel-for-pixel.
+  # Otherwise the real Windows caption can legitimately render a hover state under the
+  # pointer after detach even though every original frame/style value was restored.
+  [void][FrameProbeApi]::SetCursorPos($x,[int]($styled.Rect.Top+140));Start-Sleep -Milliseconds 150
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 0) 'Detach did not occur.';Check ((Send $hwnd ($WM_APP+82))-eq 1) 'Original WNDPROC not restored.';Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Original style bits not preserved.';Check (-not $process.HasExited) 'Target app died during detach.'
   $restored=Capture $hwnd 'restored';Check ($restored.Pixel.R-gt115) 'Windows caption not restored.';Check ((Get-FileHash $original.Path).Hash-eq(Get-FileHash $restored.Path).Hash) 'Restored frame differs pixel-for-pixel from original.'
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 1) 'Reattach failed.';[void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+82))-eq 1) 'Second restore failed.'
   # Finally exercise the actual close circle, rather than closing the test only from the harness.
   [void](Send $hwnd $WM_KEYDOWN 0x77);Check ((Send $hwnd ($WM_APP+81))-eq 1) 'Final attach before native close failed.'
   $closeX=[int]($styled.Rect.Right-30);$closeParam=[int64](($closeX-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($closeParam)))-eq 20) 'Native close button hit target failed.'
-  [void](Send $hwnd $WM_NCLBUTTONDOWN 20 ([IntPtr]::new($closeParam)))
-  Check ($process.WaitForExit(3000)) 'Native close button did not terminate the disposable window process.'
+  [void][FrameProbeApi]::SetCursorPos($closeX,[int]($styled.Rect.Top+23));Start-Sleep -Milliseconds 100
+  [void](Send $hwnd $WM_NCLBUTTONDOWN 20 ([IntPtr]::new($closeParam)));[void](Send $hwnd $WM_LBUTTONUP)
+  Check ($process.WaitForExit(3000)) 'Native close button did not terminate the disposable window process on release.'
   $process.Refresh();Check ($process.ExitCode-eq 0) "Native close exited with code $($process.ExitCode)."
   Check (-not [FrameProbeApi]::IsWindow($hwnd)) 'Native close left a live HWND.'
-  Write-Host "FRAME PROBE PASS: attach -> native system menu -> Win+Left Snap -> Windows maximize/minimize/double-click -> exact rollback -> reattach -> rollback -> native close; same PID=$($process.Id)."
+  Write-Host "FRAME PROBE PASS: attach -> native system menu -> Win+Left Snap -> pressed/cancel/release controls -> Windows maximize/minimize/double-click -> exact rollback -> reattach -> rollback -> native close; same PID=$($process.Id)."
 } finally { [void][FrameProbeApi]::SetCursorPos($cursorBefore.X,$cursorBefore.Y);if($hwnd-ne[IntPtr]::Zero -and [FrameProbeApi]::IsWindow($hwnd)){[void](Send $hwnd $WM_CLOSE)};if(-not $process.WaitForExit(3000)){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue} }
