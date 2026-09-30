@@ -21,6 +21,9 @@ public static class FrameProbeApi {
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extraInfo);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int cx, int cy, uint flags);
   [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll", EntryPoint="SendMessageW")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
@@ -32,7 +35,7 @@ $exe = Join-Path $out 'fedorawin-frame-probe.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "No real native frame probe: $exe" }
 if (-not $env:MSYS2_ROOT) { throw 'MSYS2_ROOT missing.' }
 $env:PATH = "$(Join-Path $env:MSYS2_ROOT 'ucrt64\bin');$env:PATH"
-$WM_APP = 0x8000; $WM_KEYDOWN = 0x0100; $WM_NCHITTEST = 0x0084; $WM_NCLBUTTONDOWN = 0x00A1; $WM_NCLBUTTONDBLCLK = 0x00A3; $WM_NCRBUTTONUP = 0x00A5; $WM_CANCELMODE = 0x001F; $WM_CLOSE = 0x0010
+$WM_APP = 0x8000; $WM_KEYDOWN = 0x0100; $WM_NCHITTEST = 0x0084; $WM_NCLBUTTONDOWN = 0x00A1; $WM_NCLBUTTONDBLCLK = 0x00A3; $WM_NCRBUTTONUP = 0x00A5; $WM_CANCELMODE = 0x001F; $WM_CLOSE = 0x0010; $VK_LWIN = 0x5B; $VK_LEFT = 0x25; $KEYEVENTF_KEYUP = 0x0002; $SWP_NOZORDER = 0x0004; $SWP_NOACTIVATE = 0x0010
 function Send([IntPtr]$h, [uint32]$message, [int]$w = 0, [IntPtr]$l = [IntPtr]::Zero) { return [FrameProbeApi]::SendMessage($h,$message,[IntPtr]::new($w),$l).ToInt64() }
 function Check($condition,$message) { if (-not $condition) { throw $message } }
 function Capture($hwnd,$label) {
@@ -75,6 +78,24 @@ try {
   for($i=0;$i-lt 30 -and [FrameProbeApi]::FindWindowW('#32768',$null)-ne[IntPtr]::Zero;$i++){ Start-Sleep -Milliseconds 50 }
   Check ([FrameProbeApi]::FindWindowW('#32768',$null)-eq[IntPtr]::Zero) 'Windows-owned system menu did not close cleanly.'
   Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Caption context menu changed original style bits.'
+  # Exercise the real Windows shell Win+Left Snap accelerator while our frame owns non-client hit testing.
+  [void][FrameProbeApi]::SetForegroundWindow($hwnd); Start-Sleep -Milliseconds 200
+  Check ([FrameProbeApi]::GetForegroundWindow()-eq$hwnd) 'Native probe did not own foreground before Win+Left Snap.'
+  [FrameProbeApi]::keybd_event($VK_LWIN,0,0,[UIntPtr]::Zero)
+  [FrameProbeApi]::keybd_event($VK_LEFT,0,0,[UIntPtr]::Zero)
+  [FrameProbeApi]::keybd_event($VK_LEFT,0,$KEYEVENTF_KEYUP,[UIntPtr]::Zero)
+  [FrameProbeApi]::keybd_event($VK_LWIN,0,$KEYEVENTF_KEYUP,[UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 600
+  $snappedRect=New-Object FrameProbeApi+RECT
+  Check ([FrameProbeApi]::GetWindowRect($hwnd,[ref]$snappedRect)) 'Could not read bounds after Win+Left Snap.'
+  $snapChanged=[Math]::Abs($snappedRect.Left-$styled.Rect.Left)-gt20 -or [Math]::Abs($snappedRect.Top-$styled.Rect.Top)-gt20 -or [Math]::Abs($snappedRect.Right-$styled.Rect.Right)-gt20 -or [Math]::Abs($snappedRect.Bottom-$styled.Rect.Bottom)-gt20
+  Check $snapChanged 'Win+Left did not change the attached window bounds through Windows Snap.'
+  Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Win+Left Snap changed original style bits.'
+  # Restore deterministic probe geometry for the remaining control/rollback checks.
+  [void][FrameProbeApi]::ShowWindow($hwnd,9)
+  $styledHeight=$styled.Rect.Bottom-$styled.Rect.Top
+  Check ([FrameProbeApi]::SetWindowPos($hwnd,[IntPtr]::Zero,$styled.Rect.Left,$styled.Rect.Top,$styled.Width,$styledHeight,$SWP_NOZORDER-bor$SWP_NOACTIVATE)) 'Could not restore probe geometry after Snap.'
+  Start-Sleep -Milliseconds 250
   $leftX=[int]($styled.Rect.Left+3);$leftParam=[int64](($leftX-band 0xffff)-bor(($y-band 0xffff)-shl 16));Check ((Send $hwnd $WM_NCHITTEST 0 ([IntPtr]::new($leftParam)))-eq 10) 'Left resize border hit target failed.'
   # Exercise the actual Windows-owned maximize/restore system command path, not only hit-test geometry.
   [void](Send $hwnd $WM_NCLBUTTONDOWN 9 ([IntPtr]::new($maxParam)));Start-Sleep -Milliseconds 250;Check ([FrameProbeApi]::IsZoomed($hwnd)) 'Native maximize control did not maximize through WM_SYSCOMMAND.'
@@ -99,5 +120,5 @@ try {
   Check ($process.WaitForExit(3000)) 'Native close button did not terminate the disposable window process.'
   $process.Refresh();Check ($process.ExitCode-eq 0) "Native close exited with code $($process.ExitCode)."
   Check (-not [FrameProbeApi]::IsWindow($hwnd)) 'Native close left a live HWND.'
-  Write-Host "FRAME PROBE PASS: attach -> native system menu and Windows maximize/minimize/double-click -> exact rollback -> reattach -> rollback -> native close; same PID=$($process.Id)."
+  Write-Host "FRAME PROBE PASS: attach -> native system menu -> Win+Left Snap -> Windows maximize/minimize/double-click -> exact rollback -> reattach -> rollback -> native close; same PID=$($process.Id)."
 } finally { [void][FrameProbeApi]::SetCursorPos($cursorBefore.X,$cursorBefore.Y);if($hwnd-ne[IntPtr]::Zero -and [FrameProbeApi]::IsWindow($hwnd)){[void](Send $hwnd $WM_CLOSE)};if(-not $process.WaitForExit(3000)){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue} }
