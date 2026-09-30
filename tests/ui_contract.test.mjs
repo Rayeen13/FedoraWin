@@ -9,6 +9,7 @@ const performance = fs.readFileSync(new URL('../src-tauri/src/performance.rs', i
 const layout = fs.readFileSync(new URL('../src-tauri/src/layout.rs', import.meta.url), 'utf8');
 const frame = fs.readFileSync(new URL('../src-tauri/src/windows/frame.rs', import.meta.url), 'utf8');
 const hotkeys = fs.readFileSync(new URL('../src-tauri/src/windows/hotkeys.rs', import.meta.url), 'utf8');
+const nativePreferences = fs.readFileSync(new URL('../src-tauri/src/windows/native_preferences.rs', import.meta.url), 'utf8');
 const screenshot = fs.readFileSync(new URL('../src-tauri/src/windows/screenshot.rs', import.meta.url), 'utf8');
 const panel = fs.readFileSync(new URL('../src-tauri/src/windows/panel.rs', import.meta.url), 'utf8');
 const power = fs.readFileSync(new URL('../src-tauri/src/windows/power.rs', import.meta.url), 'utf8');
@@ -29,6 +30,13 @@ const windowsCi = fs.readFileSync(new URL('../.github/workflows/windows-ci.yml',
 
 assert.match(js, /toggle_activities/);
 assert.match(js, /toggle_surface/);
+assert.match(js, /open_native_preferences/);
+assert.match(js, /renderQuickSettings\(true\)/);
+assert.match(main, /fn open_native_preferences/);
+assert.match(main, /open_native_preferences,/);
+assert.match(nativePreferences, /FEDORAWIN_NATIVE_PREFERENCES_EXE/);
+assert.match(nativePreferences, /fedorawin-preferences\.exe/);
+assert.match(nativePreferences, /FEDORAWIN_ADWAITA_THEME/);
 assert.match(js, /list_apps/);
 assert.match(js, /list_windows/);
 assert.match(js, /launch_app/);
