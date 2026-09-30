@@ -28,6 +28,27 @@ fn set_appearance(
     Ok(snapshot)
 }
 #[tauri::command]
+fn open_native_preferences(
+    state: tauri::State<'_, Arc<ShellState>>,
+) -> Result<bool, String> {
+    #[cfg(windows)]
+    {
+        let snapshot = state.snapshot();
+        let theme = match snapshot.appearance.theme {
+            shell::ThemeMode::System => "system",
+            shell::ThemeMode::Light => "light",
+            shell::ThemeMode::Dark => "dark",
+        };
+        return windows::native_preferences::launch(theme);
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = state;
+        Ok(false)
+    }
+}
+#[tauri::command]
 fn toggle_activities(app: tauri::AppHandle) -> Result<(), String> {
     shell::toggle_activities(&app)
 }
@@ -417,6 +438,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_shell_state,
             set_appearance,
+            open_native_preferences,
             toggle_activities,
             toggle_surface,
             get_memory_snapshot,
