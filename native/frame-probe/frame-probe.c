@@ -171,6 +171,26 @@ static void paint(HWND hwnd) {
     EndPaint(hwnd, &ps);
 }
 
+static void show_caption_system_menu(HWND hwnd, LPARAM lp) {
+    HMENU menu = GetSystemMenu(hwnd, FALSE);
+    if (!menu) return;
+
+    int x = GET_X_LPARAM(lp);
+    int y = GET_Y_LPARAM(lp);
+    UINT command = TrackPopupMenu(
+        menu,
+        TPM_RETURNCMD | TPM_RIGHTBUTTON,
+        x,
+        y,
+        0,
+        hwnd,
+        NULL);
+
+    if (command != 0) {
+        PostMessageW(hwnd, WM_SYSCOMMAND, (WPARAM)command, 0);
+    }
+}
+
 static LRESULT frame_hit(HWND hwnd, LPARAM lp) {
     RECT r;
     if (!GetWindowRect(hwnd, &r)) return HTNOWHERE;
@@ -242,6 +262,12 @@ static LRESULT CALLBACK frame_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         break;
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE) set_hovered_control(hwnd, HTNOWHERE);
+        break;
+    case WM_NCRBUTTONUP:
+        if (wp == HTCAPTION) {
+            show_caption_system_menu(hwnd, lp);
+            return 0;
+        }
         break;
     case WM_NCLBUTTONDOWN:
         if (wp == HTCLOSE || wp == HTMINBUTTON || wp == HTMAXBUTTON) {
