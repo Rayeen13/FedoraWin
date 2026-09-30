@@ -13,14 +13,14 @@
     "artifact_id": 10626646196
   },
   "optional_native_frame_engine": {
-    "status": "same_process_caption_right_click_system_menu_ci_passed_cross_process_not_implemented",
-    "source_sha": "5351fb0755ee1cf9fd3b4a065778bc0a585178d0",
+    "status": "same_process_system_menu_win_left_snap_ci_passed_cross_process_not_implemented",
+    "source_sha": "806fb41eae908782c6234e29c383d96fea8cca6e",
     "ci_run": 36741085461,
     "artifact_id": null,
     "policy": "per-app opt-in; protect custom-chrome and OS apps; no Windows Update, System32, WinSxS, servicing-stack or user-data patching",
     "rollback": "same-process no-restart verified; cross-process failure may require target-app relaunch",
     "docs": "frame-engine.html",
-    "tests": "real Win32 caption right-click system menu, close, maximize/restore, minimize/restore, caption double-click, hover, hit testing and exact attach/rollback in disposable app",
+    "tests": "real Win32 caption right-click system menu, Win+Left Snap, close, maximize/restore, minimize/restore, caption double-click, hover, hit testing and exact attach/rollback in disposable app",
     "full_windows_ci_for_source": {
       "status": "passed_on_pr_head_before_merge",
       "source_sha": "f0fbfa0697a6b2326d1ab2ffc309f924a0b8ddde",
@@ -64,7 +64,7 @@
     "requirement": "FedoraWin-owned windows must present authentic GNOME 51 behavior and visuals, using GTK4/libadwaita where Tauri cannot provide the required fidelity; Fluent-looking FedoraWin-owned windows are a beta blocker.",
     "safety": "Windows Update, servicing, recovery and user data must remain untouched; invasive integration is opt-in, reversible and VM-gated.",
     "remaining": [
-      "Win+Arrow/Snap Layout validation",
+      "Windows Snap Layout flyout validation on maximize hover",
       "mixed-DPI and multi-monitor physical validation",
       "accessibility and keyboard validation",
       "force-kill/recovery coverage for any future opt-in cross-process helper",
@@ -72,12 +72,18 @@
     ]
   },
   "latest_native_frame_probe": {
-    "source_sha": "f0fbfa0697a6b2326d1ab2ffc309f924a0b8ddde",
-    "merged_as": "5351fb0755ee1cf9fd3b4a065778bc0a585178d0",
+    "source_sha": "806fb41eae908782c6234e29c383d96fea8cca6e",
     "date": "2026-09-30",
-    "windows_ci_run": 36741085380,
-    "frame_workflow_run": 36741085461,
+    "windows_ci_runs": [
+      36743525944,
+      36743534219
+    ],
+    "native_frame_runs": [
+      36743525957,
+      36743534067
+    ],
+    "native_adwaita_run": 36743534076,
     "conclusion": "success",
-    "scope": "disposable same-process Win32 frame; cross-process attachment remains unimplemented"
+    "scope": "same-process disposable Win32 frame; Win+Left Snap verified; cross-process attachment remains unimplemented"
   }
 }
