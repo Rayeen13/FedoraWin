@@ -2,7 +2,7 @@
   "project": "FedoraWin",
   "release": "0.4.0-dev",
   "target": "GNOME 51",
-  "updated": "2026-09-26",
+  "updated": "2026-09-30",
   "runtime_gallery": "15 distinct real FedoraWin.exe Windows captures from native commit cfe4e74dfd32296456fcfb9a71d7f4a57484cf94, including full desktop with GNOME 51 Roundhex; separate GTK/libadwaita proof not counted",
   "frame_recovery": "Guardian initialization fail-closed regression contract and real force-kill recovery Windows CI passed; physical Windows validation still required",
   "native_adwaita": {
@@ -13,14 +13,15 @@
     "artifact_id": 10626646196
   },
   "optional_native_frame_engine": {
-    "status": "same_process_caption_menu_close_max_min_rollback_ci_passed_cross_process_not_implemented",
-    "source_sha": "383ff5cabb3d12d481cdbc32a7f467f112a6714f",
-    "ci_run": 35695503395,
+    "status": "same_process_caption_right_click_system_menu_ci_passed_cross_process_not_implemented",
+    "source_sha": "a8a15cdef080b5b5d6672fde7753a55c7fa87dec",
+    "ci_run": 36740446489,
     "artifact_id": null,
-    "policy": "per-app opt-in; protect custom-chrome and OS apps; no System32 patching",
-    "rollback": "same-process no-restart verified; cross-process failure may require app relaunch",
+    "policy": "per-app opt-in; protect custom-chrome and OS apps; no Windows Update, System32, WinSxS, servicing-stack or user-data patching",
+    "rollback": "same-process no-restart verified; cross-process failure may require target-app relaunch",
     "docs": "frame-engine.html",
-    "tests": "real Win32 system menu, close, maximize/restore, minimize/restore, caption double-click, exact attach/rollback in disposable app"
+    "tests": "real Win32 caption right-click system menu, close, maximize/restore, minimize/restore, caption double-click, hover, hit testing and exact attach/rollback in disposable app",
+    "full_windows_ci_for_source": "in_progress_at_site_update"
   },
   "frame_recovery_source_sha": "19bdc033609c51941e2797159cef503da6807733",
   "frame_recovery_ci_run": 35750778518,
@@ -52,5 +53,25 @@
     "wallpaper_git_blob": "71e1e91496d82cbe82b9bf9121d4fe23ac81bb21",
     "wallpaper_license": "CC BY-SA 3.0",
     "wallpaper_scope": "temporary CI capture only; previous wallpaper restored"
+  },
+  "beta_gate": {
+    "label": "pre-beta",
+    "requirement": "FedoraWin-owned windows must present authentic GNOME 51 behavior and visuals, using GTK4/libadwaita where Tauri cannot provide the required fidelity; Fluent-looking FedoraWin-owned windows are a beta blocker.",
+    "safety": "Windows Update, servicing, recovery and user data must remain untouched; invasive integration is opt-in, reversible and VM-gated.",
+    "remaining": [
+      "full Windows CI for current frame branch",
+      "Win+Arrow/Snap Layout validation",
+      "mixed-DPI and multi-monitor physical validation",
+      "accessibility and keyboard validation",
+      "force-kill/recovery coverage for any future opt-in cross-process helper",
+      "production GTK4/libadwaita integration for FedoraWin-owned windows"
+    ]
+  },
+  "latest_native_frame_probe": {
+    "source_sha": "a8a15cdef080b5b5d6672fde7753a55c7fa87dec",
+    "date": "2026-09-30",
+    "workflow_run": 36740446489,
+    "conclusion": "success",
+    "scope": "disposable same-process Win32 frame only"
   }
 }
