@@ -215,23 +215,35 @@ unsafe fn set_attr<T>(hwnd: isize, attribute: u32, value: &T) -> bool {
 // paints standard non-client chrome: Chromium and other frameworks may keep
 // this bit while rendering their own draggable region and controls. These
 // classes are a conservative veto, not an exhaustive "custom titlebar" test.
-fn has_known_self_drawn_chrome(class_name: &str) -> bool {
-    let name = class_name.to_ascii_lowercase();
-    [
-        "chrome_widgetwin",
-        "mozillawindowclass",
-        "gdk",
-        "gtk",
-        "qt",
-        "sdl",
-        "glfw",
+//
+// Keep the family label alongside the prefix so the future opt-in frame engine
+// can explain why a window was rejected instead of exposing only a boolean.
+const SELF_DRAWN_CLASS_PREFIXES: [(&str, &str); 11] = [
+    ("chrome_widgetwin", "Chromium custom chrome"),
+    ("mozillawindowclass", "Firefox custom chrome"),
+    ("gdk", "GDK/GTK custom chrome"),
+    ("gtk", "GTK custom chrome"),
+    ("qt", "Qt custom chrome"),
+    ("sdl", "SDL custom chrome"),
+    ("glfw", "GLFW custom chrome"),
+    (
         "cascadia_hosting_window_class",
-        "winuidesktopwin32windowclass",
-        "applicationframewindow",
-        "windows.ui.core.corewindow",
-    ]
-    .iter()
-    .any(|prefix| name.starts_with(prefix))
+        "Windows Terminal custom chrome",
+    ),
+    ("winuidesktopwin32windowclass", "WinUI custom chrome"),
+    ("applicationframewindow", "Windows application frame"),
+    ("windows.ui.core.corewindow", "Windows CoreWindow"),
+];
+
+fn self_drawn_chrome_family(class_name: &str) -> Option<&'static str> {
+    let name = class_name.to_ascii_lowercase();
+    SELF_DRAWN_CLASS_PREFIXES
+        .iter()
+        .find_map(|(prefix, family)| name.starts_with(prefix).then_some(*family))
+}
+
+fn has_known_self_drawn_chrome(class_name: &str) -> bool {
+    self_drawn_chrome_family(class_name).is_some()
 }
 
 unsafe fn owns_standard_caption(hwnd: isize) -> bool {
@@ -241,7 +253,7 @@ unsafe fn owns_standard_caption(hwnd: isize) -> bool {
         return false; // Unknown window class: fail closed.
     }
     let name = String::from_utf16_lossy(&class_name[..length as usize]);
-    if has_known_self_drawn_chrome(&name) {
+    if self_drawn_chrome_family(&name).is_some() {
         return false;
     }
     // Respect explicit app DWM opt-out, even if WS_CAPTION remains set.
@@ -403,7 +415,7 @@ pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) -> Result<(), S
 
 #[cfg(test)]
 mod tests {
-    use super::{has_known_self_drawn_chrome, palette};
+    use super::{has_known_self_drawn_chrome, palette, self_drawn_chrome_family};
     use crate::shell::{AppearanceState, ThemeMode};
 
     fn appearance(theme: ThemeMode) -> AppearanceState {
@@ -415,21 +427,32 @@ mod tests {
 
     #[test]
     fn known_self_drawn_window_classes_are_not_restyled() {
-        for class in [
-            "Chrome_WidgetWin_1",
-            "MozillaWindowClass",
-            "gdkWin32Window",
-            "Qt661QWindowIcon",
-            "SDL_app",
-            "GLFW30",
-            "CASCADIA_HOSTING_WINDOW_CLASS",
-            "WinUIDesktopWin32WindowClass",
-            "ApplicationFrameWindow",
+        for (class, expected_family) in [
+            ("Chrome_WidgetWin_1", "Chromium custom chrome"),
+            ("MozillaWindowClass", "Firefox custom chrome"),
+            ("gdkWin32Window", "GDK/GTK custom chrome"),
+            ("GtkWindow", "GTK custom chrome"),
+            ("Qt661QWindowIcon", "Qt custom chrome"),
+            ("SDL_app", "SDL custom chrome"),
+            ("GLFW30", "GLFW custom chrome"),
+            (
+                "CASCADIA_HOSTING_WINDOW_CLASS",
+                "Windows Terminal custom chrome",
+            ),
+            ("WinUIDesktopWin32WindowClass", "WinUI custom chrome"),
+            ("ApplicationFrameWindow", "Windows application frame"),
+            ("Windows.UI.Core.CoreWindow", "Windows CoreWindow"),
         ] {
             assert!(has_known_self_drawn_chrome(class), "{class}");
+            assert_eq!(
+                self_drawn_chrome_family(class),
+                Some(expected_family),
+                "{class}"
+            );
         }
         for class in ["WindowsForms10.Window.8.app.0.1234", "#32770", "Notepad"] {
             assert!(!has_known_self_drawn_chrome(class), "{class}");
+            assert_eq!(self_drawn_chrome_family(class), None, "{class}");
         }
     }
 
