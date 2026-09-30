@@ -14,14 +14,19 @@
   },
   "optional_native_frame_engine": {
     "status": "same_process_caption_right_click_system_menu_ci_passed_cross_process_not_implemented",
-    "source_sha": "a8a15cdef080b5b5d6672fde7753a55c7fa87dec",
-    "ci_run": 36740446489,
+    "source_sha": "5351fb0755ee1cf9fd3b4a065778bc0a585178d0",
+    "ci_run": 36741085461,
     "artifact_id": null,
     "policy": "per-app opt-in; protect custom-chrome and OS apps; no Windows Update, System32, WinSxS, servicing-stack or user-data patching",
     "rollback": "same-process no-restart verified; cross-process failure may require target-app relaunch",
     "docs": "frame-engine.html",
     "tests": "real Win32 caption right-click system menu, close, maximize/restore, minimize/restore, caption double-click, hover, hit testing and exact attach/rollback in disposable app",
-    "full_windows_ci_for_source": "in_progress_at_site_update"
+    "full_windows_ci_for_source": {
+      "status": "passed_on_pr_head_before_merge",
+      "source_sha": "f0fbfa0697a6b2326d1ab2ffc309f924a0b8ddde",
+      "windows_ci_run": 36741085380,
+      "native_frame_run": 36741085461
+    }
   },
   "frame_recovery_source_sha": "19bdc033609c51941e2797159cef503da6807733",
   "frame_recovery_ci_run": 35750778518,
@@ -59,7 +64,6 @@
     "requirement": "FedoraWin-owned windows must present authentic GNOME 51 behavior and visuals, using GTK4/libadwaita where Tauri cannot provide the required fidelity; Fluent-looking FedoraWin-owned windows are a beta blocker.",
     "safety": "Windows Update, servicing, recovery and user data must remain untouched; invasive integration is opt-in, reversible and VM-gated.",
     "remaining": [
-      "full Windows CI for current frame branch",
       "Win+Arrow/Snap Layout validation",
       "mixed-DPI and multi-monitor physical validation",
       "accessibility and keyboard validation",
@@ -68,10 +72,12 @@
     ]
   },
   "latest_native_frame_probe": {
-    "source_sha": "a8a15cdef080b5b5d6672fde7753a55c7fa87dec",
+    "source_sha": "f0fbfa0697a6b2326d1ab2ffc309f924a0b8ddde",
+    "merged_as": "5351fb0755ee1cf9fd3b4a065778bc0a585178d0",
     "date": "2026-09-30",
-    "workflow_run": 36740446489,
+    "windows_ci_run": 36741085380,
+    "frame_workflow_run": 36741085461,
     "conclusion": "success",
-    "scope": "disposable same-process Win32 frame only"
+    "scope": "disposable same-process Win32 frame; cross-process attachment remains unimplemented"
   }
 }
