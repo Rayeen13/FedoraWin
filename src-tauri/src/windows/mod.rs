@@ -20,6 +20,8 @@ pub mod frame_recovery;
 #[cfg(windows)]
 pub mod hotkeys;
 #[cfg(windows)]
+pub mod native_preferences;
+#[cfg(windows)]
 pub mod panel;
 #[cfg(windows)]
 pub mod power;

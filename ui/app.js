@@ -566,7 +566,14 @@ function renderQuickSettings(appearanceOpen = false) {
   bindMasterVolume();
   hydratePowerStatus();
   document.querySelector('#screenshot-open').addEventListener('click', () => call('open_screenshot_overlay'));
-  document.querySelector('#appearance-open').addEventListener('click', () => renderQuickSettings(true));
+  document.querySelector('#appearance-open').addEventListener('click', async () => {
+    const openedNative = await call('open_native_preferences');
+    if (openedNative) {
+      await call('toggle_surface', { label: 'quick-settings' });
+      return;
+    }
+    renderQuickSettings(true);
+  });
   document.querySelector('#dark-style').addEventListener('click', async () => {
     const nextTheme = shell.appearance.theme === 'dark' ? 'light' : 'dark';
     shell = await call('set_appearance', { theme: nextTheme, accent: shell.appearance.accent }) || { ...shell, appearance: { ...shell.appearance, theme: nextTheme } };
