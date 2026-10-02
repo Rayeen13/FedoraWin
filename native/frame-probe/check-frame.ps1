@@ -39,7 +39,7 @@ $exe = Join-Path $out 'fedorawin-frame-probe.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "No real native frame probe: $exe" }
 if (-not $env:MSYS2_ROOT) { throw 'MSYS2_ROOT missing.' }
 $env:PATH = "$(Join-Path $env:MSYS2_ROOT 'ucrt64\bin');$env:PATH"
-$WM_APP = 0x8000; $WM_KEYDOWN = 0x0100; $WM_MOUSEMOVE = 0x0200; $WM_LBUTTONUP = 0x0202; $WM_NCHITTEST = 0x0084; $WM_NCLBUTTONDOWN = 0x00A1; $WM_NCLBUTTONDBLCLK = 0x00A3; $WM_NCRBUTTONUP = 0x00A5; $WM_CANCELMODE = 0x001F; $WM_CLOSE = 0x0010; $VK_LWIN = 0x5B; $VK_LEFT = 0x25; $KEYEVENTF_KEYUP = 0x0002
+$WM_APP = 0x8000; $WM_KEYDOWN = 0x0100; $WM_MOUSEMOVE = 0x0200; $WM_LBUTTONUP = 0x0202; $WM_NCHITTEST = 0x0084; $WM_NCLBUTTONDOWN = 0x00A1; $WM_NCLBUTTONDBLCLK = 0x00A3; $WM_NCRBUTTONUP = 0x00A5; $WM_CANCELMODE = 0x001F; $WM_CLOSE = 0x0010; $VK_LWIN = 0x5B; $VK_LEFT = 0x25; $VK_MENU = 0x12; $VK_SPACE = 0x20; $KEYEVENTF_KEYUP = 0x0002
 function Send([IntPtr]$h, [uint32]$message, [int]$w = 0, [IntPtr]$l = [IntPtr]::Zero) { return [FrameProbeApi]::SendMessage($h,$message,[IntPtr]::new($w),$l).ToInt64() }
 function Check($condition,$message) { if (-not $condition) { throw $message } }
 function Capture($hwnd,$label,[bool]$focus=$true) {
@@ -105,6 +105,20 @@ try {
   for($i=0;$i-lt 30 -and [FrameProbeApi]::FindWindowW('#32768',$null)-ne[IntPtr]::Zero;$i++){ Start-Sleep -Milliseconds 50 }
   Check ([FrameProbeApi]::FindWindowW('#32768',$null)-eq[IntPtr]::Zero) 'Windows-owned system menu did not close cleanly.'
   Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Caption context menu changed original style bits.'
+  # Keyboard accessibility must preserve the real Windows Alt+Space system-menu path.
+  [void][FrameProbeApi]::SetForegroundWindow($hwnd);Start-Sleep -Milliseconds 150
+  Check ([FrameProbeApi]::GetForegroundWindow()-eq$hwnd) 'Native probe did not own foreground before Alt+Space.'
+  [FrameProbeApi]::keybd_event($VK_MENU,0,0,[UIntPtr]::Zero)
+  [FrameProbeApi]::keybd_event($VK_SPACE,0,0,[UIntPtr]::Zero)
+  [FrameProbeApi]::keybd_event($VK_SPACE,0,$KEYEVENTF_KEYUP,[UIntPtr]::Zero)
+  [FrameProbeApi]::keybd_event($VK_MENU,0,$KEYEVENTF_KEYUP,[UIntPtr]::Zero)
+  $keyboardMenu=[IntPtr]::Zero
+  for($i=0;$i-lt 30;$i++){ $keyboardMenu=[FrameProbeApi]::FindWindowW('#32768',$null);if($keyboardMenu-ne[IntPtr]::Zero){break};Start-Sleep -Milliseconds 50 }
+  Check ($keyboardMenu-ne[IntPtr]::Zero) 'Alt+Space did not open the Windows-owned system menu.'
+  Check ([FrameProbeApi]::PostMessage($hwnd,$WM_CANCELMODE,[IntPtr]::Zero,[IntPtr]::Zero)) 'Could not cancel Alt+Space system menu.'
+  for($i=0;$i-lt 30 -and [FrameProbeApi]::FindWindowW('#32768',$null)-ne[IntPtr]::Zero;$i++){Start-Sleep -Milliseconds 50}
+  Check ([FrameProbeApi]::FindWindowW('#32768',$null)-eq[IntPtr]::Zero) 'Alt+Space system menu did not close cleanly.'
+  Check ((Send $hwnd ($WM_APP+83))-eq 1) 'Alt+Space system-menu round trip changed original style bits.'
   # Exercise the real Windows shell Win+Left Snap accelerator while our frame owns non-client hit testing.
   # Save Windows' full placement state: SetWindowPos alone does not clear Snap's restore metadata.
   $placementBefore=New-Object FrameProbeApi+WINDOWPLACEMENT
@@ -171,7 +185,7 @@ try {
   Check ($process.WaitForExit(3000)) 'Native close button did not terminate the disposable window process on release.'
   $process.Refresh();Check ($process.ExitCode-eq 0) "Native close exited with code $($process.ExitCode)."
   Check (-not [FrameProbeApi]::IsWindow($hwnd)) 'Native close left a live HWND.'
-  Write-Host "FRAME PROBE PASS: attach -> real active/inactive focus lifecycle -> native system menu -> Win+Left Snap -> pressed/cancel/release controls -> Windows maximize/minimize/double-click -> exact rollback -> reattach -> rollback -> native close; same PID=$($process.Id)."
+  Write-Host "FRAME PROBE PASS: attach -> real active/inactive focus lifecycle -> mouse + Alt+Space native system menu -> Win+Left Snap -> pressed/cancel/release controls -> Windows maximize/minimize/double-click -> exact rollback -> reattach -> rollback -> native close; same PID=$($process.Id)."
 } finally {
   [void][FrameProbeApi]::SetCursorPos($cursorBefore.X,$cursorBefore.Y)
   if($otherHwnd-ne[IntPtr]::Zero -and [FrameProbeApi]::IsWindow($otherHwnd)){[void][FrameProbeApi]::PostMessage($otherHwnd,$WM_CLOSE,[IntPtr]::Zero,[IntPtr]::Zero)}
