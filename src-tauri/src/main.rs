@@ -295,6 +295,18 @@ fn set_wifi_enabled(enabled: bool) -> Result<windows::wifi::WifiStatus, String> 
     windows::wifi::set_enabled(enabled)
 }
 #[tauri::command]
+fn exclude_window_frame(handle: String) -> Result<bool, String> {
+    windows::frame::exclude_window(&handle)
+}
+#[tauri::command]
+fn include_window_frame(handle: String) -> Result<bool, String> {
+    windows::frame::include_window(&handle)
+}
+#[tauri::command]
+fn is_window_frame_excluded(handle: String) -> Result<bool, String> {
+    windows::frame::is_window_excluded(&handle)
+}
+#[tauri::command]
 fn refresh_window_frames(state: tauri::State<'_, Arc<ShellState>>) -> Result<usize, String> {
     windows::frame::apply_to_top_level_windows(&state.snapshot().appearance)
         .map_err(|e| e.to_string())
@@ -512,6 +524,9 @@ fn main() {
             set_wifi_enabled,
             get_radio_pause_status,
             set_radio_pause,
+            exclude_window_frame,
+            include_window_frame,
+            is_window_frame_excluded,
             refresh_window_frames,
             mark_capture_ready
         ])
