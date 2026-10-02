@@ -1,6 +1,10 @@
 use std::env;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread;
+
+const APPEARANCE_PREFIX: &str = "FEDORAWIN_APPEARANCE";
 
 fn push_unique(paths: &mut Vec<PathBuf>, candidate: PathBuf) {
     if !paths.iter().any(|existing| existing == &candidate) {
@@ -38,7 +42,23 @@ fn candidate_paths() -> Vec<PathBuf> {
     paths
 }
 
-pub fn launch(theme: &str) -> Result<bool, String> {
+fn parse_appearance_line(line: &str) -> Option<(String, String)> {
+    let mut fields = line.trim_end().split('\t');
+    if fields.next()? != APPEARANCE_PREFIX {
+        return None;
+    }
+    let theme = fields.next()?.to_owned();
+    let accent = fields.next()?.to_owned();
+    if fields.next().is_some() {
+        return None;
+    }
+    Some((theme, accent))
+}
+
+pub fn launch<F>(theme: &str, accent: &str, on_appearance: F) -> Result<bool, String>
+where
+    F: Fn(String, String) + Send + 'static,
+{
     for executable in candidate_paths() {
         if !executable.is_file() {
             continue;
@@ -48,10 +68,29 @@ pub fn launch(theme: &str) -> Result<bool, String> {
         if let Some(parent) = executable.parent() {
             command.current_dir(parent);
         }
-        command.env("FEDORAWIN_ADWAITA_THEME", theme);
         command
+            .env("FEDORAWIN_ADWAITA_THEME", theme)
+            .env("FEDORAWIN_ADWAITA_ACCENT", accent)
+            .stdout(Stdio::piped());
+
+        let mut child = command
             .spawn()
             .map_err(|error| format!("failed to launch {}: {error}", executable.display()))?;
+        let stdout = match child.stdout.take() {
+            Some(stdout) => stdout,
+            None => {
+                let _ = child.kill();
+                return Err("native Preferences stdout pipe was unavailable".into());
+            }
+        };
+
+        thread::spawn(move || {
+            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                if let Some((theme, accent)) = parse_appearance_line(&line) {
+                    on_appearance(theme, accent);
+                }
+            }
+        });
         return Ok(true);
     }
 
@@ -70,5 +109,27 @@ mod tests {
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| name.eq_ignore_ascii_case("fedorawin-preferences.exe"))
         }));
+    }
+
+    #[test]
+    fn appearance_protocol_accepts_exact_three_field_messages() {
+        assert_eq!(
+            parse_appearance_line("FEDORAWIN_APPEARANCE\tdark\tpurple"),
+            Some(("dark".into(), "purple".into()))
+        );
+        assert_eq!(
+            parse_appearance_line("FEDORAWIN_APPEARANCE\tlight\tblue\n"),
+            Some(("light".into(), "blue".into()))
+        );
+    }
+
+    #[test]
+    fn appearance_protocol_ignores_unrelated_or_malformed_output() {
+        assert_eq!(parse_appearance_line("GTK warning"), None);
+        assert_eq!(parse_appearance_line("FEDORAWIN_APPEARANCE\tdark"), None);
+        assert_eq!(
+            parse_appearance_line("FEDORAWIN_APPEARANCE\tdark\tblue\textra"),
+            None
+        );
     }
 }
