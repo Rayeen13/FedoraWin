@@ -28,9 +28,7 @@ fn set_appearance(
     Ok(snapshot)
 }
 #[tauri::command]
-fn open_native_preferences(
-    state: tauri::State<'_, Arc<ShellState>>,
-) -> Result<bool, String> {
+fn open_native_preferences(state: tauri::State<'_, Arc<ShellState>>) -> Result<bool, String> {
     #[cfg(windows)]
     {
         let snapshot = state.snapshot();
