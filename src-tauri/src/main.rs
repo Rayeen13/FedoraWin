@@ -10,25 +10,45 @@ use shell::{AppearanceState, ShellState};
 use std::sync::Arc;
 #[cfg(windows)]
 use std::{thread, time::Duration};
-use tauri::{LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 
 #[tauri::command]
 fn get_shell_state(state: tauri::State<'_, Arc<ShellState>>) -> shell::ShellSnapshot {
     state.snapshot()
 }
+
+fn apply_appearance(
+    app: &tauri::AppHandle,
+    state: &Arc<ShellState>,
+    appearance: AppearanceState,
+) -> Result<shell::ShellSnapshot, String> {
+    state.set_appearance(appearance)?;
+    let snapshot = state.snapshot();
+    windows::frame::apply_to_top_level_windows(&snapshot.appearance).map_err(|e| e.to_string())?;
+    app.emit("fedorawin://appearance-changed", &snapshot)
+        .map_err(|e| e.to_string())?;
+    Ok(snapshot)
+}
+
 #[tauri::command]
 fn set_appearance(
+    app: tauri::AppHandle,
     state: tauri::State<'_, Arc<ShellState>>,
     theme: String,
     accent: String,
 ) -> Result<shell::ShellSnapshot, String> {
-    state.set_appearance(AppearanceState::parse(&theme, &accent)?)?;
-    let snapshot = state.snapshot();
-    windows::frame::apply_to_top_level_windows(&snapshot.appearance).map_err(|e| e.to_string())?;
-    Ok(snapshot)
+    apply_appearance(
+        &app,
+        state.inner(),
+        AppearanceState::parse(&theme, &accent)?,
+    )
 }
+
 #[tauri::command]
-fn open_native_preferences(state: tauri::State<'_, Arc<ShellState>>) -> Result<bool, String> {
+fn open_native_preferences(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<ShellState>>,
+) -> Result<bool, String> {
     #[cfg(windows)]
     {
         let snapshot = state.snapshot();
@@ -37,12 +57,36 @@ fn open_native_preferences(state: tauri::State<'_, Arc<ShellState>>) -> Result<b
             shell::ThemeMode::Light => "light",
             shell::ThemeMode::Dark => "dark",
         };
-        return windows::native_preferences::launch(theme);
+        let accent = match snapshot.appearance.accent {
+            shell::Accent::Blue => "blue",
+            shell::Accent::Teal => "teal",
+            shell::Accent::Green => "green",
+            shell::Accent::Yellow => "yellow",
+            shell::Accent::Orange => "orange",
+            shell::Accent::Red => "red",
+            shell::Accent::Pink => "pink",
+            shell::Accent::Purple => "purple",
+            shell::Accent::Slate => "slate",
+        };
+        let app_handle = app.clone();
+        let shell_state = state.inner().clone();
+        return windows::native_preferences::launch(theme, accent, move |theme, accent| {
+            let appearance = match AppearanceState::parse(&theme, &accent) {
+                Ok(appearance) => appearance,
+                Err(error) => {
+                    eprintln!("Ignored invalid native Preferences update: {error}");
+                    return;
+                }
+            };
+            if let Err(error) = apply_appearance(&app_handle, &shell_state, appearance) {
+                eprintln!("Native Preferences update failed: {error}");
+            }
+        });
     }
 
     #[cfg(not(windows))]
     {
-        let _ = state;
+        let _ = (app, state);
         Ok(false)
     }
 }

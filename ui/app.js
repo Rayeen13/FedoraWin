@@ -30,6 +30,7 @@ let windows = [];
 let activitiesMode = 'windows';
 let calendarCursor = new Date();
 let windowEventsBound = false;
+let appearanceEventsBound = false;
 let appPage = 0;
 let volumeCommitTimer = null;
 let volumeRevision = 0;
@@ -115,6 +116,21 @@ function applyAppearance() {
     ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
     : theme;
   document.documentElement.style.setProperty('--accent', ACCENTS[accent] || ACCENTS.blue);
+}
+
+async function bindAppearanceEvents() {
+  if (!listen || appearanceEventsBound) return;
+  appearanceEventsBound = true;
+  try {
+    await withTimeout(listen('fedorawin://appearance-changed', event => {
+      const next = event?.payload;
+      if (!next?.appearance) return;
+      shell = next;
+      applyAppearance();
+    }), 2500, null);
+  } catch {
+    appearanceEventsBound = false;
+  }
 }
 
 async function call(command, payload = {}) {
@@ -638,6 +654,7 @@ async function bootstrap() {
     ];
   }
   applyAppearance();
+  await bindAppearanceEvents();
   if (view === 'panel') renderPanel();
   else if (view === 'activities') await renderActivities();
   else if (view === 'quick-settings') renderQuickSettings(captureMode === 'appearance');
