@@ -5,10 +5,16 @@ on:
     branches: [dev/gnome-native-20260914]
     paths:
       - 'native/adwaita/**'
+      - 'src-tauri/src/windows/native_preferences.rs'
+      - 'src-tauri/src/main.rs'
+      - 'ui/app.js'
       - '.github/workflows/native-adwaita.yml'
   pull_request:
     paths:
       - 'native/adwaita/**'
+      - 'src-tauri/src/windows/native_preferences.rs'
+      - 'src-tauri/src/main.rs'
+      - 'ui/app.js'
       - '.github/workflows/native-adwaita.yml'
 
 permissions:
