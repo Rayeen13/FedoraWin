@@ -645,10 +645,7 @@ mod tests {
         // File Explorer is not process-wide vetoed here: the DWM fallback may
         // style ordinary Explorer file windows, while shell/taskbar HWNDs are
         // guarded independently and future injection remains prohibited.
-        assert_eq!(
-            protected_process_family(r"C:\Windows\explorer.exe"),
-            None
-        );
+        assert_eq!(protected_process_family(r"C:\Windows\explorer.exe"), None);
     }
 
     #[test]
