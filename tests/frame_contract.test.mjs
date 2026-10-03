@@ -92,3 +92,17 @@ test('AppBar registration failures never proceed with a stale desktop reservatio
     assert.match(failure[1], /AppBar rollback also failed/);
   }
 });
+
+
+test('per-window frame exclusions are lifetime-bound and immediately reversible', () => {
+  assert.match(frame, /struct WindowIdentity \{/);
+  assert.match(frame, /pid: u32,/);
+  assert.match(frame, /created: u64,/);
+  assert.match(frame, /FRAME_EXCLUSIONS/);
+  assert.match(frame, /identity_is_excluded\(identity\)/);
+  assert.match(frame, /journal\.remove\(&hwnd\);\s*unsafe \{ restore_frame\(hwnd, original\) \}/);
+  assert.match(runtime, /fn exclude_window_frame\(handle: String\)/);
+  assert.match(runtime, /fn include_window_frame\(handle: String\)/);
+  assert.match(runtime, /fn is_window_frame_excluded\(handle: String\)/);
+  assert.match(runtime, /exclude_window_frame,\s*include_window_frame,\s*is_window_frame_excluded,/);
+});

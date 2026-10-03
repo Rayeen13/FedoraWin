@@ -1,6 +1,6 @@
 use crate::shell::{AppearanceState, ThemeMode};
 use crate::windows::frame_recovery::{self, Snapshot};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -70,11 +70,88 @@ struct OriginalFrame {
     changed_text: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct WindowIdentity {
+    hwnd: isize,
+    pid: u32,
+    created: u64,
+}
+
 static FRAME_WATCHER_ENABLED: AtomicBool = AtomicBool::new(false);
 static ORIGINAL_FRAMES: OnceLock<Mutex<HashMap<isize, OriginalFrame>>> = OnceLock::new();
+static FRAME_EXCLUSIONS: OnceLock<Mutex<HashSet<WindowIdentity>>> = OnceLock::new();
 
 fn originals() -> &'static Mutex<HashMap<isize, OriginalFrame>> {
     ORIGINAL_FRAMES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn exclusions() -> &'static Mutex<HashSet<WindowIdentity>> {
+    FRAME_EXCLUSIONS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn window_identity(hwnd: isize) -> Option<WindowIdentity> {
+    if hwnd == 0 || unsafe { IsWindow(hwnd) } == 0 {
+        return None;
+    }
+    let pid = unsafe { window_pid(hwnd) };
+    if pid == 0 {
+        return None;
+    }
+    let created = frame_recovery::process_creation_time(pid)?;
+    Some(WindowIdentity { hwnd, pid, created })
+}
+
+fn identity_is_excluded(identity: WindowIdentity) -> bool {
+    exclusions()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .contains(&identity)
+}
+
+pub fn is_window_excluded(handle: &str) -> Result<bool, String> {
+    let hwnd = handle
+        .parse::<isize>()
+        .map_err(|_| "invalid window handle".to_string())?;
+    let identity =
+        window_identity(hwnd).ok_or_else(|| "window is no longer available".to_string())?;
+    Ok(identity_is_excluded(identity))
+}
+
+pub fn exclude_window(handle: &str) -> Result<bool, String> {
+    let hwnd = handle
+        .parse::<isize>()
+        .map_err(|_| "invalid window handle".to_string())?;
+    let identity =
+        window_identity(hwnd).ok_or_else(|| "window is no longer available".to_string())?;
+
+    let inserted = exclusions()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .insert(identity);
+
+    let mut journal = originals()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    if let Some(original) = journal.get(&hwnd).copied() {
+        if original.pid == identity.pid && original.created == identity.created {
+            journal.remove(&hwnd);
+            unsafe { restore_frame(hwnd, original) };
+            persist_originals(&journal)?;
+        }
+    }
+    Ok(inserted)
+}
+
+pub fn include_window(handle: &str) -> Result<bool, String> {
+    let hwnd = handle
+        .parse::<isize>()
+        .map_err(|_| "invalid window handle".to_string())?;
+    let identity =
+        window_identity(hwnd).ok_or_else(|| "window is no longer available".to_string())?;
+    Ok(exclusions()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .remove(&identity))
 }
 
 fn persist_originals(journal: &HashMap<isize, OriginalFrame>) -> Result<(), String> {
@@ -288,6 +365,12 @@ unsafe fn eligible(hwnd: isize) -> bool {
     if pid == 0 || pid == std::process::id() {
         return false;
     }
+    let Some(identity) = window_identity(hwnd) else {
+        return false;
+    };
+    if identity_is_excluded(identity) {
+        return false;
+    }
     let mut cloaked = 0i32;
     if DwmGetWindowAttribute(
         hwnd,
@@ -390,6 +473,10 @@ pub fn apply_to_top_level_windows(appearance: &AppearanceState) -> Result<usize,
 
 pub fn reset_top_level_windows() {
     FRAME_WATCHER_ENABLED.store(false, Ordering::SeqCst);
+    exclusions()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .clear();
     let mut journal = originals()
         .lock()
         .unwrap_or_else(|error| error.into_inner());
@@ -415,7 +502,10 @@ pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) -> Result<(), S
 
 #[cfg(test)]
 mod tests {
-    use super::{has_known_self_drawn_chrome, palette, self_drawn_chrome_family};
+    use super::{
+        exclusions, has_known_self_drawn_chrome, identity_is_excluded, palette,
+        self_drawn_chrome_family, WindowIdentity,
+    };
     use crate::shell::{AppearanceState, ThemeMode};
 
     fn appearance(theme: ThemeMode) -> AppearanceState {
@@ -454,6 +544,33 @@ mod tests {
             assert!(!has_known_self_drawn_chrome(class), "{class}");
             assert_eq!(self_drawn_chrome_family(class), None, "{class}");
         }
+    }
+
+    #[test]
+    fn per_window_exclusion_is_bound_to_process_lifetime() {
+        let first = WindowIdentity {
+            hwnd: 42,
+            pid: 100,
+            created: 1000,
+        };
+        let recycled = WindowIdentity {
+            hwnd: 42,
+            pid: 200,
+            created: 2000,
+        };
+        {
+            let mut entries = exclusions()
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            entries.clear();
+            entries.insert(first);
+        }
+        assert!(identity_is_excluded(first));
+        assert!(!identity_is_excluded(recycled));
+        exclusions()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clear();
     }
 
     #[test]
