@@ -319,6 +319,7 @@ fn self_drawn_chrome_family(class_name: &str) -> Option<&'static str> {
         .find_map(|(prefix, family)| name.starts_with(prefix).then_some(*family))
 }
 
+#[cfg(test)]
 fn has_known_self_drawn_chrome(class_name: &str) -> bool {
     self_drawn_chrome_family(class_name).is_some()
 }
