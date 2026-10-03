@@ -1,6 +1,6 @@
-# FedoraWin
+# FedoraWin DE
 
-FedoraWin is a native Windows shell layer whose target is the current Fedora Workstation / GNOME interaction model, not a generic Linux theme.
+**FedoraWin DE** is a desktop environment for Windows that targets the current Fedora Workstation / GNOME interaction model, not a generic Linux theme. **FedoraWin Shell** is its shell layer: panel, Activities, app grid, workspaces, calendar, Quick Settings and desktop presentation. Windows/DWM/device APIs remain the underlying platform.
 
 ## Development status
 

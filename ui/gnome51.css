@@ -1,0 +1,476 @@
+/* FedoraWin GNOME 51 fidelity overrides.
+   Loaded after the base shell and Adwaita layers so this file can tighten
+   proportions without changing the native Windows safety architecture. */
+
+:root {
+  --gnome-panel-height: 32px;
+  --gnome-search-width: 420px;
+  --gnome-control-radius: 14px;
+  --gnome-focus-ring: 0 0 0 2px color-mix(in srgb, var(--accent) 72%, white 28%);
+  --gnome-icon-size: 64px;
+}
+
+.panel {
+  min-height: var(--gnome-panel-height);
+  height: var(--gnome-panel-height);
+}
+
+.activities-button {
+  padding-inline: 11px;
+}
+
+.activities {
+  padding-top: 32px;
+  gap: 20px;
+}
+
+.search-shell {
+  width: min(var(--gnome-search-width), calc(100vw - 48px));
+  min-height: 42px;
+  border-radius: 22px;
+}
+
+.workspace-strip--native {
+  gap: 20px;
+}
+
+.workspace-current {
+  min-width: 136px;
+}
+
+.window-grid {
+  gap: 18px;
+}
+
+.window-card {
+  gap: 10px;
+}
+
+.applications-overview {
+  width: min(1180px, 92vw);
+  padding-inline: 5vw;
+}
+
+.applications-grid {
+  grid-template-columns: repeat(6, minmax(96px, 1fr));
+  grid-template-rows: repeat(4, minmax(86px, 1fr));
+  gap: 14px 22px;
+  align-content: center;
+  padding-inline: 4vw;
+}
+
+.app-tile {
+  min-height: 86px;
+  border-radius: 18px;
+  padding: 8px 6px;
+}
+
+.app-icon {
+  width: var(--gnome-icon-size);
+  height: var(--gnome-icon-size);
+  border-radius: 16px;
+}
+
+.app-name {
+  max-width: 118px;
+  line-height: 1.2;
+}
+
+.app-pages {
+  min-height: 24px;
+  gap: 9px;
+}
+
+.dash-wrap {
+  padding-bottom: 18px;
+}
+
+.dash {
+  min-height: 74px;
+  height: 74px;
+  padding: 9px 10px;
+  border-radius: 23px;
+  gap: 7px;
+}
+
+.dash-button {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+}
+
+.dash-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+}
+
+/* Quick Settings: consistent pill geometry and spacing with GNOME's system menu. */
+.quick-card {
+  position: relative;
+  padding: 12px;
+  gap: 10px;
+  overflow: visible;
+}
+
+.quick-header {
+  min-height: 36px;
+}
+
+.sliders {
+  gap: 9px;
+}
+
+.slider-row {
+  height: 44px;
+  padding-inline: 12px;
+}
+
+.quick-grid {
+  gap: 9px;
+}
+
+.quick-item {
+  min-height: 48px;
+}
+
+.quick-tile,
+.quick-more {
+  height: 48px;
+}
+
+.quick-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.background-apps {
+  min-height: 38px;
+  border-radius: var(--gnome-control-radius);
+}
+
+/* Reusable GNOME 51-style detail flyout. The component is intentionally
+   shell-native in appearance while actions remain backed by Windows APIs. */
+.control-flyout {
+  position: absolute;
+  z-index: 30;
+  top: 116px;
+  right: 12px;
+  width: min(340px, calc(100vw - 40px));
+  padding: 12px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--popover-bg, #242424) 94%, white 6%);
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .34), 0 2px 10px rgba(0, 0, 0, .22);
+  transform-origin: top right;
+  animation: gnome-control-flyout-in 140ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.control-flyout.is-closing {
+  opacity: 0;
+  transform: translateY(-4px) scale(.985);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.control-flyout__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 4px 10px 8px;
+}
+
+.control-flyout__header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.control-flyout__header strong {
+  font-size: 15px;
+}
+
+.control-flyout__header small {
+  opacity: .62;
+  font-size: 12px;
+}
+
+.control-flyout__close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.control-flyout__options {
+  display: grid;
+  gap: 6px;
+}
+
+.control-option {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.control-option:hover,
+.control-option:focus-visible {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.control-option.is-selected {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.control-option__indicator {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 38%, transparent);
+  box-sizing: border-box;
+}
+
+.control-option.is-selected .control-option__indicator {
+  border: 5px solid var(--accent);
+}
+
+.control-option__copy {
+  display: grid;
+  gap: 2px;
+}
+
+.control-option__copy strong {
+  font-size: 13px;
+}
+
+.control-option__copy small {
+  opacity: .62;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.control-detail {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+
+.control-detail__indicator {
+  width: 10px;
+  height: 10px;
+  margin-inline: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.control-detail--secondary .control-detail__indicator {
+  background: color-mix(in srgb, currentColor 45%, transparent);
+  box-shadow: none;
+}
+
+.control-option:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
+@keyframes gnome-control-flyout-in {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Calendar/date menu density mirrors current GNOME shell popovers. */
+.date-card {
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 360px);
+}
+
+.notifications-pane {
+  padding: 22px 24px;
+}
+
+.calendar-pane {
+  padding: 18px 20px;
+}
+
+.calendar-grid {
+  grid-auto-rows: 38px;
+  gap: 2px;
+}
+
+/* Keyboard navigation is visible across every shell surface. */
+.panel-button:focus-visible,
+.icon-button:focus-visible,
+.app-tile:focus-visible,
+.dash-button:focus-visible,
+.workspace-nav:focus-visible,
+.quick-tile:focus-visible,
+.quick-more:focus-visible,
+.background-apps:focus-visible,
+.control-flyout__close:focus-visible,
+.control-option:focus-visible,
+.calendar-day:focus-visible,
+.calendar-footer button:focus-visible,
+.app-page-dot:focus-visible {
+  outline: 0;
+  box-shadow: var(--gnome-focus-ring);
+}
+
+/* GNOME 51 expands reduced-motion support throughout the shell. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .001ms !important;
+  }
+}
+
+/* Preserve the 24-item page on compact displays rather than reverting to 8×3. */
+@media (max-width: 1200px) {
+  .activities {
+    padding-inline: 24px;
+  }
+
+  .applications-overview {
+    padding-inline: 3vw;
+  }
+
+  .applications-grid {
+    grid-template-columns: repeat(6, minmax(78px, 1fr));
+    grid-template-rows: repeat(4, minmax(82px, 1fr));
+    gap-inline: 12px;
+    padding-inline: 3vw;
+  }
+
+  .app-icon {
+    width: 58px;
+    height: 58px;
+  }
+}
+
+/* Wireless pause uses the shared GNOME control flyout; do not imply system Airplane Mode. */
+.control-flyout--radios .control-flyout__note {
+  display: block;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: .74;
+}
+
+.control-flyout--radios .control-flyout__error,
+.control-flyout--radios [data-radio-error] {
+  color: #ff8d83;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.control-flyout--radios [hidden] {
+  display: none;
+}
+
+.control-flyout--radios [data-radio-action] {
+  margin-top: 4px;
+  justify-content: center;
+  display: flex;
+  font-weight: 600;
+}
+
+#radio-pause[data-radio-pause="partial"] {
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Native shell hosts must composite: never paint the WebView backing box.
+   Actual rounded cards retain their own Adwaita background and shadow. */
+html,
+body,
+#app,
+.popover {
+  background: transparent !important;
+}
+
+/* Activities is a full desktop stage, not a separate rectangular popup.
+   Dim the real Windows desktop rather than painting a solid fake backdrop. */
+.activities {
+  background:
+    radial-gradient(
+      circle at 50% 112%,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      transparent 38%
+    ),
+    color-mix(in srgb, var(--adw-overview-bg) 92%, transparent);
+}
+
+/* Real Windows Shell icons: only fall back to initials when Shell has none. */
+.app-icon:has(img), .dash-icon:has(img) {
+  background: transparent;
+  box-shadow: none;
+}
+.app-icon img, .dash-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  image-rendering: auto;
+  user-select: none;
+  pointer-events: none;
+}
+.app-icon img { filter: drop-shadow(0 4px 8px rgba(0,0,0,.17)); }
+
+/* Native app-search errors must not silently become a blank overview. */
+.search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  justify-self: center;
+  gap: 10px;
+  min-width: min(360px, 82vw);
+  padding: 28px 34px;
+  text-align: center;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--adw-thumbnail-bg) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--adw-window-fg) 10%, transparent);
+  box-shadow: 0 12px 32px rgba(0,0,0,.12);
+}
+.search-empty__symbol {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+  font-size: 42px;
+}
+.search-empty strong { font-size: 17px; }
+.search-empty small { color: var(--adw-dim); max-width: 30ch; }
