@@ -503,8 +503,8 @@ pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) -> Result<(), S
 #[cfg(test)]
 mod tests {
     use super::{
-        has_known_self_drawn_chrome, identity_is_excluded, palette, self_drawn_chrome_family,
-        exclusions, WindowIdentity,
+        exclusions, has_known_self_drawn_chrome, identity_is_excluded, palette,
+        self_drawn_chrome_family, WindowIdentity,
     };
     use crate::shell::{AppearanceState, ThemeMode};
 
