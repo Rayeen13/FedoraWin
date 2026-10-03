@@ -176,7 +176,9 @@ pub fn set_app_excluded(handle: &str, excluded: bool) -> Result<bool, String> {
     let target_key = frame_policy::process_key(pid)?;
     let changed = frame_policy::set_pid_excluded(pid, excluded)?;
     if excluded {
-        let mut journal = originals().lock().unwrap_or_else(|error| error.into_inner());
+        let mut journal = originals()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let matching: Vec<(isize, OriginalFrame)> = journal
             .iter()
             .filter_map(|(&candidate_hwnd, original)| {
