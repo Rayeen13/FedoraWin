@@ -29,8 +29,10 @@ UCRT64 DLL closure and required GLib/icon data, while
 removed from PATH and rejects any loaded non-Windows module outside the staged
 runtime. The native Adwaita workflow also transfers only that staged runtime to
 a second fresh Windows runner with no MSYS2 setup and launches the real
-Preferences HWND again there. This is CI staging evidence, not a distributable
-beta package.
+Preferences HWND again there. The production Rust launcher recognizes the
+isolated `preferences-runtime/` layout and supplies its local GLib schema and
+icon-data roots to GTK without adding MSYS2 to PATH. This is CI staging
+evidence, not a distributable beta package.
 
 Windows CI must still build and capture both dark/light HWNDs, record the
 temporary process working set, and pass both same-runner and fresh-runner
