@@ -58,7 +58,23 @@ $missing = [System.Collections.Generic.List[string]]::new()
 
 foreach ($line in $dependencyOutput) {
     $text = [string]$line
-    if ($text -match '^\s*([^\s]+\.dll)\s+=>\s+not found\s*
+    if ($text -match '^\s*([^\s]+\.dll)\s+=>\s+not found\s*$') {
+        $missingName = $Matches[1]
+        # Windows API-set forwarders are virtual contracts resolved by the OS and
+        # are not distributable files. ntldd may also miss an actual System32 DLL;
+        # accept that only when Windows proves the file exists.
+        $systemCandidate = Join-Path (Join-Path $env:SystemRoot 'System32') $missingName
+        if ($missingName -match '^(api-ms-win-|ext-ms-win-)' -or
+            (Test-Path -LiteralPath $systemCandidate)) {
+            continue
+        }
+        $missing.Add($text.Trim())
+        continue
+    }
+    if ($text -match '<MODULE MISSING>') {
+        $missing.Add($text.Trim())
+        continue
+    }
     if ($text -notmatch '=>\s+(.+?\.dll)(?:\s+\(0x[0-9A-Fa-f]+\))?\s*$') {
         continue
     }
