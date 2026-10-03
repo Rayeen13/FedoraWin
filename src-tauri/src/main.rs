@@ -307,6 +307,18 @@ fn is_window_frame_excluded(handle: String) -> Result<bool, String> {
     windows::frame::is_window_excluded(&handle)
 }
 #[tauri::command]
+fn set_app_frame_excluded(
+    state: tauri::State<'_, Arc<ShellState>>,
+    handle: String,
+    excluded: bool,
+) -> Result<bool, String> {
+    let changed = windows::frame::set_app_excluded(&handle, excluded)?;
+    if !excluded {
+        windows::frame::apply_to_top_level_windows(&state.snapshot().appearance)?;
+    }
+    Ok(changed)
+}
+#[tauri::command]
 fn refresh_window_frames(state: tauri::State<'_, Arc<ShellState>>) -> Result<usize, String> {
     windows::frame::apply_to_top_level_windows(&state.snapshot().appearance)
         .map_err(|e| e.to_string())
@@ -527,6 +539,7 @@ fn main() {
             exclude_window_frame,
             include_window_frame,
             is_window_frame_excluded,
+            set_app_frame_excluded,
             refresh_window_frames,
             mark_capture_ready
         ])

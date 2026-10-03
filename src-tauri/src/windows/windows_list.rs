@@ -18,6 +18,7 @@ pub struct WindowEntry {
     pub minimized: bool,
     pub desktop_id: Option<String>,
     pub on_current_workspace: bool,
+    pub frame_excluded: bool,
 }
 
 #[link(name = "user32")]
@@ -95,6 +96,7 @@ unsafe extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
             minimized: IsIconic(hwnd) != 0,
             desktop_id: None,
             on_current_workspace: true,
+            frame_excluded: false,
         });
     }
     1
@@ -120,6 +122,7 @@ pub fn list() -> Result<Vec<WindowEntry>, String> {
             window.desktop_id = Some(workspace.desktop_id);
             window.on_current_workspace = workspace.on_current_workspace;
         }
+        window.frame_excluded = super::frame::is_app_excluded(&window.handle).unwrap_or(true);
     }
 
     Ok(windows)
