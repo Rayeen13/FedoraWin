@@ -1,6 +1,6 @@
 use std::env;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 
@@ -52,6 +52,36 @@ fn candidate_paths() -> Vec<PathBuf> {
     paths
 }
 
+fn is_portable_runtime(executable: &Path) -> bool {
+    executable
+        .parent()
+        .and_then(|parent| parent.file_name())
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("preferences-runtime"))
+}
+
+fn configure_command(command: &mut Command, executable: &Path, theme: &str, accent: &str) {
+    if let Some(parent) = executable.parent() {
+        command.current_dir(parent);
+        if is_portable_runtime(executable) {
+            let share = parent.join("share");
+            command
+                .env("GDK_BACKEND", "win32")
+                .env("GSETTINGS_BACKEND", "memory")
+                .env(
+                    "GSETTINGS_SCHEMA_DIR",
+                    share.join("glib-2.0").join("schemas"),
+                )
+                .env("XDG_DATA_DIRS", &share);
+        }
+    }
+
+    command
+        .env("FEDORAWIN_ADWAITA_THEME", theme)
+        .env("FEDORAWIN_ADWAITA_ACCENT", accent)
+        .stdout(Stdio::piped());
+}
+
 fn parse_appearance_line(line: &str) -> Option<(String, String)> {
     let mut fields = line.trim_end().split('\t');
     if fields.next()? != APPEARANCE_PREFIX {
@@ -75,13 +105,7 @@ where
         }
 
         let mut command = Command::new(&executable);
-        if let Some(parent) = executable.parent() {
-            command.current_dir(parent);
-        }
-        command
-            .env("FEDORAWIN_ADWAITA_THEME", theme)
-            .env("FEDORAWIN_ADWAITA_ACCENT", accent)
-            .stdout(Stdio::piped());
+        configure_command(&mut command, &executable, theme, accent);
 
         let mut child = command
             .spawn()
@@ -125,6 +149,64 @@ mod tests {
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| name.eq_ignore_ascii_case("preferences-runtime"))
         }));
+    }
+
+    fn command_env(command: &Command, key: &str) -> Option<String> {
+        command
+            .get_envs()
+            .find(|(name, _)| name.to_string_lossy().eq_ignore_ascii_case(key))
+            .and_then(|(_, value)| value)
+            .map(|value| value.to_string_lossy().into_owned())
+    }
+
+    #[test]
+    fn portable_runtime_configures_local_gtk_data_without_global_path_dependency() {
+        let executable =
+            PathBuf::from(r"C:\FedoraWin\preferences-runtime\fedorawin-preferences.exe");
+        let mut command = Command::new(&executable);
+        configure_command(&mut command, &executable, "dark", "purple");
+
+        assert_eq!(
+            command.get_current_dir(),
+            executable.parent(),
+            "portable Preferences must run from its isolated runtime directory"
+        );
+        assert_eq!(
+            command_env(&command, "GDK_BACKEND").as_deref(),
+            Some("win32")
+        );
+        assert_eq!(
+            command_env(&command, "GSETTINGS_BACKEND").as_deref(),
+            Some("memory")
+        );
+        assert_eq!(
+            command_env(&command, "GSETTINGS_SCHEMA_DIR").as_deref(),
+            Some(r"C:\FedoraWin\preferences-runtime\share\glib-2.0\schemas")
+        );
+        assert_eq!(
+            command_env(&command, "XDG_DATA_DIRS").as_deref(),
+            Some(r"C:\FedoraWin\preferences-runtime\share")
+        );
+        assert_eq!(
+            command_env(&command, "FEDORAWIN_ADWAITA_THEME").as_deref(),
+            Some("dark")
+        );
+        assert_eq!(
+            command_env(&command, "FEDORAWIN_ADWAITA_ACCENT").as_deref(),
+            Some("purple")
+        );
+        assert_eq!(command_env(&command, "PATH"), None);
+    }
+
+    #[test]
+    fn adjacent_development_preferences_does_not_override_gtk_data_roots() {
+        let executable = PathBuf::from(r"C:\FedoraWin\fedorawin-preferences.exe");
+        let mut command = Command::new(&executable);
+        configure_command(&mut command, &executable, "light", "blue");
+
+        assert_eq!(command_env(&command, "GSETTINGS_SCHEMA_DIR"), None);
+        assert_eq!(command_env(&command, "XDG_DATA_DIRS"), None);
+        assert_eq!(command_env(&command, "GDK_BACKEND"), None);
     }
 
     #[test]
