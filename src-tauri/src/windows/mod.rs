@@ -178,8 +178,12 @@ pub mod frame {
         Ok(0)
     }
     pub fn reset_top_level_windows() {}
-    pub fn is_app_excluded(_: &str) -> Result<bool, String> { Ok(false) }
-    pub fn set_app_excluded(_: &str, _: bool) -> Result<bool, String> { Ok(false) }
+    pub fn is_app_excluded(_: &str) -> Result<bool, String> {
+        Ok(false)
+    }
+    pub fn set_app_excluded(_: &str, _: bool) -> Result<bool, String> {
+        Ok(false)
+    }
     pub fn start_frame_watcher<T>(_: Arc<T>)
     where
         T: Send + Sync + 'static,
