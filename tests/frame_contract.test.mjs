@@ -106,3 +106,20 @@ test('per-window frame exclusions are lifetime-bound and immediately reversible'
   assert.match(runtime, /fn is_window_frame_excluded\(handle: String\)/);
   assert.match(runtime, /exclude_window_frame,\s*include_window_frame,\s*is_window_frame_excluded,/);
 });
+
+const windowsList = readFileSync(new URL('../src-tauri/src/windows/windows_list.rs', import.meta.url), 'utf8');
+const desktopPresentation = readFileSync(new URL('../src-tauri/src/windows/desktop_presentation.rs', import.meta.url), 'utf8');
+const appIcons = readFileSync(new URL('../src-tauri/src/windows/app_icons.rs', import.meta.url), 'utf8');
+const virtualDesktop = readFileSync(new URL('../src-tauri/src/windows/virtual_desktop.rs', import.meta.url), 'utf8');
+
+test('shared Win32 FFI declarations use one ABI-compatible signature', () => {
+  for (const source of [frame, windowsList, desktopPresentation]) {
+    assert.match(source, /fn EnumWindows\(callback: unsafe extern "system" fn\(isize, isize\) -> i32, (?:lparam|data): isize\) -> i32;/);
+  }
+  assert.match(frame, /unsafe extern "system" fn apply_callback/);
+  assert.match(windowsList, /unsafe extern "system" fn enum_callback/);
+  for (const source of [appIcons, virtualDesktop]) {
+    assert.match(source, /fn CoInitializeEx\(reserved: \*mut c_void, (?:model|apartment): u32\) -> i32;/);
+  }
+  assert.match(appIcons, /CoInitializeEx\(null_mut\(\), COINIT_APARTMENTTHREADED\)/);
+});
