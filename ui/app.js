@@ -261,6 +261,7 @@ function renderWindowOverview() {
       <div class="window-card__preview">
         <div class="window-card__bar">
           <span class="window-card__bar-title">${escapeHtml(w.title)}</span>
+          <button class="window-card__frame-policy${w.frameExcluded ? ' is-excluded' : ''}" data-frame-policy-window="${escapeHtml(w.handle)}" data-frame-policy-excluded="${w.frameExcluded ? 'true' : 'false'}" aria-pressed="${w.frameExcluded ? 'true' : 'false'}" aria-label="${w.frameExcluded ? 'Allow FedoraWin frame styling for this app' : 'Never style this app'}" title="${w.frameExcluded ? 'Allow FedoraWin frame styling for this app' : 'Never style this app'}">${w.frameExcluded ? '⊘' : '○'}</button>
           <button class="window-card__close" data-close-window="${escapeHtml(w.handle)}" aria-label="Close ${escapeHtml(w.title)}">×</button>
         </div>
         <button class="window-card__live-preview" data-window="${escapeHtml(w.handle)}" data-thumbnail-window="${escapeHtml(w.handle)}" aria-label="Open ${escapeHtml(w.title)}"></button>
@@ -381,6 +382,15 @@ function bindActivitiesContent() {
     event.stopPropagation();
     await call('close_window', { handle: button.dataset.closeWindow });
     setTimeout(refreshNativeWindows, 120);
+  }));
+  content.querySelectorAll('[data-frame-policy-window]').forEach(button => button.addEventListener('click', async event => {
+    event.stopPropagation();
+    const excluded = button.dataset.framePolicyExcluded === 'true';
+    await call('set_app_frame_excluded', {
+      handle: button.dataset.framePolicyWindow,
+      excluded: !excluded
+    });
+    await refreshNativeWindows();
   }));
   content.querySelectorAll('[data-workspace-direction]').forEach(button => button.addEventListener('click', async () => {
     const direction = Number(button.dataset.workspaceDirection);
