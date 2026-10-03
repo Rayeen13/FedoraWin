@@ -142,3 +142,23 @@ test('persistent app exclusions are local, atomic, fail-closed, and user reversi
   assert.match(activitiesUi, /set_app_frame_excluded/);
   assert.match(activitiesUi, /Never style this app/);
 });
+
+
+test('DWM fallback rejects protected Windows shell and security process identities', () => {
+  assert.match(frame, /PROTECTED_PROCESS_NAMES/);
+  for (const process of [
+    'shellexperiencehost\\.exe',
+    'startmenuexperiencehost\\.exe',
+    'searchhost\\.exe',
+    'lockapp\\.exe',
+    'logonui\\.exe',
+    'consent\\.exe',
+    'securityhealthservice\\.exe'
+  ]) {
+    assert.match(frame, new RegExp(process));
+  }
+  assert.match(frame, /frame_policy::process_key\(pid\)/);
+  assert.match(frame, /protected_process_family\(&process_key\)\.is_some\(\)/);
+  assert.match(framePolicy, /pub fn is_process_key_excluded\(process_key: &str\)/);
+  assert.doesNotMatch(frame, /\("explorer\.exe",/);
+});
