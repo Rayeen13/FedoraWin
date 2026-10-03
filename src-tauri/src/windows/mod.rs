@@ -16,6 +16,8 @@ pub mod display;
 #[cfg(windows)]
 pub mod frame;
 #[cfg(windows)]
+pub mod frame_policy;
+#[cfg(windows)]
 pub mod frame_recovery;
 #[cfg(windows)]
 pub mod hotkeys;
@@ -176,6 +178,12 @@ pub mod frame {
         Ok(0)
     }
     pub fn reset_top_level_windows() {}
+    pub fn is_app_excluded(_: &str) -> Result<bool, String> {
+        Ok(false)
+    }
+    pub fn set_app_excluded(_: &str, _: bool) -> Result<bool, String> {
+        Ok(false)
+    }
     pub fn start_frame_watcher<T>(_: Arc<T>)
     where
         T: Send + Sync + 'static,
@@ -221,6 +229,7 @@ pub mod windows_list {
         pub minimized: bool,
         pub desktop_id: Option<String>,
         pub on_current_workspace: bool,
+        pub frame_excluded: bool,
     }
     pub fn list() -> Result<Vec<WindowEntry>, String> {
         Ok(Vec::new())

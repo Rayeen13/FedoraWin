@@ -49,6 +49,8 @@ test('System restores forced caption colors without changing real frames', () =>
 });
 
 const recovery = readFileSync(new URL('../src-tauri/src/windows/frame_recovery.rs', import.meta.url), 'utf8');
+const framePolicy = readFileSync(new URL('../src-tauri/src/windows/frame_policy.rs', import.meta.url), 'utf8');
+const activitiesUi = readFileSync(new URL('../ui/app.js', import.meta.url), 'utf8');
 
 test('frame guardian is initialized before the watcher can mutate foreign HWNDs', () => {
   assert.match(frame, /AtomicBool::new\(false\)/);
@@ -122,4 +124,21 @@ test('shared Win32 FFI declarations use one ABI-compatible signature', () => {
     assert.match(source, /fn CoInitializeEx\(reserved: \*mut c_void, (?:model|apartment): u32\) -> i32;/);
   }
   assert.match(appIcons, /CoInitializeEx\(null_mut\(\), COINIT_APARTMENTTHREADED\)/);
+});
+
+
+test('persistent app exclusions are local, atomic, fail-closed, and user reversible', () => {
+  assert.match(framePolicy, /LOCALAPPDATA/);
+  assert.match(framePolicy, /frame-exclusions\.json/);
+  assert.match(framePolicy, /QueryFullProcessImageNameW/);
+  assert.match(framePolicy, /MOVEFILE_REPLACE_EXISTING \| MOVEFILE_WRITE_THROUGH/);
+  assert.match(frame, /let Ok\(app_excluded\) = frame_policy::is_pid_excluded\(pid\) else \{\s*return false;/);
+  assert.match(frame, /pub fn set_app_excluded\(handle: &str, excluded: bool\)/);
+  assert.match(frame, /restore_frame\(candidate_hwnd, original\)/);
+  assert.match(windowsList, /pub frame_excluded: bool/);
+  assert.match(windowsList, /is_app_excluded\(&window\.handle\)\.unwrap_or\(true\)/);
+  assert.match(runtime, /fn set_app_frame_excluded[\s\S]*excluded: bool/);
+  assert.match(activitiesUi, /data-frame-policy-window=/);
+  assert.match(activitiesUi, /set_app_frame_excluded/);
+  assert.match(activitiesUi, /Never style this app/);
 });

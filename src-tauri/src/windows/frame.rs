@@ -1,4 +1,5 @@
 use crate::shell::{AppearanceState, ThemeMode};
+use crate::windows::frame_policy;
 use crate::windows::frame_recovery::{self, Snapshot};
 use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
@@ -152,6 +153,48 @@ pub fn include_window(handle: &str) -> Result<bool, String> {
         .lock()
         .unwrap_or_else(|error| error.into_inner())
         .remove(&identity))
+}
+
+pub fn is_app_excluded(handle: &str) -> Result<bool, String> {
+    let hwnd = handle
+        .parse::<isize>()
+        .map_err(|_| "invalid window handle".to_string())?;
+    if hwnd == 0 || unsafe { IsWindow(hwnd) } == 0 {
+        return Err("window is no longer available".into());
+    }
+    frame_policy::is_pid_excluded(unsafe { window_pid(hwnd) })
+}
+
+pub fn set_app_excluded(handle: &str, excluded: bool) -> Result<bool, String> {
+    let hwnd = handle
+        .parse::<isize>()
+        .map_err(|_| "invalid window handle".to_string())?;
+    if hwnd == 0 || unsafe { IsWindow(hwnd) } == 0 {
+        return Err("window is no longer available".into());
+    }
+    let pid = unsafe { window_pid(hwnd) };
+    let target_key = frame_policy::process_key(pid)?;
+    let changed = frame_policy::set_pid_excluded(pid, excluded)?;
+    if excluded {
+        let mut journal = originals()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let matching: Vec<(isize, OriginalFrame)> = journal
+            .iter()
+            .filter_map(|(&candidate_hwnd, original)| {
+                frame_policy::process_key(original.pid)
+                    .ok()
+                    .filter(|key| key == &target_key)
+                    .map(|_| (candidate_hwnd, *original))
+            })
+            .collect();
+        for (candidate_hwnd, original) in matching {
+            journal.remove(&candidate_hwnd);
+            unsafe { restore_frame(candidate_hwnd, original) };
+        }
+        persist_originals(&journal)?;
+    }
+    Ok(changed)
 }
 
 fn persist_originals(journal: &HashMap<isize, OriginalFrame>) -> Result<(), String> {
@@ -370,6 +413,12 @@ unsafe fn eligible(hwnd: isize) -> bool {
         return false;
     };
     if identity_is_excluded(identity) {
+        return false;
+    }
+    let Ok(app_excluded) = frame_policy::is_pid_excluded(pid) else {
+        return false;
+    };
+    if app_excluded {
         return false;
     }
     let mut cloaked = 0i32;
