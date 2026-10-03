@@ -132,7 +132,8 @@ test('persistent app exclusions are local, atomic, fail-closed, and user reversi
   assert.match(framePolicy, /frame-exclusions\.json/);
   assert.match(framePolicy, /QueryFullProcessImageNameW/);
   assert.match(framePolicy, /MOVEFILE_REPLACE_EXISTING \| MOVEFILE_WRITE_THROUGH/);
-  assert.match(frame, /let Ok\(app_excluded\) = frame_policy::is_pid_excluded\(pid\) else \{\s*return false;/);
+  assert.match(frame, /let Ok\(process_key\) = frame_policy::process_key\(pid\) else \{\s*return false;/);
+  assert.match(frame, /let Ok\(app_excluded\) = frame_policy::is_process_key_excluded\(&process_key\) else \{\s*return false;/);
   assert.match(frame, /pub fn set_app_excluded\(handle: &str, excluded: bool\)/);
   assert.match(frame, /restore_frame\(candidate_hwnd, original\)/);
   assert.match(windowsList, /pub frame_excluded: bool/);
