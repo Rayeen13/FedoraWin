@@ -161,9 +161,8 @@ mod tests {
 
     #[test]
     fn portable_runtime_configures_local_gtk_data_without_global_path_dependency() {
-        let executable = PathBuf::from(
-            r"C:\FedoraWin\preferences-runtime\fedorawin-preferences.exe",
-        );
+        let executable =
+            PathBuf::from(r"C:\FedoraWin\preferences-runtime\fedorawin-preferences.exe");
         let mut command = Command::new(&executable);
         configure_command(&mut command, &executable, "dark", "purple");
 
@@ -172,7 +171,10 @@ mod tests {
             executable.parent(),
             "portable Preferences must run from its isolated runtime directory"
         );
-        assert_eq!(command_env(&command, "GDK_BACKEND").as_deref(), Some("win32"));
+        assert_eq!(
+            command_env(&command, "GDK_BACKEND").as_deref(),
+            Some("win32")
+        );
         assert_eq!(
             command_env(&command, "GSETTINGS_BACKEND").as_deref(),
             Some("memory")
