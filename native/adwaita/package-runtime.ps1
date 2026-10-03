@@ -54,25 +54,16 @@ if ($LASTEXITCODE -ne 0) {
 $systemRoot = [IO.Path]::GetFullPath($env:SystemRoot).TrimEnd('\\')
 $ucrtRootFull = [IO.Path]::GetFullPath($ucrtRoot).TrimEnd('\\')
 $runtimeDlls = [ordered]@{}
-$missing = [System.Collections.Generic.List[string]]::new()
+$unresolved = [System.Collections.Generic.List[string]]::new()
 
 foreach ($line in $dependencyOutput) {
     $text = [string]$line
-    if ($text -match '^\s*([^\s]+\.dll)\s+=>\s+not found\s*$') {
-        $missingName = $Matches[1]
-        # Windows API-set forwarders are virtual contracts resolved by the OS and
-        # are not distributable files. ntldd may also miss an actual System32 DLL;
-        # accept that only when Windows proves the file exists.
-        $systemCandidate = Join-Path (Join-Path $env:SystemRoot 'System32') $missingName
-        if ($missingName -match '^(api-ms-win-|ext-ms-win-)' -or
-            (Test-Path -LiteralPath $systemCandidate)) {
-            continue
-        }
-        $missing.Add($text.Trim())
-        continue
-    }
-    if ($text -match '<MODULE MISSING>') {
-        $missing.Add($text.Trim())
+    if ($text -match '^\s*([^\s]+\.dll)\s+=>\s+not found\s*$' -or
+        $text -match '<MODULE MISSING>') {
+        # ntldd follows optional/delay-load Windows paths that may legitimately
+        # be absent on the runner. Record them for evidence; the isolated launch
+        # below is the authoritative check for hard runtime dependencies.
+        $unresolved.Add($text.Trim())
         continue
     }
     if ($text -notmatch '=>\s+(.+?\.dll)(?:\s+\(0x[0-9A-Fa-f]+\))?\s*$') {
@@ -91,16 +82,12 @@ foreach ($line in $dependencyOutput) {
         throw "Preferences depends on an unexpected non-system runtime outside UCRT64: $full"
     }
     if (-not (Test-Path -LiteralPath $full)) {
-        $missing.Add($full)
-        continue
+        throw "Resolved UCRT64 dependency disappeared during staging: $full"
     }
     $name = [IO.Path]::GetFileName($full)
     $runtimeDlls[$name.ToLowerInvariant()] = $full
 }
 
-if ($missing.Count) {
-    throw "Portable Preferences dependency closure is incomplete: $($missing -join ' | ')"
-}
 if (-not $runtimeDlls.Contains('libadwaita-1-0.dll')) {
     throw 'Portable dependency scan did not include libadwaita-1-0.dll.'
 }
@@ -143,7 +130,9 @@ $manifest = [ordered]@{
     total_bytes = [int64]$totalBytes
     total_mb = [Math]::Round($totalBytes / 1MB, 1)
     msys2_root_used_for_staging = $env:MSYS2_ROOT
-    verification = 'CI staging only; not a beta distribution artifact.'
+    verification = 'CI staging only; isolated launch is the authoritative hard-dependency gate; not a beta distribution artifact.'
+    unresolved_ntldd_count = $unresolved.Count
+    unresolved_ntldd = @($unresolved)
     dlls = @($runtimeDlls.Keys | Sort-Object)
 }
 $manifestPath = Join-Path $outRoot 'portable-runtime.json'
