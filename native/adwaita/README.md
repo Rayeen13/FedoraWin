@@ -21,12 +21,17 @@ FEDORAWIN_ADWAITA_THEME=dark ./native/adwaita/out/fedorawin-preferences.exe
 ```
 
 Use FEDORAWIN_ADWAITA_THEME=light or omit it for system mode.
-Run with UCRT64 DLLs on PATH. The Preferences executable is the first
-**FedoraWin-owned candidate surface** intended to replace Fluent-looking
-configuration UI for Beta. It is not yet wired into the production shell or
-beta installer, so do not present it as shipped integration. Windows CI must
-build and capture both dark/light HWNDs and record the temporary process
-working set before the surface counts as verified.
+The production shell can launch this Preferences surface on demand. The beta
+installer/runtime package is still gated on a self-contained Windows runtime:
+`package-runtime.ps1` stages `preferences-runtime/` with the recursive
+UCRT64 DLL closure and required GLib/icon data, while
+`check-portable-runtime.ps1` launches that staged executable with MSYS2
+removed from PATH and rejects any loaded non-Windows module outside the staged
+runtime. This is CI staging evidence, not a distributable beta package.
+
+Windows CI must still build and capture both dark/light HWNDs, record the
+temporary process working set, and pass the portable-runtime isolation check
+before packaging progress is treated as verified.
 
 The temporary GTK surface has its own 300 MB CI ceiling. That measurement is
 separate from the stricter idle-shell process-tree budget and does not include

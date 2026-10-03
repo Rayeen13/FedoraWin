@@ -23,6 +23,16 @@ fn candidate_paths() -> Vec<PathBuf> {
 
     if let Ok(current_exe) = env::current_exe() {
         if let Some(parent) = current_exe.parent() {
+            // Shipping layout keeps GTK/libadwaita isolated from the lightweight
+            // shell so those DLLs are loaded only when Preferences is opened.
+            push_unique(
+                &mut paths,
+                parent
+                    .join("preferences-runtime")
+                    .join("fedorawin-preferences.exe"),
+            );
+            // Keep the adjacent executable path as a compatibility fallback for
+            // development builds and older staging layouts.
             push_unique(&mut paths, parent.join("fedorawin-preferences.exe"));
         }
     }
@@ -108,6 +118,12 @@ mod tests {
             path.file_name()
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| name.eq_ignore_ascii_case("fedorawin-preferences.exe"))
+        }));
+        assert!(candidates.iter().any(|path| {
+            path.parent()
+                .and_then(|parent| parent.file_name())
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.eq_ignore_ascii_case("preferences-runtime"))
         }));
     }
 
