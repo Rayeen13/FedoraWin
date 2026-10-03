@@ -157,12 +157,17 @@ pub fn process_key(pid: u32) -> Result<String, String> {
     Ok(key)
 }
 
-pub fn is_pid_excluded(pid: u32) -> Result<bool, String> {
-    let key = process_key(pid)?;
+pub fn is_process_key_excluded(process_key: &str) -> Result<bool, String> {
+    let key = normalize_path(Path::new(process_key));
     Ok(policy()?
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .contains(&key))
+}
+
+pub fn is_pid_excluded(pid: u32) -> Result<bool, String> {
+    let key = process_key(pid)?;
+    is_process_key_excluded(&key)
 }
 
 pub fn set_pid_excluded(pid: u32, excluded: bool) -> Result<bool, String> {
