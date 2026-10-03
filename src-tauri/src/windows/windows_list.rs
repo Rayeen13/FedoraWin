@@ -22,7 +22,7 @@ pub struct WindowEntry {
 
 #[link(name = "user32")]
 extern "system" {
-    fn EnumWindows(callback: extern "system" fn(isize, isize) -> i32, lparam: isize) -> i32;
+    fn EnumWindows(callback: unsafe extern "system" fn(isize, isize) -> i32, lparam: isize) -> i32;
     fn IsWindow(hwnd: isize) -> i32;
     fn IsWindowVisible(hwnd: isize) -> i32;
     fn IsIconic(hwnd: isize) -> i32;
@@ -68,7 +68,7 @@ unsafe fn eligible(hwnd: isize) -> bool {
     GetWindowTextLengthW(hwnd) > 0
 }
 
-extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
+unsafe extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
     let windows = unsafe { &mut *(lparam as *mut Vec<WindowEntry>) };
     unsafe {
         if !eligible(hwnd) {

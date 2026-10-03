@@ -48,7 +48,7 @@ struct BitmapInfo {
 
 #[link(name = "ole32")]
 extern "system" {
-    fn CoInitializeEx(reserved: *const c_void, model: u32) -> i32;
+    fn CoInitializeEx(reserved: *mut c_void, model: u32) -> i32;
     fn CoUninitialize();
     fn CoTaskMemFree(memory: *mut c_void);
 }
@@ -134,7 +134,7 @@ pub fn icon_data_uri(app_id: &str) -> Option<String> {
 }
 
 unsafe fn extract(app_id: &str) -> Option<String> {
-    let initialized = CoInitializeEx(null(), COINIT_APARTMENTTHREADED) >= 0;
+    let initialized = CoInitializeEx(null_mut(), COINIT_APARTMENTTHREADED) >= 0;
     // RPC_E_CHANGED_MODE means COM was already initialized in another mode.
     // Keep the caller's COM apartment, and only uninitialize our own.
     let result = extract_in_apartment(app_id);

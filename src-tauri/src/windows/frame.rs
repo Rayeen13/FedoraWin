@@ -28,7 +28,7 @@ const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;
 
 #[link(name = "user32")]
 extern "system" {
-    fn EnumWindows(callback: extern "system" fn(isize, isize) -> i32, lparam: isize) -> i32;
+    fn EnumWindows(callback: unsafe extern "system" fn(isize, isize) -> i32, lparam: isize) -> i32;
     fn IsWindowVisible(hwnd: isize) -> i32;
     fn IsWindow(hwnd: isize) -> i32;
     fn IsIconic(hwnd: isize) -> i32;
@@ -390,7 +390,7 @@ struct EnumContext {
     count: usize,
 }
 
-extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
+unsafe extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
     let ctx = unsafe { &mut *(lparam as *mut EnumContext) };
     unsafe {
         let is_eligible = eligible(hwnd);
