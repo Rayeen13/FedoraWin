@@ -32,9 +32,7 @@ foreach ($required in @($exe, $manifestPath)) {
         throw "Portable runtime staging output is missing: $required"
     }
 }
-if (-not $env:MSYS2_ROOT) {
-    throw 'MSYS2_ROOT must come from setup-msys2 output.'
-}
+$msysRootValue = [Environment]::GetEnvironmentVariable('MSYS2_ROOT')
 
 function Find-PreferencesWindow {
     param([int]$ProcessId)
@@ -103,7 +101,11 @@ try {
     $modules = @(Get-Process -Id $process.Id -Module -ErrorAction Stop)
     $runtimeRoot = [IO.Path]::GetFullPath($runtime).TrimEnd('\\')
     $windowsRoot = [IO.Path]::GetFullPath($env:SystemRoot).TrimEnd('\\')
-    $msysRoot = [IO.Path]::GetFullPath($env:MSYS2_ROOT).TrimEnd('\\')
+    $msysRoot = if ($msysRootValue) {
+        [IO.Path]::GetFullPath($msysRootValue).TrimEnd('\\')
+    } else {
+        $null
+    }
     $unexpected = [System.Collections.Generic.List[string]]::new()
     foreach ($module in $modules) {
         $path = $module.FileName
@@ -117,12 +119,15 @@ try {
     if ($unexpected.Count) {
         throw "Portable Preferences loaded modules outside its staged runtime or Windows: $($unexpected -join ' | ')"
     }
-    if ($modules.FileName | Where-Object { $_ -and ([IO.Path]::GetFullPath($_)).StartsWith($msysRoot, [StringComparison]::OrdinalIgnoreCase) }) {
+    if ($msysRoot -and ($modules.FileName | Where-Object {
+        $_ -and ([IO.Path]::GetFullPath($_)).StartsWith($msysRoot, [StringComparison]::OrdinalIgnoreCase)
+    })) {
         throw 'Portable Preferences still loaded a module directly from the MSYS2 installation.'
     }
 
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    Write-Host "PORTABLE VERIFIED: FedoraWin Preferences HWND launched with MSYS2 removed from PATH; staged size=$($manifest.total_mb) MB; loaded modules=$($modules.Count)."
+    $runnerMode = if ($msysRoot) { 'build runner with MSYS2 removed from PATH' } else { 'fresh runner with no MSYS2 setup' }
+    Write-Host "PORTABLE VERIFIED ($runnerMode): FedoraWin Preferences HWND launched from staged runtime; staged size=$($manifest.total_mb) MB; loaded modules=$($modules.Count)."
 } finally {
     if ($process -and -not $process.HasExited) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue

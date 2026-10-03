@@ -27,11 +27,15 @@ installer/runtime package is still gated on a self-contained Windows runtime:
 UCRT64 DLL closure and required GLib/icon data, while
 `check-portable-runtime.ps1` launches that staged executable with MSYS2
 removed from PATH and rejects any loaded non-Windows module outside the staged
-runtime. This is CI staging evidence, not a distributable beta package.
+runtime. The native Adwaita workflow also transfers only that staged runtime to
+a second fresh Windows runner with no MSYS2 setup and launches the real
+Preferences HWND again there. This is CI staging evidence, not a distributable
+beta package.
 
 Windows CI must still build and capture both dark/light HWNDs, record the
-temporary process working set, and pass the portable-runtime isolation check
-before packaging progress is treated as verified.
+temporary process working set, and pass both same-runner and fresh-runner
+portable-runtime isolation checks before packaging progress is treated as
+verified.
 
 The temporary GTK surface has its own 300 MB CI ceiling. That measurement is
 separate from the stricter idle-shell process-tree budget and does not include
