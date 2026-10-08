@@ -2,7 +2,13 @@ name: Windows CI
 
 on:
   push:
-    branches: [main, feat/gnome-shell-native, dev/gnome-native-20260914]
+    branches:
+      - main
+      - feat/gnome-shell-native
+      - dev/gnome-native-20260914
+      - 'feat/**'
+      - 'fix/**'
+      - 'test/**'
   pull_request:
 
 permissions:
