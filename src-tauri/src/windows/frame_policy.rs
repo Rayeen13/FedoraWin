@@ -72,7 +72,11 @@ fn load_policy_from_path(path: &Path) -> Result<Mutex<HashSet<String>>, String> 
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return Ok(Mutex::new(HashSet::new()));
         }
-        Err(e) => return Err(format!("could not inspect persistent frame exclusions: {e}")),
+        Err(e) => {
+            return Err(format!(
+                "could not inspect persistent frame exclusions: {e}"
+            ))
+        }
     }
     let bytes =
         fs::read(path).map_err(|e| format!("could not read persistent frame exclusions: {e}"))?;
