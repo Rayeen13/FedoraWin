@@ -362,6 +362,32 @@ fn self_drawn_chrome_family(class_name: &str) -> Option<&'static str> {
         .find_map(|(prefix, family)| name.starts_with(prefix).then_some(*family))
 }
 
+// DWM styling is deliberately more conservative around Windows-owned shell,
+// sign-in/elevation, and security surfaces. These are not ordinary app chrome
+// and FedoraWin has no reason to write cosmetic attributes to them.
+const PROTECTED_PROCESS_NAMES: [(&str, &str); 9] = [
+    ("shellexperiencehost.exe", "Windows Shell Experience"),
+    ("startmenuexperiencehost.exe", "Windows Start menu"),
+    ("searchhost.exe", "Windows Search"),
+    ("searchapp.exe", "Windows Search (legacy)"),
+    ("lockapp.exe", "Windows lock screen"),
+    ("logonui.exe", "Windows sign-in UI"),
+    ("consent.exe", "Windows elevation consent"),
+    ("securityhealthservice.exe", "Windows Security service"),
+    ("securityhealthsystray.exe", "Windows Security tray"),
+];
+
+fn protected_process_family(process_key: &str) -> Option<&'static str> {
+    let name = process_key
+        .rsplit_once('\\')
+        .map(|(_, name)| name)
+        .unwrap_or(process_key)
+        .to_ascii_lowercase();
+    PROTECTED_PROCESS_NAMES
+        .iter()
+        .find_map(|(candidate, family)| (name == *candidate).then_some(*family))
+}
+
 #[cfg(test)]
 fn has_known_self_drawn_chrome(class_name: &str) -> bool {
     self_drawn_chrome_family(class_name).is_some()
@@ -415,7 +441,13 @@ unsafe fn eligible(hwnd: isize) -> bool {
     if identity_is_excluded(identity) {
         return false;
     }
-    let Ok(app_excluded) = frame_policy::is_pid_excluded(pid) else {
+    let Ok(process_key) = frame_policy::process_key(pid) else {
+        return false;
+    };
+    if protected_process_family(&process_key).is_some() {
+        return false;
+    }
+    let Ok(app_excluded) = frame_policy::is_process_key_excluded(&process_key) else {
         return false;
     };
     if app_excluded {
@@ -554,7 +586,7 @@ pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) -> Result<(), S
 mod tests {
     use super::{
         exclusions, has_known_self_drawn_chrome, identity_is_excluded, palette,
-        self_drawn_chrome_family, WindowIdentity,
+        protected_process_family, self_drawn_chrome_family, WindowIdentity,
     };
     use crate::shell::{AppearanceState, ThemeMode};
 
@@ -594,6 +626,26 @@ mod tests {
             assert!(!has_known_self_drawn_chrome(class), "{class}");
             assert_eq!(self_drawn_chrome_family(class), None, "{class}");
         }
+    }
+
+    #[test]
+    fn protected_windows_processes_are_rejected_by_identity() {
+        assert_eq!(
+            protected_process_family(r"C:\Windows\SystemApps\ShellExperienceHost.exe"),
+            Some("Windows Shell Experience")
+        );
+        assert_eq!(
+            protected_process_family(r"C:\Windows\System32\consent.exe"),
+            Some("Windows elevation consent")
+        );
+        assert_eq!(
+            protected_process_family(r"C:\Program Files\Example\editor.exe"),
+            None
+        );
+        // File Explorer is not process-wide vetoed here: the DWM fallback may
+        // style ordinary Explorer file windows, while shell/taskbar HWNDs are
+        // guarded independently and future injection remains prohibited.
+        assert_eq!(protected_process_family(r"C:\Windows\explorer.exe"), None);
     }
 
     #[test]
