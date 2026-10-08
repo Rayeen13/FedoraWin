@@ -59,11 +59,20 @@ fn policy_path() -> Result<PathBuf, String> {
 
 fn load_policy() -> Result<Mutex<HashSet<String>>, String> {
     let path = policy_path()?;
-    if !path.exists() {
-        return Ok(Mutex::new(HashSet::new()));
-    }
-    let bytes =
-        fs::read(&path).map_err(|e| format!("could not read persistent frame exclusions: {e}"))?;
+    load_policy_from_path(&path)
+}
+
+fn load_policy_from_path(path: &Path) -> Result<Mutex<HashSet<String>>, String> {
+    // Path::exists() treats metadata errors as "does not exist". That could
+    // silently discard a user's exclusions after a permission or I/O failure.
+    // Only a genuine NotFound means that no policy has been created yet.
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Mutex::new(HashSet::new()));
+        }
+        Err(e) => return Err(format!("could not read persistent frame exclusions: {e}")),
+    };
     let stored: StoredPolicy = serde_json::from_slice(&bytes)
         .map_err(|e| format!("persistent frame exclusions are invalid: {e}"))?;
     if stored.version != POLICY_VERSION {
@@ -195,8 +204,9 @@ pub fn set_pid_excluded(pid: u32, excluded: bool) -> Result<bool, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_path, StoredPolicy, POLICY_VERSION};
+    use super::{load_policy_from_path, normalize_path, StoredPolicy, POLICY_VERSION};
     use std::path::Path;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn executable_keys_are_case_and_separator_insensitive() {
@@ -204,6 +214,40 @@ mod tests {
             normalize_path(Path::new(r"C:/Apps/Foo/Foo.EXE")),
             normalize_path(Path::new(r"c:\apps\foo\foo.exe"))
         );
+    }
+
+    #[test]
+    fn missing_policy_is_empty_but_unreadable_policy_fails_closed() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock is valid")
+            .as_nanos();
+        let missing = std::env::temp_dir().join(format!(
+            "fedorawin-missing-frame-policy-{}-{nonce}.json",
+            std::process::id()
+        ));
+        let empty = load_policy_from_path(&missing).expect("no policy is permitted");
+        assert!(empty.lock().expect("policy mutex").is_empty());
+
+        // A directory cannot be read as a JSON file. This previously could
+        // look like a missing policy on metadata errors; now it fails closed.
+        assert!(load_policy_from_path(&std::env::temp_dir()).is_err());
+    }
+
+    #[test]
+    fn corrupt_policy_fails_closed() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock is valid")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "fedorawin-corrupt-frame-policy-{}-{nonce}.json",
+            std::process::id()
+        ));
+        std::fs::write(&path, b"{not valid json").expect("create corrupted test policy");
+        let result = load_policy_from_path(&path);
+        std::fs::remove_file(&path).expect("cleanup corrupted test policy");
+        assert!(result.is_err());
     }
 
     #[test]
