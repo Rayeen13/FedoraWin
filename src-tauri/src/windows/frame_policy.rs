@@ -63,16 +63,19 @@ fn load_policy() -> Result<Mutex<HashSet<String>>, String> {
 }
 
 fn load_policy_from_path(path: &Path) -> Result<Mutex<HashSet<String>>, String> {
-    // Path::exists() treats metadata errors as "does not exist". That could
-    // silently discard a user's exclusions after a permission or I/O failure.
-    // Only a genuine NotFound means that no policy has been created yet.
-    let bytes = match fs::read(path) {
-        Ok(bytes) => bytes,
+    // Check metadata first: on Windows, reading an existing directory may
+    // report NotFound too. Only an absent path may become an empty policy;
+    // permission errors, directories and read races must fail closed.
+    match fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => {}
+        Ok(_) => return Err("persistent frame exclusion policy is not a file".into()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return Ok(Mutex::new(HashSet::new()));
         }
-        Err(e) => return Err(format!("could not read persistent frame exclusions: {e}")),
-    };
+        Err(e) => return Err(format!("could not inspect persistent frame exclusions: {e}")),
+    }
+    let bytes =
+        fs::read(path).map_err(|e| format!("could not read persistent frame exclusions: {e}"))?;
     let stored: StoredPolicy = serde_json::from_slice(&bytes)
         .map_err(|e| format!("persistent frame exclusions are invalid: {e}"))?;
     if stored.version != POLICY_VERSION {
