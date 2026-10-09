@@ -396,8 +396,7 @@ impl WorkspaceMoveJournal {
 
         // Keep the record when the native operation fails, so the user can
         // retry instead of silently losing their only rollback opportunity.
-        VirtualDesktopManager::new()?
-            .move_window(entry.identity.hwnd, &entry.original_desktop)?;
+        VirtualDesktopManager::new()?.move_window(entry.identity.hwnd, &entry.original_desktop)?;
         journal.pop();
         Ok(Some(entry.identity.hwnd.to_string()))
     }
