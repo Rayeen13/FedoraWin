@@ -601,7 +601,9 @@ fn main() {
                     eprintln!("Native frame styling disabled: {error}");
                 }
                 let _ = windows::hotkeys::start_activities_hotkey(app.handle().clone());
-                let _ = windows::window_events::start(app.handle().clone());
+                if let Err(error) = windows::window_events::start(app.handle().clone()) {
+                    eprintln!("Native window/workspace event updates disabled: {error}");
+                }
                 start_display_topology_watcher(app.handle().clone());
             }
             Ok(())
