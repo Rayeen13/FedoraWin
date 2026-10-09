@@ -106,7 +106,8 @@ fn explorer_owns_taskbar(hwnd: isize) -> bool {
         return false;
     }
     let mut current_pid = 0u32;
-    unsafe { GetWindowThreadProcessId(hwnd, &mut current_pid) } != 0 && current_pid == pid
+    let thread_id = unsafe { GetWindowThreadProcessId(hwnd, &mut current_pid) };
+    thread_id != 0 && current_pid == pid
 }
 
 fn valid_taskbar(hwnd: isize) -> bool {
