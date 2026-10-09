@@ -1,3 +1,4 @@
+use super::frame_recovery;
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::ffi::c_void;
@@ -294,8 +295,41 @@ pub fn navigate(direction: i32) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WindowIdentity {
+    hwnd: isize,
+    pid: u32,
+    created: u64,
+}
+
+fn window_identity(hwnd: isize) -> Option<WindowIdentity> {
+    if hwnd == 0 || unsafe { IsWindow(hwnd) } == 0 {
+        return None;
+    }
+    let mut pid = 0u32;
+    if unsafe { GetWindowThreadProcessId(hwnd, &mut pid) } == 0 || pid == 0 {
+        return None;
+    }
+    let created = frame_recovery::process_creation_time(pid)?;
+    let mut current_pid = 0u32;
+    if unsafe { IsWindow(hwnd) } == 0
+        || unsafe { GetWindowThreadProcessId(hwnd, &mut current_pid) } == 0
+        || current_pid != pid
+        || frame_recovery::process_creation_time(pid) != Some(created)
+    {
+        return None;
+    }
+    Some(WindowIdentity { hwnd, pid, created })
+}
+
+#[derive(Clone, Debug)]
+struct WorkspaceMoveRecord {
+    identity: WindowIdentity,
+    original_desktop: String,
+}
+
 pub struct WorkspaceMoveJournal {
-    original_desktops: Mutex<Vec<(String, String)>>,
+    original_desktops: Mutex<Vec<WorkspaceMoveRecord>>,
 }
 
 impl Default for WorkspaceMoveJournal {
@@ -307,40 +341,64 @@ impl Default for WorkspaceMoveJournal {
 }
 
 impl WorkspaceMoveJournal {
+    fn record_successful_move(
+        journal: &mut Vec<WorkspaceMoveRecord>,
+        identity: WindowIdentity,
+        origin: String,
+    ) {
+        // Keep the first successful move's origin for each process-lifetime-bound
+        // HWND. An old record must never apply to a different process that reused
+        // the same numeric window handle.
+        if !journal.iter().any(|entry| entry.identity == identity) {
+            journal.push(WorkspaceMoveRecord {
+                identity,
+                original_desktop: origin,
+            });
+        }
+    }
+
     pub fn move_window(&self, handle: &str, target_desktop_id: &str) -> Result<(), String> {
         let hwnd = handle
             .parse::<isize>()
             .map_err(|_| "invalid window handle")?;
+        let identity = window_identity(hwnd).ok_or("window is no longer available")?;
+        let mut journal = self.original_desktops.lock();
         let manager = VirtualDesktopManager::new()?;
         let origin = manager.window_info(hwnd)?.desktop_id;
         if origin.eq_ignore_ascii_case(target_desktop_id) {
             return Ok(());
         }
-
-        {
-            let mut journal = self.original_desktops.lock();
-            if !journal
-                .iter()
-                .any(|(saved_handle, _)| saved_handle == handle)
-            {
-                journal.push((handle.to_string(), origin));
-            }
+        if window_identity(hwnd) != Some(identity) {
+            return Err("window identity changed before workspace move".into());
         }
 
-        manager.move_window(hwnd, target_desktop_id)
+        // Windows must confirm the move BEFORE we offer an undo. A failed COM
+        // call must not leave an undo entry for a move that never happened.
+        manager.move_window(hwnd, target_desktop_id)?;
+        if window_identity(hwnd) != Some(identity) {
+            return Err("window identity changed after workspace move".into());
+        }
+        Self::record_successful_move(&mut journal, identity, origin);
+        Ok(())
     }
 
     pub fn undo_last(&self) -> Result<Option<String>, String> {
-        let entry = self.original_desktops.lock().pop();
-        let Some((handle, desktop_id)) = entry else {
+        let mut journal = self.original_desktops.lock();
+        let Some(entry) = journal.last().cloned() else {
             return Ok(None);
         };
+        if window_identity(entry.identity.hwnd) != Some(entry.identity) {
+            // An HWND can be recycled. Never move an unrelated window back to
+            // someone else's old workspace, and discard this unusable entry.
+            journal.pop();
+            return Err("original window exited or its handle was reused".into());
+        }
 
-        let hwnd = handle
-            .parse::<isize>()
-            .map_err(|_| "invalid window handle")?;
-        VirtualDesktopManager::new()?.move_window(hwnd, &desktop_id)?;
-        Ok(Some(handle))
+        // Keep the record when the native operation fails, so the user can
+        // retry instead of silently losing their only rollback opportunity.
+        VirtualDesktopManager::new()?.move_window(entry.identity.hwnd, &entry.original_desktop)?;
+        journal.pop();
+        Ok(Some(entry.identity.hwnd.to_string()))
     }
 
     pub fn pending_count(&self) -> usize {
@@ -364,11 +422,13 @@ extern "system" {
 #[link(name = "user32")]
 extern "system" {
     fn SendInput(count: u32, inputs: *const Input, size: i32) -> u32;
+    fn IsWindow(hwnd: isize) -> i32;
+    fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Guid;
+    use super::{Guid, WindowIdentity, WorkspaceMoveJournal};
 
     #[test]
     fn virtual_desktop_guid_round_trips() {
@@ -380,5 +440,38 @@ mod tests {
     #[test]
     fn malformed_desktop_guid_is_rejected() {
         assert!(Guid::parse("not-a-guid").is_err());
+    }
+
+    #[test]
+    fn workspace_undo_preserves_first_successful_origin() {
+        let first = WindowIdentity {
+            hwnd: 123,
+            pid: 456,
+            created: 789,
+        };
+        let mut entries = Vec::new();
+        WorkspaceMoveJournal::record_successful_move(&mut entries, first, "desktop-A".into());
+        WorkspaceMoveJournal::record_successful_move(&mut entries, first, "desktop-B".into());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].original_desktop, "desktop-A");
+    }
+
+    #[test]
+    fn recycled_window_handles_never_share_workspace_undo_identity() {
+        let original = WindowIdentity {
+            hwnd: 123,
+            pid: 456,
+            created: 789,
+        };
+        let reused = WindowIdentity {
+            hwnd: 123,
+            pid: 456,
+            created: 790,
+        };
+        let mut entries = Vec::new();
+        WorkspaceMoveJournal::record_successful_move(&mut entries, original, "desktop-A".into());
+        WorkspaceMoveJournal::record_successful_move(&mut entries, reused, "desktop-B".into());
+        assert_eq!(entries.len(), 2);
+        assert_ne!(entries[0].identity, entries[1].identity);
     }
 }
