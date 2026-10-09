@@ -190,7 +190,13 @@ assert.match(desktopPresentation, /WaitForSingleObject/);
 assert.match(desktopPresentation, /FEDORAWIN_KEEP_WINDOWS_TASKBAR/);
 assert.match(desktopPresentation, /ShowWindow\(hwnd, SW_HIDE\)/);
 assert.match(desktopPresentation, /ShowWindow\(hwnd, SW_SHOW\)/);
-assert.doesNotMatch(desktopPresentation, /taskkill|TerminateProcess|explorer\.exe|reg\.exe|powershell|SetWindowLong/i);
+// Checking the genuine Explorer executable path is allowed; terminating or
+// replacing Explorer, mutating its window procedure, and registry patching are not.
+assert.doesNotMatch(desktopPresentation, /taskkill|TerminateProcess|reg\.exe|powershell|SetWindowLong/i);
+assert.match(desktopPresentation, /GetWindowsDirectoryW/);
+assert.match(desktopPresentation, /frame_policy::process_key\(pid\)/);
+assert.match(desktopPresentation, /is_windows_explorer_executable\(&executable, windows_dir\)/);
+assert.match(desktopPresentation, /&& explorer_owns_taskbar\(hwnd\)/);
 assert.match(captureScript, /AnyVisibleExplorerTaskbar/);
 assert.match(captureScript, /still has a visible Explorer taskbar/);
 

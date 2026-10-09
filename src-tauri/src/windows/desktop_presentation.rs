@@ -1,11 +1,13 @@
 //! FedoraWin DE temporarily hides Explorer's presentation, without terminating the Windows shell process.
 //! A separate copy of this executable restores the original taskbar HWNDs
 //! even when the desktop process is force-killed. No registry or Shell change.
+use crate::windows::{frame_policy, frame_recovery};
 use std::fs::{self, File};
 use std::io::Write;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -16,6 +18,7 @@ const WAIT_FOREVER: u32 = 0xffff_ffff;
 const WAIT_OBJECT_0: u32 = 0;
 const MOVEFILE_REPLACE_EXISTING: u32 = 1;
 const MOVEFILE_WRITE_THROUGH: u32 = 8;
+static WINDOWS_DIRECTORY: OnceLock<Option<String>> = OnceLock::new();
 
 #[link(name = "user32")]
 extern "system" {
@@ -25,6 +28,7 @@ extern "system" {
     fn IsWindow(hwnd: isize) -> i32;
     fn IsWindowVisible(hwnd: isize) -> i32;
     fn ShowWindow(hwnd: isize, command: i32) -> i32;
+    fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
 }
 
 #[link(name = "kernel32")]
@@ -33,6 +37,7 @@ extern "system" {
     fn WaitForSingleObject(handle: isize, timeout: u32) -> u32;
     fn CloseHandle(handle: isize) -> i32;
     fn MoveFileExW(source: *const u16, destination: *const u16, flags: u32) -> i32;
+    fn GetWindowsDirectoryW(buffer: *mut u16, capacity: u32) -> u32;
 }
 
 fn wide(text: &str) -> Vec<u16> {
@@ -56,10 +61,60 @@ fn class_name(hwnd: isize) -> Option<String> {
     (len > 0).then(|| String::from_utf16_lossy(&buffer[..len.max(0) as usize]))
 }
 
+fn is_windows_explorer_executable(executable: &str, windows_directory: &str) -> bool {
+    let root = windows_directory
+        .replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_lowercase();
+    !root.is_empty()
+        && executable.replace('/', "\\").to_lowercase() == format!(r"{root}\explorer.exe")
+}
+
+fn windows_directory() -> Option<&'static str> {
+    WINDOWS_DIRECTORY
+        .get_or_init(|| {
+            let mut buffer = [0u16; 32_768];
+            let len = unsafe { GetWindowsDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32) };
+            if len == 0 || len as usize >= buffer.len() {
+                return None;
+            }
+            Some(String::from_utf16_lossy(&buffer[..len as usize]))
+        })
+        .as_deref()
+}
+
+fn explorer_owns_taskbar(hwnd: isize) -> bool {
+    let Some(windows_dir) = windows_directory() else {
+        return false;
+    };
+    let mut pid = 0u32;
+    if unsafe { GetWindowThreadProcessId(hwnd, &mut pid) } == 0 || pid == 0 {
+        return false;
+    }
+    let Some(created) = frame_recovery::process_creation_time(pid) else {
+        return false;
+    };
+    let Ok(executable) = frame_policy::process_key(pid) else {
+        return false;
+    };
+    // A class name alone can be registered by an unrelated process. Only the
+    // real %SystemRoot%\explorer.exe process may have its taskbar HWND hidden.
+    // Recheck ownership and process lifetime after inspecting the executable.
+    if !is_windows_explorer_executable(&executable, windows_dir)
+        || frame_recovery::process_creation_time(pid) != Some(created)
+    {
+        return false;
+    }
+    let mut current_pid = 0u32;
+    let thread_id = unsafe { GetWindowThreadProcessId(hwnd, &mut current_pid) };
+    thread_id != 0 && current_pid == pid
+}
+
 fn valid_taskbar(hwnd: isize) -> bool {
     hwnd != 0
         && unsafe { IsWindow(hwnd) } != 0
         && class_name(hwnd).is_some_and(|name| is_taskbar_class(&name))
+        && explorer_owns_taskbar(hwnd)
 }
 
 unsafe extern "system" fn enumerate_taskbars(hwnd: isize, data: isize) -> i32 {
@@ -86,7 +141,7 @@ fn visible_taskbars() -> Vec<isize> {
 
 fn restore(windows: &[isize]) {
     for &hwnd in windows {
-        // Only restore HWNDs that are still genuine Explorer taskbar classes.
+        // Recheck genuine Explorer ownership before restoring a journaled HWND.
         if valid_taskbar(hwnd) {
             unsafe { ShowWindow(hwnd, SW_SHOW) };
         }
@@ -239,7 +294,7 @@ pub fn start() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{add_new_handles, is_taskbar_class};
+    use super::{add_new_handles, is_taskbar_class, is_windows_explorer_executable};
 
     #[test]
     fn only_explorer_taskbar_classes() {
@@ -247,6 +302,30 @@ mod tests {
         assert!(is_taskbar_class("Shell_SecondaryTrayWnd"));
         assert!(!is_taskbar_class("Progman"));
         assert!(!is_taskbar_class("CabinetWClass"));
+    }
+
+    #[test]
+    fn taskbar_owner_requires_real_windows_explorer_path() {
+        assert!(is_windows_explorer_executable(
+            r"C:\Windows\explorer.exe",
+            r"C:\Windows"
+        ));
+        assert!(is_windows_explorer_executable(
+            "c:/windows/EXPLORER.EXE",
+            "C:\\WINDOWS\\"
+        ));
+        assert!(!is_windows_explorer_executable(
+            r"C:\Users\Public\explorer.exe",
+            r"C:\Windows"
+        ));
+        assert!(!is_windows_explorer_executable(
+            r"C:\Windows\System32\explorer.exe",
+            r"C:\Windows"
+        ));
+        assert!(!is_windows_explorer_executable(
+            r"C:\Windows\explorer.exe",
+            ""
+        ));
     }
 
     #[test]
