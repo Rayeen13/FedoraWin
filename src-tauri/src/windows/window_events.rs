@@ -216,10 +216,7 @@ mod tests {
     fn window_event_queue_drops_duplicate_pending_notifications() {
         let (tx, rx) = mpsc::sync_channel(1);
         assert!(tx.try_send(()).is_ok());
-        assert!(matches!(
-            tx.try_send(()),
-            Err(mpsc::TrySendError::Full(()))
-        ));
+        assert!(matches!(tx.try_send(()), Err(mpsc::TrySendError::Full(()))));
         assert!(rx.try_recv().is_ok());
         assert!(tx.try_send(()).is_ok());
     }
