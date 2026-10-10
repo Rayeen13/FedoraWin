@@ -1,0 +1,140 @@
+param(
+    [string]$Executable = 'src-tauri\target\release\fedorawin.exe',
+    [int]$TargetIdleMb = 100,
+    [int]$HardLimitMb = 300
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$evidencePath = Join-Path $repoRoot 'memory-budget.json'
+$exe = if ([IO.Path]::IsPathRooted($Executable)) { $Executable } else { Join-Path $repoRoot $Executable }
+if (-not (Test-Path -LiteralPath $exe)) { throw "FedoraWin executable not found at $exe" }
+
+function Get-ProcessTreeIds {
+    param([Parameter(Mandatory)][int]$RootProcessId)
+    $rows = @(Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId)
+    $ids = [System.Collections.Generic.HashSet[int]]::new()
+    [void]$ids.Add($RootProcessId)
+    do {
+        $before = $ids.Count
+        foreach ($row in $rows) {
+            if ($ids.Contains([int]$row.ParentProcessId)) { [void]$ids.Add([int]$row.ProcessId) }
+        }
+    } while ($ids.Count -ne $before)
+    return @($ids)
+}
+
+function Get-TreeWorkingSetMb {
+    param([Parameter(Mandatory)][int]$RootProcessId)
+    $ids = @(Get-ProcessTreeIds -RootProcessId $RootProcessId)
+    [int64]$bytes = 0
+    [int]$alive = 0
+    foreach ($id in $ids) {
+        try {
+            $process = Get-Process -Id $id -ErrorAction Stop
+            $bytes += [int64]$process.WorkingSet64
+            $alive++
+        } catch {
+            # A short-lived WebView2 utility process may disappear between snapshots.
+        }
+    }
+    [pscustomobject]@{ Megabytes = [Math]::Ceiling($bytes / 1MB); ProcessCount = $alive; ProcessIds = $ids }
+}
+
+# Explorer remains the Windows shell. FedoraWin may reserve desktop work area and
+# present shell surfaces, but a beta candidate must never replace/restart Explorer.
+$explorerBefore = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+if ($explorerBefore.Count -eq 0) { throw 'Explorer is not running before the FedoraWin smoke test; preservation cannot be verified.' }
+Write-Host ("Explorer baseline PID(s): {0}" -f ($explorerBefore -join ', '))
+
+$env:FEDORAWIN_CAPTURE_VIEW = 'panel'
+$env:FEDORAWIN_CAPTURE_MODE = ''
+$env:FEDORAWIN_CAPTURE_THEME = 'dark'
+$process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
+$runtimeChecksPassed = $false
+$preservedExplorer = @()
+
+try {
+    Start-Sleep -Seconds 3
+    $samples = @()
+    1..6 | ForEach-Object {
+        if ($process.HasExited) { throw "FedoraWin exited during the memory smoke test with code $($process.ExitCode)." }
+        $sample = Get-TreeWorkingSetMb -RootProcessId $process.Id
+        $samples += $sample
+        Write-Host ("MEMORY sample {0}: {1} MB across {2} processes" -f $_, $sample.Megabytes, $sample.ProcessCount)
+        if ($_ -eq 1) {
+            foreach ($id in $sample.ProcessIds) {
+                try {
+                    $item = Get-Process -Id $id -ErrorAction Stop
+                    Write-Host ("MEMORY process: {0} pid={1} workingSet={2} MB" -f $item.ProcessName, $id, [Math]::Ceiling($item.WorkingSet64 / 1MB))
+                } catch {}
+            }
+        }
+        Start-Sleep -Milliseconds 350
+    }
+
+    $explorerAfter = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+    $preservedExplorer = @($explorerBefore | Where-Object { $explorerAfter -contains $_ })
+    if ($preservedExplorer.Count -eq 0) { throw 'FedoraWin did not preserve any pre-existing Explorer process during the runtime smoke test.' }
+    Write-Host ("Explorer preservation verified for PID(s): {0}" -f ($preservedExplorer -join ', '))
+
+    $peak = ($samples | Measure-Object -Property Megabytes -Maximum).Maximum
+    # Use the median of the final three samples as the idle estimate. A WebView2
+    # utility process can appear/disappear between snapshots, so the final sample
+    # alone is too sensitive to one short-lived child-process transition.
+    $idleSamples = @(
+        $samples |
+            Select-Object -Last 3 |
+            ForEach-Object { [int]$_.Megabytes } |
+            Sort-Object
+    )
+    $idle = $idleSamples[[int][Math]::Floor($idleSamples.Count / 2)]
+    $processCount = ($samples | Measure-Object -Property ProcessCount -Maximum).Maximum
+    Write-Host ("FedoraWin idle working set (median of final {0} samples): {1} MB" -f $idleSamples.Count, $idle)
+    Write-Host "FedoraWin sampled peak: $peak MB"
+    Write-Host "Target idle budget: ~$TargetIdleMb MB"
+    Write-Host "Hard memory ceiling: $HardLimitMb MB"
+
+    [ordered]@{
+        idle_working_set_mb = $idle
+        idle_sample_count = $idleSamples.Count
+        idle_samples_mb = $idleSamples
+        sampled_peak_mb = $peak
+        process_count_peak = $processCount
+        target_idle_mb = $TargetIdleMb
+        hard_limit_mb = $HardLimitMb
+        within_hard_limit = ($peak -le $HardLimitMb)
+        explorer_preserved = $true
+        explorer_baseline_pids = $explorerBefore
+        explorer_preserved_pids = $preservedExplorer
+        explorer_preserved_after_shutdown = $false
+        explorer_preserved_after_shutdown_pids = @()
+    } | ConvertTo-Json | Set-Content -LiteralPath $evidencePath -Encoding UTF8
+
+    if ($peak -gt $HardLimitMb) { throw "FedoraWin exceeded the $HardLimitMb MB hard memory ceiling (sampled peak: $peak MB)." }
+    if ($idle -gt ($TargetIdleMb + 50)) { Write-Warning "FedoraWin is above the ~$TargetIdleMb MB idle target ($idle MB). The build is under the hard ceiling but needs further trimming." }
+    $runtimeChecksPassed = $true
+} finally {
+    $treeIds = if ($process) { @(Get-ProcessTreeIds -RootProcessId $process.Id) } else { @() }
+    foreach ($id in ($treeIds | Sort-Object -Descending)) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
+    Remove-Item Env:FEDORAWIN_CAPTURE_VIEW -ErrorAction SilentlyContinue
+    Remove-Item Env:FEDORAWIN_CAPTURE_MODE -ErrorAction SilentlyContinue
+    Remove-Item Env:FEDORAWIN_CAPTURE_THEME -ErrorAction SilentlyContinue
+
+    if ($runtimeChecksPassed) {
+        # Re-check after FedoraWin teardown. Persist this separately from the live
+        # check so release evidence cannot imply shutdown safety without proving it.
+        Start-Sleep -Milliseconds 500
+        $explorerAfterShutdown = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+        $preservedAfterShutdown = @($explorerBefore | Where-Object { $explorerAfterShutdown -contains $_ })
+        if ($preservedAfterShutdown.Count -eq 0) { throw 'FedoraWin shutdown did not preserve any pre-existing Explorer process.' }
+
+        $evidence = Get-Content -LiteralPath $evidencePath -Raw | ConvertFrom-Json
+        $evidence.explorer_preserved_after_shutdown = $true
+        $evidence.explorer_preserved_after_shutdown_pids = @($preservedAfterShutdown)
+        $evidence | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $evidencePath -Encoding UTF8
+        Write-Host ("Explorer shutdown preservation verified for PID(s): {0}" -f ($preservedAfterShutdown -join ', '))
+    }
+}
