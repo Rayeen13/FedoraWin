@@ -163,3 +163,19 @@ test('DWM fallback rejects protected Windows shell and security process identiti
   assert.match(framePolicy, /pub fn is_process_key_excluded\(process_key: &str\)/);
   assert.doesNotMatch(frame, /\("explorer\.exe",/);
 });
+
+const taskbarRecovery = readFileSync(new URL('./check-taskbar-recovery.ps1', import.meta.url), 'utf8');
+
+test('taskbar recovery cleanup is bound to the original Explorer process lifetime', () => {
+  assert.match(taskbarRecovery, /function Test-BaselineExplorerTaskbar/);
+  assert.match(taskbarRecovery, /GetWindowThreadProcessId\(\$Hwnd, \[ref\]\$ownerPid\)/);
+  assert.match(taskbarRecovery, /if \(\$threadId -eq 0\) \{ return 0 \}/);
+  assert.match(taskbarRecovery, /\$script:explorerStartTicks\[\[int\]\$process\.Id\]/);
+  assert.match(taskbarRecovery, /\$owner\.ProcessName -ne 'explorer'/);
+  assert.match(taskbarRecovery, /\$owner\.StartTime\.ToUniversalTime\(\)\.Ticks -eq \$script:explorerStartTicks/);
+
+  const cleanup = taskbarRecovery.slice(taskbarRecovery.lastIndexOf('} finally {'));
+  assert.match(cleanup, /if \(\(Test-BaselineExplorerTaskbar -Hwnd \$hwnd\) -and/);
+  assert.match(cleanup, /\[FedoraWinTaskbarRecoveryProbe\]::ShowWindow\(\$hwnd, 5\)/);
+  assert.doesNotMatch(cleanup, /if \(\(Test-ExplorerTaskbar -Hwnd \$hwnd\) -and/);
+});
