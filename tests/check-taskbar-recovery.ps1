@@ -81,11 +81,38 @@ function Get-VisibleTaskbars {
 function Get-TaskbarOwnerPid {
     param([Parameter(Mandatory)][IntPtr]$Hwnd)
     [uint32]$ownerPid = 0
-    [void][FedoraWinTaskbarRecoveryProbe]::GetWindowThreadProcessId($Hwnd, [ref]$ownerPid)
-    return $ownerPid
+    $threadId = [FedoraWinTaskbarRecoveryProbe]::GetWindowThreadProcessId($Hwnd, [ref]$ownerPid)
+    if ($threadId -eq 0) { return 0 }
+    return [int]$ownerPid
 }
 
-$explorerBefore = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+# Pin both the original Explorer PID and its creation time. A reused PID or a
+# recycled HWND must never authorize emergency ShowWindow against another app.
+$explorerProcesses = @(Get-Process -Name explorer -ErrorAction SilentlyContinue)
+$explorerBefore = @($explorerProcesses | Select-Object -ExpandProperty Id)
+$script:explorerStartTicks = @{}
+foreach ($process in $explorerProcesses) {
+    # Failure to read process identity is a hard test failure before hiding anything.
+    $script:explorerStartTicks[[int]$process.Id] = $process.StartTime.ToUniversalTime().Ticks
+}
+
+function Test-BaselineExplorerTaskbar {
+    param([Parameter(Mandatory)][IntPtr]$Hwnd)
+    if (-not (Test-ExplorerTaskbar -Hwnd $Hwnd)) { return $false }
+
+    $ownerPid = Get-TaskbarOwnerPid -Hwnd $Hwnd
+    if ($ownerPid -eq 0 -or -not $script:explorerStartTicks.ContainsKey([int]$ownerPid)) {
+        return $false
+    }
+    $owner = Get-Process -Id $ownerPid -ErrorAction SilentlyContinue
+    if ($null -eq $owner -or $owner.ProcessName -ne 'explorer') { return $false }
+    try {
+        return $owner.StartTime.ToUniversalTime().Ticks -eq $script:explorerStartTicks[[int]$ownerPid]
+    } catch {
+        return $false
+    }
+}
+
 if ($explorerBefore.Count -eq 0) {
     throw 'Explorer is not running; taskbar recovery cannot be validated.'
 }
@@ -96,9 +123,8 @@ if ($taskbars.Count -eq 0) {
 }
 
 foreach ($hwnd in $taskbars) {
-    $ownerPid = Get-TaskbarOwnerPid -Hwnd $hwnd
-    if ($explorerBefore -notcontains [int]$ownerPid) {
-        throw "Taskbar HWND $($hwnd.ToInt64()) is not owned by a baseline Explorer process."
+    if (-not (Test-BaselineExplorerTaskbar -Hwnd $hwnd)) {
+        throw "Taskbar HWND $($hwnd.ToInt64()) is not owned by the original Explorer process lifetime."
     }
 }
 Write-Host ("TASKBAR BASELINE: Explorer PID(s)={0}; HWND(s)={1}" -f
@@ -120,8 +146,13 @@ try {
         if ($shell.HasExited) {
             throw "FedoraWin exited before hiding Explorer taskbars: $($shell.ExitCode)"
         }
+        foreach ($hwnd in $taskbars) {
+            if (-not (Test-BaselineExplorerTaskbar -Hwnd $hwnd)) {
+                throw "Baseline Explorer HWND $($hwnd.ToInt64()) changed identity before taskbar hide."
+            }
+        }
         $stillVisible = @($taskbars | Where-Object {
-            (Test-ExplorerTaskbar -Hwnd $_) -and [FedoraWinTaskbarRecoveryProbe]::IsWindowVisible($_)
+            [FedoraWinTaskbarRecoveryProbe]::IsWindowVisible($_)
         })
         if ($stillVisible.Count -eq 0) {
             $hidden = $true
@@ -145,7 +176,7 @@ try {
 
     for ($attempt = 0; $attempt -lt 120; $attempt++) {
         $pending = @($taskbars | Where-Object {
-            -not (Test-ExplorerTaskbar -Hwnd $_) -or
+            -not (Test-BaselineExplorerTaskbar -Hwnd $_) -or
             -not [FedoraWinTaskbarRecoveryProbe]::IsWindowVisible($_)
         })
         if ($pending.Count -eq 0) {
@@ -168,8 +199,9 @@ try {
 
     foreach ($hwnd in $taskbars) {
         $ownerPid = Get-TaskbarOwnerPid -Hwnd $hwnd
-        if ($preservedAfter -notcontains [int]$ownerPid) {
-            throw "Restored taskbar HWND $($hwnd.ToInt64()) changed Explorer ownership."
+        if ($preservedAfter -notcontains [int]$ownerPid -or
+            -not (Test-BaselineExplorerTaskbar -Hwnd $hwnd)) {
+            throw "Restored taskbar HWND $($hwnd.ToInt64()) changed Explorer ownership or lifetime."
         }
     }
 
@@ -181,11 +213,10 @@ try {
         Stop-Process -Id $shell.Id -Force -ErrorAction SilentlyContinue
     }
 
-    # Never leave the CI desktop without its taskbar if the watchdog itself is
-    # what failed. Only validated Explorer taskbar classes from the baseline are
-    # eligible for this emergency test cleanup.
+    # Never show a recycled HWND or a taskbar-like window owned by another
+    # process. Emergency cleanup may touch only the original Explorer lifetime.
     foreach ($hwnd in $taskbars) {
-        if ((Test-ExplorerTaskbar -Hwnd $hwnd) -and
+        if ((Test-BaselineExplorerTaskbar -Hwnd $hwnd) -and
             -not [FedoraWinTaskbarRecoveryProbe]::IsWindowVisible($hwnd)) {
             [void][FedoraWinTaskbarRecoveryProbe]::ShowWindow($hwnd, 5)
         }
