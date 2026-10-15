@@ -179,3 +179,22 @@ test('taskbar recovery cleanup is bound to the original Explorer process lifetim
   assert.match(cleanup, /\[FedoraWinTaskbarRecoveryProbe\]::ShowWindow\(\$hwnd, 5\)/);
   assert.doesNotMatch(cleanup, /if \(\(Test-ExplorerTaskbar -Hwnd \$hwnd\) -and/);
 });
+
+const explorerRestartProbe = readFileSync(new URL('./check-explorer-restart-recovery.ps1', import.meta.url), 'utf8');
+
+test('Explorer restart probe only manipulates genuine Windows Explorer taskbars', () => {
+  assert.match(explorerRestartProbe, /function Test-RealExplorerProcess/);
+  assert.match(explorerRestartProbe, /function Test-RealExplorerTaskbar/);
+  assert.match(explorerRestartProbe, /function Test-ReplacementTaskbar/);
+  assert.match(explorerRestartProbe, /\$script:windowsExplorer = \[IO\.Path\]::GetFullPath/);
+  assert.match(explorerRestartProbe, /\$Process\.Path/);
+  assert.match(explorerRestartProbe, /\$current\.StartTime\.ToUniversalTime\(\)\.Ticks -eq \$created/);
+  assert.match(explorerRestartProbe, /if \(-not \(Test-RealExplorerProcess -Process \$owner\) -or/);
+  assert.match(explorerRestartProbe, /Refusing to terminate a recycled or non-Explorer PID/);
+  assert.match(explorerRestartProbe, /identify the new taskbar by[\s\S]*Explorer process lifetime/);
+
+  const cleanup = explorerRestartProbe.slice(explorerRestartProbe.lastIndexOf('} finally {'));
+  assert.match(cleanup, /if \(\(Test-RealExplorerTaskbar -Hwnd \$hwnd\) -and/);
+  assert.match(cleanup, /\[FedoraWinExplorerRestartProbe\]::ShowWindow\(\$hwnd, 5\)/);
+  assert.doesNotMatch(cleanup, /if \(\(Test-Taskbar -Hwnd \$hwnd\) -and/);
+});

@@ -71,22 +71,68 @@ function Get-Taskbars {
 function Get-OwnerPid {
     param([Parameter(Mandatory)][IntPtr]$Hwnd)
     [uint32]$ownerPid = 0
-    [void][FedoraWinExplorerRestartProbe]::GetWindowThreadProcessId($Hwnd, [ref]$ownerPid)
+    $threadId = [FedoraWinExplorerRestartProbe]::GetWindowThreadProcessId($Hwnd, [ref]$ownerPid)
+    if ($threadId -eq 0) { return 0 }
     return [int]$ownerPid
 }
 
-function Ensure-ExplorerRunning {
-    $existing = @(Get-Process -Name explorer -ErrorAction SilentlyContinue)
-    if ($existing.Count -eq 0) {
-        Start-Process explorer.exe | Out-Null
+# Do not trust a taskbar-like class or a process name by itself.
+$script:windowsExplorer = [IO.Path]::GetFullPath((Join-Path $env:SystemRoot 'explorer.exe'))
+
+function Test-RealExplorerProcess {
+    param([Parameter(Mandatory)][System.Diagnostics.Process]$Process)
+    try {
+        return [string]::Equals(
+            $Process.Path,
+            $script:windowsExplorer,
+            [StringComparison]::OrdinalIgnoreCase
+        )
+    } catch {
+        return $false
     }
 }
 
-$baselineExplorer = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
+function Get-RealExplorerProcesses {
+    return @(Get-Process -Name explorer -ErrorAction SilentlyContinue |
+        Where-Object { Test-RealExplorerProcess -Process $_ })
+}
+
+function Test-RealExplorerTaskbar {
+    param([Parameter(Mandatory)][IntPtr]$Hwnd)
+    if (-not (Test-Taskbar -Hwnd $Hwnd)) { return $false }
+    $ownerPid = Get-OwnerPid -Hwnd $Hwnd
+    if ($ownerPid -eq 0) { return $false }
+    try {
+        $owner = Get-Process -Id $ownerPid -ErrorAction Stop
+        $created = $owner.StartTime.ToUniversalTime().Ticks
+        if (-not (Test-RealExplorerProcess -Process $owner)) { return $false }
+        $current = Get-Process -Id $ownerPid -ErrorAction Stop
+        return (Test-RealExplorerProcess -Process $current) -and
+            $current.StartTime.ToUniversalTime().Ticks -eq $created -and
+            (Get-OwnerPid -Hwnd $Hwnd) -eq $ownerPid
+    } catch {
+        return $false
+    }
+}
+
+function Ensure-ExplorerRunning {
+    if (@(Get-RealExplorerProcesses).Count -eq 0) {
+        Start-Process -FilePath $script:windowsExplorer | Out-Null
+    }
+}
+
+$baselineExplorerProcesses = @(Get-RealExplorerProcesses)
+$baselineExplorer = @($baselineExplorerProcesses | Select-Object -ExpandProperty Id)
+$baselineStartTicks = @{}
+foreach ($process in $baselineExplorerProcesses) {
+    $baselineStartTicks[[int]$process.Id] = $process.StartTime.ToUniversalTime().Ticks
+}
 if ($baselineExplorer.Count -eq 0) {
     throw 'Explorer is not running before the restart test.'
 }
-$baselineTaskbars = @(Get-Taskbars | Where-Object { [FedoraWinExplorerRestartProbe]::IsWindowVisible($_) })
+$baselineTaskbars = @(Get-Taskbars | Where-Object {
+    (Test-RealExplorerTaskbar -Hwnd $_) -and [FedoraWinExplorerRestartProbe]::IsWindowVisible($_)
+})
 if ($baselineTaskbars.Count -eq 0) {
     throw 'No visible Explorer taskbar exists before the restart test.'
 }
@@ -99,6 +145,21 @@ Remove-Item Env:FEDORAWIN_KEEP_WINDOWS_TASKBAR -ErrorAction SilentlyContinue
 $shell = $null
 $replacementHwnd = [IntPtr]::Zero
 $replacementExplorerPid = 0
+$replacementExplorerStartTicks = 0
+
+function Test-ReplacementTaskbar {
+    param([Parameter(Mandatory)][IntPtr]$Hwnd)
+    if (-not (Test-RealExplorerTaskbar -Hwnd $Hwnd) -or
+        (Get-OwnerPid -Hwnd $Hwnd) -ne $replacementExplorerPid) {
+        return $false
+    }
+    try {
+        $owner = Get-Process -Id $replacementExplorerPid -ErrorAction Stop
+        return $owner.StartTime.ToUniversalTime().Ticks -eq $replacementExplorerStartTicks
+    } catch {
+        return $false
+    }
+}
 
 try {
     $shell = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
@@ -106,8 +167,14 @@ try {
     $hidden = $false
     for ($attempt = 0; $attempt -lt 120; $attempt++) {
         if ($shell.HasExited) { throw "FedoraWin exited before baseline taskbar hide: $($shell.ExitCode)" }
+        foreach ($hwnd in $baselineTaskbars) {
+            if (-not (Test-RealExplorerTaskbar -Hwnd $hwnd) -or
+                $baselineStartTicks[(Get-OwnerPid -Hwnd $hwnd)] -ne
+                    (Get-Process -Id (Get-OwnerPid -Hwnd $hwnd)).StartTime.ToUniversalTime().Ticks) {
+                throw 'Baseline Explorer taskbar changed owner lifetime before restart.'
+            }
+        }
         $visible = @($baselineTaskbars | Where-Object {
-            [FedoraWinExplorerRestartProbe]::IsWindow($_) -and
             [FedoraWinExplorerRestartProbe]::IsWindowVisible($_)
         })
         if ($visible.Count -eq 0) { $hidden = $true; break }
@@ -123,7 +190,12 @@ try {
 
     # CI fault injection only: product code never calls Stop-Process on Explorer.
     foreach ($explorerPid in $baselineExplorer) {
-        Stop-Process -Id $explorerPid -Force -ErrorAction SilentlyContinue
+        $owner = Get-Process -Id $explorerPid -ErrorAction Stop
+        if (-not (Test-RealExplorerProcess -Process $owner) -or
+            $owner.StartTime.ToUniversalTime().Ticks -ne $baselineStartTicks[$explorerPid]) {
+            throw "Refusing to terminate a recycled or non-Explorer PID $explorerPid."
+        }
+        Stop-Process -Id $explorerPid -Force -ErrorAction Stop
     }
 
     for ($attempt = 0; $attempt -lt 120; $attempt++) {
@@ -133,15 +205,22 @@ try {
             Ensure-ExplorerRunning
         }
 
-        $explorerNow = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
-        $newPids = @($explorerNow | Where-Object { $baselineExplorer -notcontains $_ })
-        $taskbarsNow = @(Get-Taskbars)
-        foreach ($hwnd in $taskbarsNow) {
-            $handle = $hwnd.ToInt64()
+        $explorerNow = @(Get-RealExplorerProcesses)
+        $newProcesses = @($explorerNow | Where-Object {
+            -not $baselineStartTicks.ContainsKey([int]$_.Id) -or
+            $_.StartTime.ToUniversalTime().Ticks -ne $baselineStartTicks[[int]$_.Id]
+        })
+        $newPids = @($newProcesses | Select-Object -ExpandProperty Id)
+        foreach ($hwnd in @(Get-Taskbars)) {
             $ownerPid = Get-OwnerPid -Hwnd $hwnd
-            if ($baselineHandles -notcontains $handle -and $newPids -contains $ownerPid) {
+            # Win32 may recycle a numerical HWND: identify the new taskbar by
+            # Explorer process lifetime, not by comparing old/new HWND numbers.
+            if ($newPids -contains $ownerPid -and (Test-RealExplorerTaskbar -Hwnd $hwnd)) {
                 $replacementHwnd = $hwnd
                 $replacementExplorerPid = $ownerPid
+                $replacementExplorerStartTicks = (
+                    $newProcesses | Where-Object { $_.Id -eq $ownerPid } | Select-Object -First 1
+                ).StartTime.ToUniversalTime().Ticks
                 break
             }
         }
@@ -156,8 +235,8 @@ try {
     $adopted = $false
     for ($attempt = 0; $attempt -lt 120; $attempt++) {
         if ($shell.HasExited) { throw "FedoraWin exited while adopting replacement taskbar: $($shell.ExitCode)" }
-        if (-not [FedoraWinExplorerRestartProbe]::IsWindow($replacementHwnd)) {
-            throw 'Replacement Explorer taskbar disappeared before FedoraWin could adopt it.'
+        if (-not (Test-ReplacementTaskbar -Hwnd $replacementHwnd)) {
+            throw 'Replacement Explorer taskbar changed identity before FedoraWin could adopt it.'
         }
         if (-not [FedoraWinExplorerRestartProbe]::IsWindowVisible($replacementHwnd)) {
             $adopted = $true
@@ -169,8 +248,8 @@ try {
         throw 'FedoraWin did not hide the replacement Explorer taskbar after Explorer restart.'
     }
 
-    if (-not (Get-Process -Id $replacementExplorerPid -ErrorAction SilentlyContinue)) {
-        throw 'Replacement Explorer exited while FedoraWin remained active.'
+    if (-not (Test-ReplacementTaskbar -Hwnd $replacementHwnd)) {
+        throw 'Replacement Explorer process lifetime changed while FedoraWin remained active.'
     }
     Write-Host ("EXPLORER RESTART ADOPTED: new Explorer PID={0}; replacement taskbar HWND={1}; FedoraWin PID={2}" -f
         $replacementExplorerPid,
@@ -182,7 +261,7 @@ try {
 
     $restored = $false
     for ($attempt = 0; $attempt -lt 120; $attempt++) {
-        if ([FedoraWinExplorerRestartProbe]::IsWindow($replacementHwnd) -and
+        if ((Test-ReplacementTaskbar -Hwnd $replacementHwnd) -and
             [FedoraWinExplorerRestartProbe]::IsWindowVisible($replacementHwnd)) {
             $restored = $true
             break
@@ -193,11 +272,8 @@ try {
         throw 'Replacement Explorer taskbar was not restored after force-killing FedoraWin.'
     }
 
-    if (-not (Get-Process -Id $replacementExplorerPid -ErrorAction SilentlyContinue)) {
-        throw 'FedoraWin recovery required or caused another Explorer restart.'
-    }
-    if ((Get-OwnerPid -Hwnd $replacementHwnd) -ne $replacementExplorerPid) {
-        throw 'Replacement taskbar changed Explorer ownership during FedoraWin recovery.'
+    if (-not (Test-ReplacementTaskbar -Hwnd $replacementHwnd)) {
+        throw 'FedoraWin recovery required another Explorer lifetime or changed taskbar ownership.'
     }
 
     Write-Host ("EXPLORER RESTART RECOVERY PASSED: FedoraWin stayed alive across Explorer restart, adopted replacement HWND {0}, then restored it while Explorer PID {1} remained intact." -f
@@ -211,7 +287,10 @@ try {
     Ensure-ExplorerRunning
     Start-Sleep -Milliseconds 500
     foreach ($hwnd in @(Get-Taskbars)) {
-        if ((Test-Taskbar -Hwnd $hwnd) -and -not [FedoraWinExplorerRestartProbe]::IsWindowVisible($hwnd)) {
+        # Never show a spoofed taskbar-class window or recycled HWND owned by
+        # a different process. Check the genuine Explorer lifetime at cleanup.
+        if ((Test-RealExplorerTaskbar -Hwnd $hwnd) -and
+            -not [FedoraWinExplorerRestartProbe]::IsWindowVisible($hwnd)) {
             [void][FedoraWinExplorerRestartProbe]::ShowWindow($hwnd, 5)
         }
     }
