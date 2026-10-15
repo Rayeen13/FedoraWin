@@ -20,6 +20,16 @@ const MOVEFILE_REPLACE_EXISTING: u32 = 1;
 const MOVEFILE_WRITE_THROUGH: u32 = 8;
 static WINDOWS_DIRECTORY: OnceLock<Option<String>> = OnceLock::new();
 
+// The independent guardian must never restore an HWND merely because its
+// numeric value now names another Explorer taskbar. Bind every record to the
+// original Explorer process lifetime, and fail closed on legacy HWND-only data.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct TaskbarSnapshot {
+    hwnd: isize,
+    pid: u32,
+    created: u64,
+}
+
 #[link(name = "user32")]
 extern "system" {
     fn FindWindowW(class: *const u16, title: *const u16) -> isize;
@@ -117,49 +127,95 @@ fn valid_taskbar(hwnd: isize) -> bool {
         && explorer_owns_taskbar(hwnd)
 }
 
+fn capture_taskbar(hwnd: isize) -> Option<TaskbarSnapshot> {
+    if !valid_taskbar(hwnd) {
+        return None;
+    }
+    let mut pid = 0u32;
+    if unsafe { GetWindowThreadProcessId(hwnd, &mut pid) } == 0 || pid == 0 {
+        return None;
+    }
+    let created = frame_recovery::process_creation_time(pid)?;
+    let mut current_pid = 0u32;
+    if !valid_taskbar(hwnd)
+        || unsafe { GetWindowThreadProcessId(hwnd, &mut current_pid) } == 0
+        || current_pid != pid
+        || frame_recovery::process_creation_time(pid) != Some(created)
+    {
+        return None;
+    }
+    Some(TaskbarSnapshot { hwnd, pid, created })
+}
+
+fn same_taskbar_lifetime(snapshot: &TaskbarSnapshot) -> bool {
+    if snapshot.hwnd == 0 || snapshot.pid == 0 || snapshot.created == 0 {
+        return false;
+    }
+    if !valid_taskbar(snapshot.hwnd) {
+        return false;
+    }
+    let mut pid = 0u32;
+    let thread_id = unsafe { GetWindowThreadProcessId(snapshot.hwnd, &mut pid) };
+    thread_id != 0
+        && pid == snapshot.pid
+        && frame_recovery::process_creation_time(pid) == Some(snapshot.created)
+}
+
 unsafe extern "system" fn enumerate_taskbars(hwnd: isize, data: isize) -> i32 {
-    if valid_taskbar(hwnd) && IsWindowVisible(hwnd) != 0 {
-        let windows = &mut *(data as *mut Vec<isize>);
-        if !windows.contains(&hwnd) {
-            windows.push(hwnd);
+    if IsWindowVisible(hwnd) != 0 {
+        if let Some(snapshot) = capture_taskbar(hwnd) {
+            let windows = &mut *(data as *mut Vec<TaskbarSnapshot>);
+            if !windows.contains(&snapshot) {
+                windows.push(snapshot);
+            }
         }
     }
     1
 }
 
-fn visible_taskbars() -> Vec<isize> {
+fn visible_taskbars() -> Vec<TaskbarSnapshot> {
     let mut windows = Vec::new();
     let primary = unsafe { FindWindowW(wide("Shell_TrayWnd").as_ptr(), std::ptr::null()) };
-    if valid_taskbar(primary) && unsafe { IsWindowVisible(primary) } != 0 {
-        windows.push(primary);
+    if unsafe { IsWindowVisible(primary) } != 0 {
+        if let Some(snapshot) = capture_taskbar(primary) {
+            windows.push(snapshot);
+        }
     }
     unsafe {
-        EnumWindows(enumerate_taskbars, &mut windows as *mut Vec<isize> as isize);
+        EnumWindows(
+            enumerate_taskbars,
+            &mut windows as *mut Vec<TaskbarSnapshot> as isize,
+        );
     }
     windows
 }
 
-fn restore(windows: &[isize]) {
-    for &hwnd in windows {
-        // Recheck genuine Explorer ownership before restoring a journaled HWND.
-        if valid_taskbar(hwnd) {
+fn restore(windows: &[TaskbarSnapshot]) {
+    for snapshot in windows {
+        let hwnd = snapshot.hwnd;
+        // Refuse stale/recycled HWNDs even when a new Explorer owns that class.
+        if same_taskbar_lifetime(snapshot) {
             unsafe { ShowWindow(hwnd, SW_SHOW) };
         }
     }
 }
 
-fn add_new_handles(known: &mut Vec<isize>, observed: &[isize]) -> bool {
+fn add_new_handles(known: &mut Vec<TaskbarSnapshot>, observed: &[TaskbarSnapshot]) -> bool {
     let mut changed = false;
-    for &hwnd in observed {
-        if hwnd > 0 && !known.contains(&hwnd) {
-            known.push(hwnd);
+    for snapshot in observed {
+        if snapshot.hwnd > 0
+            && snapshot.pid != 0
+            && snapshot.created != 0
+            && !known.contains(snapshot)
+        {
+            known.push(*snapshot);
             changed = true;
         }
     }
     changed
 }
 
-fn persist_handles(path: &Path, windows: &[isize]) -> Result<(), String> {
+fn persist_handles(path: &Path, windows: &[TaskbarSnapshot]) -> Result<(), String> {
     let temporary = path.with_extension("pending");
     let data = serde_json::to_vec(windows).map_err(|error| error.to_string())?;
     let mut file = File::create(&temporary).map_err(|error| error.to_string())?;
@@ -183,10 +239,11 @@ fn persist_handles(path: &Path, windows: &[isize]) -> Result<(), String> {
     Ok(())
 }
 
-fn read_handles(path: &Path) -> Vec<isize> {
+fn read_handles(path: &Path) -> Vec<TaskbarSnapshot> {
+    // Corrupt or legacy HWND-only journals cannot authorize a restore.
     fs::read(path)
         .ok()
-        .and_then(|bytes| serde_json::from_slice::<Vec<isize>>(&bytes).ok())
+        .and_then(|bytes| serde_json::from_slice::<Vec<TaskbarSnapshot>>(&bytes).ok())
         .unwrap_or_default()
 }
 
@@ -254,8 +311,9 @@ pub fn start() -> Result<(), String> {
             format!("taskbar recovery could not start: {error}")
         })?;
 
-    for &hwnd in &windows {
-        if valid_taskbar(hwnd) {
+    for snapshot in &windows {
+        let hwnd = snapshot.hwnd;
+        if same_taskbar_lifetime(snapshot) {
             unsafe { ShowWindow(hwnd, SW_HIDE) };
         }
     }
@@ -281,8 +339,9 @@ pub fn start() -> Result<(), String> {
                     }
                 }
 
-                for &hwnd in &known {
-                    if valid_taskbar(hwnd) && unsafe { IsWindowVisible(hwnd) } != 0 {
+                for snapshot in &known {
+                    let hwnd = snapshot.hwnd;
+                    if same_taskbar_lifetime(snapshot) && unsafe { IsWindowVisible(hwnd) } != 0 {
                         unsafe { ShowWindow(hwnd, SW_HIDE) };
                     }
                 }
@@ -294,7 +353,9 @@ pub fn start() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{add_new_handles, is_taskbar_class, is_windows_explorer_executable};
+    use super::{
+        add_new_handles, is_taskbar_class, is_windows_explorer_executable, TaskbarSnapshot,
+    };
 
     #[test]
     fn only_explorer_taskbar_classes() {
@@ -328,11 +389,45 @@ mod tests {
         ));
     }
 
+    fn record(hwnd: isize, pid: u32, created: u64) -> TaskbarSnapshot {
+        TaskbarSnapshot { hwnd, pid, created }
+    }
+
     #[test]
-    fn explorer_restart_adds_only_new_valid_handle_values() {
-        let mut known = vec![10, 20];
-        assert!(add_new_handles(&mut known, &[20, 30, 0, -4]));
-        assert_eq!(known, vec![10, 20, 30]);
-        assert!(!add_new_handles(&mut known, &[10, 20, 30]));
+    fn explorer_restart_rebinds_a_recycled_hwnd_to_its_new_process_lifetime() {
+        let before = record(10, 111, 1_000);
+        let unchanged = record(20, 111, 1_000);
+        let after = record(10, 222, 2_000);
+        let reused_pid = record(20, 111, 3_000);
+        let mut known = vec![before, unchanged];
+
+        assert!(add_new_handles(
+            &mut known,
+            &[
+                unchanged,
+                after,
+                reused_pid,
+                record(0, 222, 2_000),
+                record(-4, 222, 2_000),
+                record(30, 0, 2_000),
+                record(30, 222, 0),
+            ]
+        ));
+        assert_eq!(known, vec![before, unchanged, after, reused_pid]);
+        assert!(!add_new_handles(&mut known, &[before, after, reused_pid]));
+    }
+
+    #[test]
+    fn taskbar_journal_round_trips_identity_and_rejects_legacy_handle_arrays() {
+        let snapshots = vec![record(10, 111, 1_000), record(20, 222, 2_000)];
+        let serialized = serde_json::to_vec(&snapshots).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Vec<TaskbarSnapshot>>(&serialized).unwrap(),
+            snapshots
+        );
+        assert!(serde_json::from_slice::<Vec<TaskbarSnapshot>>(br"[10,20]").is_err());
+        assert!(
+            serde_json::from_slice::<Vec<TaskbarSnapshot>>(br#"[{"hwnd":10,"pid":111}]"#).is_err()
+        );
     }
 }
