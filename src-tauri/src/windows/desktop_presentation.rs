@@ -215,6 +215,39 @@ fn add_new_handles(known: &mut Vec<TaskbarSnapshot>, observed: &[TaskbarSnapshot
     changed
 }
 
+// Do not delete a hidden taskbar's only recovery record just because an API
+// query temporarily failed. Remove it only after Win32 proves the old HWND or
+// Explorer process lifetime no longer represents that snapshot.
+fn snapshot_provably_stale(snapshot: &TaskbarSnapshot) -> bool {
+    if unsafe { IsWindow(snapshot.hwnd) } == 0 {
+        return true;
+    }
+    let mut current_pid = 0u32;
+    let thread_id = unsafe { GetWindowThreadProcessId(snapshot.hwnd, &mut current_pid) };
+    if thread_id != 0 && current_pid != snapshot.pid {
+        return true;
+    }
+    if class_name(snapshot.hwnd).is_some_and(|name| !is_taskbar_class(&name)) {
+        return true;
+    }
+    frame_recovery::process_creation_time(snapshot.pid)
+        .is_some_and(|created| created != snapshot.created)
+}
+
+fn next_journal(
+    known: &[TaskbarSnapshot],
+    observed: &[TaskbarSnapshot],
+    is_provably_stale: impl Fn(&TaskbarSnapshot) -> bool,
+) -> Vec<TaskbarSnapshot> {
+    let mut next: Vec<_> = known
+        .iter()
+        .copied()
+        .filter(|snapshot| !is_provably_stale(snapshot))
+        .collect();
+    add_new_handles(&mut next, observed);
+    next
+}
+
 fn persist_handles(path: &Path, windows: &[TaskbarSnapshot]) -> Result<(), String> {
     let temporary = path.with_extension("pending");
     let data = serde_json::to_vec(windows).map_err(|error| error.to_string())?;
@@ -328,14 +361,16 @@ pub fn start() -> Result<(), String> {
             loop {
                 thread::sleep(Duration::from_millis(950));
                 let observed = visible_taskbars();
-                let previous_len = known.len();
-                add_new_handles(&mut known, &observed);
-                if known.len() != previous_len {
-                    if let Err(error) = persist_handles(&journal, &known) {
-                        eprintln!(
-                            "FedoraWin left newly-created Explorer taskbars visible because recovery journaling failed: {error}"
-                        );
-                        known.truncate(previous_len);
+                let next = next_journal(&known, &observed, snapshot_provably_stale);
+                if next != known {
+                    // Publish the complete replacement atomically before hiding
+                    // newly observed taskbars. On failure, keep the prior durable
+                    // journal and never hide a window absent from that journal.
+                    match persist_handles(&journal, &next) {
+                        Ok(()) => known = next,
+                        Err(error) => eprintln!(
+                            "FedoraWin kept its previous taskbar journal; new taskbars remain visible: {error}"
+                        ),
                     }
                 }
 
@@ -354,7 +389,8 @@ pub fn start() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        add_new_handles, is_taskbar_class, is_windows_explorer_executable, TaskbarSnapshot,
+        add_new_handles, is_taskbar_class, is_windows_explorer_executable, next_journal,
+        TaskbarSnapshot,
     };
 
     #[test]
@@ -415,6 +451,40 @@ mod tests {
         ));
         assert_eq!(known, vec![before, unchanged, after, reused_pid]);
         assert!(!add_new_handles(&mut known, &[before, after, reused_pid]));
+    }
+
+    #[test]
+    fn journal_compaction_removes_only_proven_stale_lifetimes() {
+        let old = record(10, 111, 1000);
+        let hidden_but_unconfirmed = record(20, 111, 1000);
+        let replacement = record(10, 222, 2000);
+        let current = next_journal(&[old, hidden_but_unconfirmed], &[replacement], |snapshot| {
+            *snapshot == old
+        });
+        assert_eq!(current, vec![hidden_but_unconfirmed, replacement]);
+
+        // An absent or temporarily unreadable hidden HWND is not proof of
+        // destruction. Keep it in the guardian's durable recovery journal.
+        let conservative = next_journal(&current, &[], |_| false);
+        assert_eq!(conservative, current);
+        let without_old = next_journal(&current, &[], |snapshot| {
+            *snapshot == hidden_but_unconfirmed
+        });
+        assert_eq!(without_old, vec![replacement]);
+        assert_eq!(
+            next_journal(&without_old, &[replacement], |_| false),
+            without_old
+        );
+    }
+
+    #[test]
+    fn repeated_explorer_restarts_do_not_accumulate_dead_recovery_records() {
+        let mut known = vec![record(10, 1, 100)];
+        for generation in 2..50u32 {
+            let newer = record(10, generation, generation as u64 * 100);
+            known = next_journal(&known, &[newer], |snapshot| snapshot.pid != generation);
+            assert_eq!(known, vec![newer]);
+        }
     }
 
     #[test]
