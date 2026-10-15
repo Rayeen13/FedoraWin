@@ -458,11 +458,9 @@ mod tests {
         let old = record(10, 111, 1000);
         let hidden_but_unconfirmed = record(20, 111, 1000);
         let replacement = record(10, 222, 2000);
-        let current = next_journal(
-            &[old, hidden_but_unconfirmed],
-            &[replacement],
-            |snapshot| *snapshot == old,
-        );
+        let current = next_journal(&[old, hidden_but_unconfirmed], &[replacement], |snapshot| {
+            *snapshot == old
+        });
         assert_eq!(current, vec![hidden_but_unconfirmed, replacement]);
 
         // An absent or temporarily unreadable hidden HWND is not proof of
@@ -473,7 +471,10 @@ mod tests {
             *snapshot == hidden_but_unconfirmed
         });
         assert_eq!(without_old, vec![replacement]);
-        assert_eq!(next_journal(&without_old, &[replacement], |_| false), without_old);
+        assert_eq!(
+            next_journal(&without_old, &[replacement], |_| false),
+            without_old
+        );
     }
 
     #[test]
@@ -481,9 +482,7 @@ mod tests {
         let mut known = vec![record(10, 1, 100)];
         for generation in 2..50u32 {
             let newer = record(10, generation, generation as u64 * 100);
-            known = next_journal(&known, &[newer], |snapshot| {
-                snapshot.pid != generation
-            });
+            known = next_journal(&known, &[newer], |snapshot| snapshot.pid != generation);
             assert_eq!(known, vec![newer]);
         }
     }
