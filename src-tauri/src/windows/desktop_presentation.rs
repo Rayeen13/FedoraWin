@@ -426,9 +426,8 @@ mod tests {
             snapshots
         );
         assert!(serde_json::from_slice::<Vec<TaskbarSnapshot>>(br"[10,20]").is_err());
-        assert!(serde_json::from_slice::<Vec<TaskbarSnapshot>>(
-            br#"[{"hwnd":10,"pid":111}]"#
-        )
-        .is_err());
+        assert!(
+            serde_json::from_slice::<Vec<TaskbarSnapshot>>(br#"[{"hwnd":10,"pid":111}]"#).is_err()
+        );
     }
 }
