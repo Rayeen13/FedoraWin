@@ -198,3 +198,20 @@ test('Explorer restart probe only manipulates genuine Windows Explorer taskbars'
   assert.match(cleanup, /\[FedoraWinExplorerRestartProbe\]::ShowWindow\(\$hwnd, 5\)/);
   assert.doesNotMatch(cleanup, /if \(\(Test-Taskbar -Hwnd \$hwnd\) -and/);
 });
+
+test('taskbar watchdog journals Explorer process lifetime, not bare HWNDs', () => {
+  assert.match(desktopPresentation, /struct TaskbarSnapshot \{/);
+  for (const field of ['hwnd: isize', 'pid: u32', 'created: u64']) {
+    assert.ok(desktopPresentation.includes(field), `missing journal identity field: ${field}`);
+  }
+  assert.match(desktopPresentation, /serde_json::from_slice::<Vec<TaskbarSnapshot>>/);
+  assert.match(desktopPresentation, /fn same_taskbar_lifetime\(snapshot: &TaskbarSnapshot\) -> bool/);
+  assert.match(desktopPresentation, /pid == snapshot\.pid/);
+  assert.match(desktopPresentation, /process_creation_time\(pid\) == Some\(snapshot\.created\)/);
+  assert.match(desktopPresentation, /fn restore\(windows: &\[TaskbarSnapshot\]\)/);
+  assert.match(desktopPresentation, /if same_taskbar_lifetime\(snapshot\) \{/);
+  assert.match(desktopPresentation, /same_taskbar_lifetime\(snapshot\) && unsafe \{ IsWindowVisible\(hwnd\) \}/);
+  assert.match(desktopPresentation, /taskbar_journal_round_trips_identity_and_rejects_legacy_handle_arrays/);
+  assert.match(desktopPresentation, /explorer_restart_rebinds_a_recycled_hwnd_to_its_new_process_lifetime/);
+  assert.doesNotMatch(desktopPresentation, /from_slice::<Vec<isize>>/);
+});
