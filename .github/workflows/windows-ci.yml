@@ -94,6 +94,8 @@ jobs:
         env:
           FEDORAWIN_SOURCE_BRANCH: ${{ github.ref_name }}
         run: ./tests/capture-site-preview.ps1
+      - name: Verify runtime gallery integrity and executable provenance
+        run: node --test tests/runtime_gallery_evidence.test.mjs
       - name: Upload memory budget
         if: always()
         uses: actions/upload-artifact@v4
@@ -141,6 +143,7 @@ jobs:
             Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'artifacts\site-preview') -Filter '*.png' |
               Copy-Item -Destination $runtime -Force
             Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'artifacts\site-preview\preview-metadata.json') -Destination $runtime -Force
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'artifacts\site-preview\evidence-integrity.json') -Destination $runtime -Force
             git add docs/assets/runtime
             git diff --cached --quiet
             $changed = $LASTEXITCODE -ne 0
