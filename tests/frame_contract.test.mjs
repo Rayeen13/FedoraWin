@@ -215,3 +215,16 @@ test('taskbar watchdog journals Explorer process lifetime, not bare HWNDs', () =
   assert.match(desktopPresentation, /explorer_restart_rebinds_a_recycled_hwnd_to_its_new_process_lifetime/);
   assert.doesNotMatch(desktopPresentation, /from_slice::<Vec<isize>>/);
 });
+
+test('taskbar journal compaction retains unknown lifetimes and writes before hiding', () => {
+  assert.match(desktopPresentation, /fn snapshot_provably_stale\(snapshot: &TaskbarSnapshot\) -> bool/);
+  assert.match(desktopPresentation, /if unsafe \{ IsWindow\(snapshot\.hwnd\) \} == 0/);
+  assert.match(desktopPresentation, /thread_id != 0 && current_pid != snapshot\.pid/);
+  assert.match(desktopPresentation, /process_creation_time\(snapshot\.pid\)[\s\S]*?\.is_some_and/);
+  assert.match(desktopPresentation, /fn next_journal\(/);
+  assert.match(desktopPresentation, /\.filter\(\|snapshot\| !is_provably_stale\(snapshot\)\)/);
+  assert.match(desktopPresentation, /let next = next_journal\(&known, &observed, snapshot_provably_stale\)/);
+  assert.match(desktopPresentation, /match persist_handles\(&journal, &next\) \{\s*Ok\(\(\)\) => known = next/);
+  assert.match(desktopPresentation, /journal_compaction_removes_only_proven_stale_lifetimes/);
+  assert.match(desktopPresentation, /repeated_explorer_restarts_do_not_accumulate_dead_recovery_records/);
+});
