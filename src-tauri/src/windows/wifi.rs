@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
+use std::{thread, time::Duration};
 
 const WLAN_CLIENT_VERSION_LONGHORN: u32 = 2;
 const WLAN_INTF_OPCODE_RADIO_STATE: u32 = 4;
@@ -293,6 +294,10 @@ pub fn status() -> Result<WifiStatus, String> {
     }
 }
 
+fn radio_change_confirmed(requested: bool, observed: &[Option<bool>]) -> bool {
+    !observed.is_empty() && observed.iter().all(|state| *state == Some(requested))
+}
+
 pub fn set_enabled(enabled: bool) -> Result<WifiStatus, String> {
     unsafe {
         let client = Client::open()?;
@@ -306,7 +311,9 @@ pub fn set_enabled(enabled: bool) -> Result<WifiStatus, String> {
         let count = (*list_ptr).count as usize;
         let first = &(*list_ptr).first as *const WlanInterfaceInfo;
         let interfaces = std::slice::from_raw_parts(first, count);
-        let mut changed = 0usize;
+        if count == 0 {
+            return Err("Windows reported no Wi-Fi interfaces to control".into());
+        }
 
         for interface in interfaces {
             let state = WlanPhyRadioState {
@@ -326,22 +333,49 @@ pub fn set_enabled(enabled: bool) -> Result<WifiStatus, String> {
                 &state as *const WlanPhyRadioState as *const c_void,
                 null(),
             );
-            if result == ERROR_SUCCESS {
-                changed += 1;
+            if result != ERROR_SUCCESS {
+                return Err(format!(
+                    "Windows rejected a Wi-Fi interface radio-state request (Win32 error {result}); other adapters may already have changed"
+                ));
             }
         }
 
-        if changed == 0 {
-            return Err("no Wi-Fi interface accepted the radio-state change".into());
+        // A successful API return only acknowledges the request. Check every
+        // adapter so a partially enabled multi-adapter laptop is not reported
+        // as though its global Wi-Fi switch reached the requested state.
+        let mut confirmed = false;
+        for _ in 0..12 {
+            let observed: Vec<_> = interfaces
+                .iter()
+                .map(|interface| query_radio_state(&client, &interface.interface_guid).ok())
+                .collect();
+            if radio_change_confirmed(enabled, &observed) {
+                confirmed = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        if !confirmed {
+            return Err(format!(
+                "Windows did not confirm Wi-Fi {} on every adapter",
+                if enabled { "enabled" } else { "disabled" }
+            ));
         }
     }
 
-    status()
+    let actual = status()?;
+    if actual.enabled != enabled || !actual.supported {
+        return Err("Wi-Fi state changed again before Windows could confirm it".into());
+    }
+    Ok(actual)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ssid_name, Dot11Ssid, WlanAssociationAttributes, WlanConnectionAttributesPrefix};
+    use super::{
+        radio_change_confirmed, ssid_name, Dot11Ssid, WlanAssociationAttributes,
+        WlanConnectionAttributesPrefix,
+    };
 
     fn connection(ssid: &[u8]) -> WlanConnectionAttributesPrefix {
         let mut bytes = [0u8; 32];
@@ -365,6 +399,17 @@ mod tests {
                 tx_rate: 0,
             },
         }
+    }
+
+    #[test]
+    fn wifi_change_requires_every_adapter_to_report_requested_state() {
+        assert!(radio_change_confirmed(true, &[Some(true)]));
+        assert!(radio_change_confirmed(false, &[Some(false), Some(false)]));
+        assert!(radio_change_confirmed(true, &[Some(true), Some(true)]));
+        assert!(!radio_change_confirmed(true, &[]));
+        assert!(!radio_change_confirmed(true, &[Some(true), Some(false)]));
+        assert!(!radio_change_confirmed(false, &[Some(false), None]));
+        assert!(!radio_change_confirmed(true, &[None]));
     }
 
     #[test]

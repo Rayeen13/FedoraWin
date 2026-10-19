@@ -18,6 +18,11 @@ fn windows_error(context: &str, error: impl std::fmt::Display) -> String {
     format!("{context}: {error}")
 }
 
+fn confirmed_radio_state(state: RadioState, target: RadioState) -> bool {
+    // RadioAccessStatus::Allowed acknowledges a request, not the actual radio.
+    state == target
+}
+
 fn radio_state_name(state: RadioState) -> &'static str {
     if state == RadioState::On {
         "on"
@@ -131,23 +136,36 @@ pub fn set_enabled(enabled: bool) -> Result<BluetoothStatus, String> {
         ));
     }
 
-    for _ in 0..8 {
+    for _ in 0..12 {
         let current = radio
             .State()
             .map_err(|error| windows_error("Bluetooth state confirmation failed", error))?;
-        if current == target {
+        if confirmed_radio_state(current, target) {
             return from_radio(&radio);
         }
-        thread::sleep(Duration::from_millis(40));
+        thread::sleep(Duration::from_millis(100));
     }
 
-    from_radio(&radio)
+    Err(format!(
+        "Windows did not confirm Bluetooth radio {} after the state-change request",
+        if enabled { "enabled" } else { "disabled" }
+    ))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::radio_state_name;
+    use super::{confirmed_radio_state, radio_state_name};
     use windows::Devices::Radios::RadioState;
+
+    #[test]
+    fn radio_request_is_not_success_until_windows_reports_the_target_state() {
+        assert!(confirmed_radio_state(RadioState::On, RadioState::On));
+        assert!(confirmed_radio_state(RadioState::Off, RadioState::Off));
+        assert!(!confirmed_radio_state(RadioState::Off, RadioState::On));
+        assert!(!confirmed_radio_state(RadioState::On, RadioState::Off));
+        assert!(!confirmed_radio_state(RadioState::Disabled, RadioState::On));
+        assert!(!confirmed_radio_state(RadioState::Unknown, RadioState::Off));
+    }
 
     #[test]
     fn maps_bluetooth_radio_states() {
