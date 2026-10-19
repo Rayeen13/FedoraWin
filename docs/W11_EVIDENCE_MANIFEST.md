@@ -1,3 +1,47 @@
-# Windows 11 evidence manifest
+# Windows 11 evidence manifest contract
 
-For every W11-01 through W11-14 gate, record PASS, FAIL, BLOCKED or NOT RUN, the tester, test date, Windows 11 build, exact CI executable SHA-256, the physical or VM environment, and an original capture or log. W11-10, W11-11 and W11-12 require physical hardware coverage. CI passing does not mean manual tests passed. A release owner must inspect the evidence before any beta ZIP or beta-ready claim.
+This is a **record format**, not a completed test report. Current manual gate
+results remain **NOT RUN** in [the authoritative validation matrix](BETA_WINDOWS_VALIDATION.md).
+The validator checks field structure only. It never approves a beta.
+
+For **each** `W11-01` through `W11-14`, a PASS record must include:
+
+| Field | Required value |
+| --- | --- |
+| `id` | One unique ID from W11-01 through W11-14 |
+| `status` | `PASS` only after manual testing (otherwise FAIL/BLOCKED/NOT RUN) |
+| `environment` | `physical`, `vm`, or `remote-vm` |
+| `tester` | Named human tester, not a CI job |
+| `testDate` | Actual manual test date in `YYYY-MM-DD` format |
+| `windows11Build` | Windows 11 edition and build as observed on the test machine |
+| `executableSha256` | Exact 64-digit hex SHA-256 of the **executed** CI-built binary |
+| `evidence` | Nonempty array of references to original screenshots, recordings, or logs |
+
+**W11-10, W11-11, W11-12 require a physical Windows 11 device.**
+For the other gates, an unmodified Windows 11 VM can provide exploratory/manual
+coverage under the matrix's criteria. A fabricated filename or SHA-shaped string
+is not proof: the reviewer must open each original, check timestamp/build and
+match the hash against the actual CI executable and run provenance.
+
+Example of a **NOT RUN placeholder**, not test evidence:
+
+```json
+{
+  "id": "W11-01",
+  "status": "NOT RUN",
+  "environment": "vm",
+  "tester": "",
+  "testDate": "",
+  "windows11Build": "",
+  "executableSha256": "",
+  "evidence": []
+}
+```
+
+Run `node --test tests/manual_beta_gate_contract.test.mjs` to verify the
+validator's regression contract. The fixtures use synthetic PASS data solely
+to exercise error handling; **no Windows 11 testing is implied**.
+
+Even when `checkManualGateCoverage(...).complete === true`,
+`betaApproved` remains `false`: a release owner must separately review
+actual artifacts and approve every gate before any beta-ready claim or ZIP.
