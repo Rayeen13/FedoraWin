@@ -20,6 +20,7 @@ export function checkManualGateCoverage(gates) {
   }
 
   const seen = new Set();
+  const executableHashes = new Set();
   for (const gate of gates) {
     if (!gate || typeof gate !== 'object' || !GATE_IDS.includes(gate.id)) {
       errors.push('Unknown manual gate.');
@@ -39,11 +40,18 @@ export function checkManualGateCoverage(gates) {
     if (!nonEmpty(gate.windows11Build)) errors.push(gate.id + ' has no Windows 11 build.');
     if (typeof gate.executableSha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(gate.executableSha256)) {
       errors.push(gate.id + ' has no valid executable SHA-256.');
+    } else {
+      // One exact release candidate must be exercised by every manual gate.
+      // SHA-256 hex casing is immaterial; mixing binaries fails closed.
+      executableHashes.add(gate.executableSha256.toLowerCase());
     }
     if (!Array.isArray(gate.evidence) || gate.evidence.length === 0 ||
         !gate.evidence.every(nonEmpty)) {
       errors.push(gate.id + ' has no valid original evidence references.');
     }
+  }
+  if (executableHashes.size > 1) {
+    errors.push('Manual gates refer to different executable SHA-256 hashes.');
   }
   for (const id of GATE_IDS) if (!seen.has(id)) errors.push('Missing ' + id);
 

@@ -23,6 +23,11 @@ coverage under the matrix's criteria. A fabricated filename or SHA-shaped string
 is not proof: the reviewer must open each original, check timestamp/build and
 match the hash against the actual CI executable and run provenance.
 
+All 14 manual gate records must identify **the same executed release-candidate
+binary SHA-256**. Digest hex casing is ignored; a different hash means the
+manifest mixes builds and cannot establish release-candidate validation.
+Re-test any affected gates against one candidate before reviewer sign-off.
+
 Example of a **NOT RUN placeholder**, not test evidence:
 
 ```json
