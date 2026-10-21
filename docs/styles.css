@@ -632,3 +632,31 @@ footer{border-top:1px solid var(--website-border)}
   .desktop-demo__tab,.card,.hero-dock a{transition:none}
   .desktop-demo .hero-dock a:hover{transform:none}
 }
+
+
+/* Provenance-first gallery callout: evidence, not a release banner. */
+.latest-capture-note{
+  display:flex;align-items:center;justify-content:space-between;gap:18px;
+  padding:20px 23px;margin:16px 0 26px;
+  border:1px solid color-mix(in srgb,var(--blue) 32%,var(--line));
+  border-radius:22px;
+  background:linear-gradient(115deg,color-mix(in srgb,var(--blue) 12%,var(--card)),var(--card));
+}
+.latest-capture-note>div{display:flex;align-items:flex-start;gap:14px}
+.latest-capture-note__mark{
+  display:grid;place-items:center;flex:none;width:32px;height:32px;border-radius:50%;
+  background:color-mix(in srgb,var(--blue) 20%,var(--card));
+  color:var(--blue2);font-size:18px;font-weight:800
+}
+.latest-capture-note strong{display:block;font-size:15px;line-height:1.5}
+.latest-capture-note p{margin:5px 0 0;font-size:12px;color:var(--muted);line-height:1.7;max-width:720px}
+.latest-capture-note a{
+  flex:none;display:inline-flex;align-items:center;justify-content:center;
+  padding:11px 15px;border-radius:12px;background:var(--blue);
+  color:white;font-weight:800;font-size:12px
+}
+.latest-capture-note a:hover{filter:brightness(1.1)}
+@media(max-width:700px){
+  .latest-capture-note{align-items:stretch;flex-direction:column;padding:17px}
+  .latest-capture-note a{align-self:flex-start}
+}
