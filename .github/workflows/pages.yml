@@ -53,13 +53,16 @@ jobs:
         working-directory: src-tauri
         run: cargo fmt --all -- --check
 
-      - name: Build current FedoraWin.exe
+      - name: Build current release FedoraWin.exe
         working-directory: src-tauri
-        run: cargo build
+        run: cargo build --release
 
       - name: Capture real Tauri shell surfaces
         shell: pwsh
         run: ./tests/capture-site-preview.ps1
+
+      - name: Verify PNG integrity and executable provenance
+        run: node --test tests/runtime_gallery_evidence.test.mjs
 
       - name: Upload Windows-rendered gallery
         if: always()
@@ -69,6 +72,7 @@ jobs:
           path: |
             artifacts/site-preview/*.png
             artifacts/site-preview/preview-metadata.json
+            artifacts/site-preview/evidence-integrity.json
           if-no-files-found: warn
           retention-days: 14
 
@@ -122,6 +126,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s docs/assets/runtime/preview-metadata.json
+          test -s docs/assets/runtime/evidence-integrity.json
           test -s docs/assets/runtime/panel.png
           test -s docs/assets/runtime/activities.png
           test -s docs/assets/runtime/apps.png
