@@ -62,7 +62,11 @@ jobs:
         run: ./tests/capture-site-preview.ps1
 
       - name: Verify PNG integrity and executable provenance
-        run: node --test tests/runtime_gallery_evidence.test.mjs
+        shell: pwsh
+        run: |
+          # Pages runs on main but this job checks out the actual native source.
+          $env:GITHUB_SHA = (git rev-parse HEAD).Trim()
+          node --test tests/runtime_gallery_evidence.test.mjs
 
       - name: Upload Windows-rendered gallery
         if: always()
