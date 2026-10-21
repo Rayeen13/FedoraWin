@@ -95,3 +95,20 @@ test('malformed manifests always report betaApproved false', () => {
     assert.equal(result.betaApproved, false);
   }
 });
+
+test('manual gates may not mix different executable SHA-256 digests', () => {
+  const gates = complete();
+  gates[13].executableSha256 = 'b'.repeat(64);
+  const result = check(gates);
+  assert.equal(result.complete, false);
+  assert.equal(result.betaApproved, false);
+  assert.match(result.errors.join(' '), /different executable SHA-256/);
+});
+
+test('case differences in hexadecimal digest do not imply different builds', () => {
+  const gates = complete();
+  gates[0].executableSha256 = 'A'.repeat(64);
+  const result = check(gates);
+  assert.equal(result.complete, true);
+  assert.equal(result.betaApproved, false);
+});
