@@ -92,13 +92,27 @@ for html_file in html_files:
 index = (DOCS / "index.html").read_text(encoding="utf-8")
 for required in [
     "GNOME 51 desktop.",
-    "32 MB measured idle",
+    "33 MB sampled idle",
     "Power Mode",
     "./gallery.html",
     "data-runtime-shot=\"activities\"",
 ]:
     if required not in index:
         errors.append(f"index.html: missing required content: {required}")
+
+# The homepage is a screenshot viewer, not a simulated product. Its images
+# must use the same verified runtime file keys already published by Windows CI.
+for required in (
+    'data-hero-stage',
+    'data-hero-preview',
+    'data-hero-screenshot="activities"',
+    'data-hero-screenshot="desktop"',
+    'data-hero-screenshot="apps"',
+    'data-hero-screenshot="quick_settings_dark"',
+    'data-ci-run-link',
+):
+    if required not in index:
+        errors.append(f"index.html: GNOME 51 screenshot showcase missing {required}")
 
 frame_engine = (DOCS / "frame-engine.html").read_text(encoding="utf-8")
 for required in ("Design only", "not yet", "without restarting Windows", "Opera GX", "System32", "FRAME_ENGINE_RFC.md"):
@@ -107,7 +121,7 @@ for required in ("Design only", "not yet", "without restarting Windows", "Opera 
 
 docs_hub = (DOCS / "docs.html").read_text(encoding="utf-8")
 for required in [
-    "32 MB verified idle",
+    "33 MB sampled CI idle",
     "Safety & reversibility",
     "Workspace foundation",
     "./architecture.html",
@@ -151,6 +165,13 @@ for element_id in ("galleryGrid", "galleryPrevious", "galleryNext", "galleryPosi
 
 site_js = (DOCS / "app.js").read_text(encoding="utf-8")
 site_css = (DOCS / "styles.css").read_text(encoding="utf-8")
+for required in ('selectDemoTab', "demoImage.dataset.runtimeShot=key", "tab.addEventListener('click',()=>selectDemoTab(tab))"):
+    if required not in site_js:
+        errors.append(f"app.js: screenshot switcher missing {required}")
+for required in (".desktop-demo__screen", ".desktop-demo__tab", ".latest-capture-note"):
+    if required not in site_css:
+        errors.append(f"styles.css: modern screenshot presentation missing {required}")
+
 for required in (
     "gallery.dataset.view=view",
     "card.hidden=carousel&&index!==active",
