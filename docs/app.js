@@ -337,6 +337,35 @@
     render();
   }
 
+  // The homepage selector swaps only the verified runtime screenshots already
+  // committed to docs/assets/runtime and named by preview-metadata.json.
+  // This is a website viewer, not an interactive simulation of FedoraWin.
+  const demo=document.querySelector('[data-hero-stage]');
+  const demoImage=demo?.querySelector('[data-hero-preview]');
+  const demoTabs=[...document.querySelectorAll('[data-hero-screenshot]')];
+  if(demo&&demoImage&&demoTabs.length){
+    const shots=new Set(['activities','desktop','apps','quick_settings_dark']);
+    const title=demo.querySelector('[data-hero-title]');
+    const detail=demo.querySelector('[data-hero-detail]');
+    const selectDemoTab=tab=>{
+      const key=tab.dataset.heroScreenshot;
+      if(!shots.has(key)) return;
+      demo.dataset.view=key;
+      demoImage.dataset.runtimeShot=key;
+      demoImage.src='./assets/runtime/'+key+'.png';
+      demoImage.alt=tab.dataset.heroAlt||'Verified FedoraWin executable screenshot';
+      if(title) title.textContent=tab.dataset.heroTitle||key;
+      if(detail) detail.textContent=tab.dataset.heroDetail||'Real Windows capture';
+      demoTabs.forEach(button=>{
+        const selected=button===tab;
+        button.classList.toggle('is-active',selected);
+        button.setAttribute('aria-pressed',String(selected));
+      });
+    };
+    demoTabs.forEach(tab=>tab.addEventListener('click',()=>selectDemoTab(tab)));
+    selectDemoTab(demoTabs[0]);
+  }
+
   const hydrateCiPreview=async()=> {
     try{
       const response=await fetch('./assets/runtime/preview-metadata.json',{cache:'no-store'});
