@@ -6,6 +6,7 @@ export const GATE_IDS = Array.from({ length: 14 }, (_, index) =>
 const HARDWARE_GATES = new Set(['W11-10', 'W11-11', 'W11-12']);
 const ENVIRONMENTS = new Set(['physical', 'vm', 'remote-vm']);
 const nonEmpty = (value) => typeof value === 'string' && value.trim().length > 0;
+const validSha256 = (value) => typeof value === 'string' && /^[0-9a-f]{64}$/i.test(value);
 
 function validDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -13,12 +14,20 @@ function validDate(value) {
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-export function checkManualGateCoverage(gates) {
+// Standalone fixture tests may omit the expected digest; release review must
+// supply the SHA-256 of the actual candidate executable.
+export function checkManualGateCoverage(gates, { expectedExecutableSha256 } = {}) {
   const errors = [];
   if (!Array.isArray(gates)) {
     return { complete: false, betaApproved: false, errors: ['Manual gates must be an array.'] };
   }
 
+  if (expectedExecutableSha256 !== undefined && !validSha256(expectedExecutableSha256)) {
+    errors.push('Expected release-candidate executable SHA-256 is invalid.');
+  }
+  const expectedHash = validSha256(expectedExecutableSha256)
+    ? expectedExecutableSha256.toLowerCase()
+    : null;
   const seen = new Set();
   const executableHashes = new Set();
   for (const gate of gates) {
@@ -38,12 +47,16 @@ export function checkManualGateCoverage(gates) {
     if (!nonEmpty(gate.tester)) errors.push(gate.id + ' has no named tester.');
     if (!validDate(gate.testDate)) errors.push(gate.id + ' has no valid YYYY-MM-DD test date.');
     if (!nonEmpty(gate.windows11Build)) errors.push(gate.id + ' has no Windows 11 build.');
-    if (typeof gate.executableSha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(gate.executableSha256)) {
+    if (!validSha256(gate.executableSha256)) {
       errors.push(gate.id + ' has no valid executable SHA-256.');
     } else {
       // One exact release candidate must be exercised by every manual gate.
       // SHA-256 hex casing is immaterial; mixing binaries fails closed.
-      executableHashes.add(gate.executableSha256.toLowerCase());
+      const digest = gate.executableSha256.toLowerCase();
+      executableHashes.add(digest);
+      if (expectedHash && digest !== expectedHash) {
+        errors.push(gate.id + ' does not match the release-candidate executable SHA-256.');
+      }
     }
     if (!Array.isArray(gate.evidence) || gate.evidence.length === 0 ||
         !gate.evidence.every(nonEmpty)) {

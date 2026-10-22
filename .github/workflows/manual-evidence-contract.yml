@@ -1,0 +1,24 @@
+name: Manual evidence binary binding contract
+
+on:
+  push:
+    branches:
+      - dev/gnome-native-20260914
+      - 'fix/**'
+      - 'test/**'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-contract:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify manual gate and candidate binary contract
+        run: node --test tests/manual_beta_gate_contract.test.mjs tests/manual_evidence_binary_binding.test.mjs
