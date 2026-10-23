@@ -692,8 +692,8 @@ pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) -> Result<(), S
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_frame_traits, exclusions, has_known_self_drawn_chrome, identity_is_excluded, palette,
-        protected_process_family, self_drawn_chrome_family, WindowIdentity, WS_CAPTION,
+        classify_frame_traits, exclusions, has_known_self_drawn_chrome, identity_is_excluded,
+        palette, protected_process_family, self_drawn_chrome_family, WindowIdentity, WS_CAPTION,
         WS_EX_LAYERED, WS_EX_TOPMOST, WS_SYSMENU, WS_THICKFRAME,
     };
     use crate::shell::{AppearanceState, ThemeMode};
@@ -713,7 +713,11 @@ mod tests {
             classify_frame_traits(standard, 0, "Notepad", process),
             "standard_candidate_unverified"
         );
-        for style in [standard & !WS_CAPTION, standard & !WS_THICKFRAME, standard & !WS_SYSMENU] {
+        for style in [
+            standard & !WS_CAPTION,
+            standard & !WS_THICKFRAME,
+            standard & !WS_SYSMENU,
+        ] {
             assert_eq!(
                 classify_frame_traits(style, 0, "Notepad", process),
                 "nonstandard_window"
@@ -731,13 +735,26 @@ mod tests {
     fn passive_frame_candidate_preserves_custom_chrome_explorer_and_unknowns() {
         let standard = WS_CAPTION | WS_THICKFRAME | WS_SYSMENU;
         let exe = r"C:\\Apps\\Example\\app.exe";
-        assert_eq!(classify_frame_traits(standard, 0, "Chrome_WidgetWin_1", exe), "custom_chrome");
         assert_eq!(
-            classify_frame_traits(standard, 0, "WindowsForms10.Window.8.app.0.1", r"C:\\Windows\\explorer.exe"),
+            classify_frame_traits(standard, 0, "Chrome_WidgetWin_1", exe),
+            "custom_chrome"
+        );
+        assert_eq!(
+            classify_frame_traits(
+                standard,
+                0,
+                "WindowsForms10.Window.8.app.0.1",
+                r"C:\\Windows\\explorer.exe"
+            ),
             "system_excluded"
         );
         assert_eq!(
-            classify_frame_traits(standard, 0, "Notepad", r"C:\\Windows\\System32\\consent.exe"),
+            classify_frame_traits(
+                standard,
+                0,
+                "Notepad",
+                r"C:\\Windows\\System32\\consent.exe"
+            ),
             "system_excluded"
         );
         assert_eq!(classify_frame_traits(standard, 0, "", exe), "unknown");
