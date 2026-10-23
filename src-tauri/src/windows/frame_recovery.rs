@@ -285,7 +285,11 @@ pub fn maybe_run_guardian() -> bool {
             return true;
         }
         let process = unsafe {
-            OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
+            OpenProcess(
+                PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
+                0,
+                pid,
+            )
         };
         let stopped = if process == 0 {
             parent_lifetime(
@@ -332,8 +336,14 @@ mod tests {
 
     #[test]
     fn guardian_waits_only_for_the_original_parent_lifetime() {
-        assert_eq!(parent_lifetime(100, Some(100), None), ParentLifetime::Running);
-        assert_eq!(parent_lifetime(100, Some(101), None), ParentLifetime::Stopped);
+        assert_eq!(
+            parent_lifetime(100, Some(100), None),
+            ParentLifetime::Running
+        );
+        assert_eq!(
+            parent_lifetime(100, Some(101), None),
+            ParentLifetime::Stopped
+        );
     }
 
     #[test]
