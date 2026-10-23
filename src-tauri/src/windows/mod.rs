@@ -230,6 +230,7 @@ pub mod windows_list {
         pub desktop_id: Option<String>,
         pub on_current_workspace: bool,
         pub frame_excluded: bool,
+        pub frame_candidate: String,
     }
     pub fn list() -> Result<Vec<WindowEntry>, String> {
         Ok(Vec::new())

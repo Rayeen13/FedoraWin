@@ -12,6 +12,9 @@ use std::time::Duration;
 const GWL_STYLE: i32 = -16;
 const GWL_EXSTYLE: i32 = -20;
 const WS_CAPTION: isize = 0x00C0_0000;
+const WS_THICKFRAME: isize = 0x0004_0000;
+const WS_SYSMENU: isize = 0x0008_0000;
+const WS_EX_TOPMOST: isize = 0x0000_0008;
 const WS_EX_TOOLWINDOW: isize = 0x00000080;
 const WS_EX_NOACTIVATE: isize = 0x08000000;
 const WS_EX_LAYERED: isize = 0x00080000;
@@ -388,6 +391,110 @@ fn protected_process_family(process_key: &str) -> Option<&'static str> {
         .find_map(|(candidate, family)| (name == *candidate).then_some(*family))
 }
 
+// Passive classification for the proposed opt-in, same-process frame engine.
+// This is NOT permission to inject into another process or replace HWND chrome.
+// A "standard_candidate_unverified" is only a diagnostic hint; the actual
+// attach path must independently prove ownership, process lifetime and rollback.
+fn classify_frame_traits(
+    style: isize,
+    exstyle: isize,
+    class_name: &str,
+    process_key: &str,
+) -> &'static str {
+    if class_name.is_empty() || process_key.is_empty() {
+        return "unknown";
+    }
+    // Explorer must not be considered for a future foreign-process attach.
+    // Its file windows may still receive today's reversible DWM treatment.
+    if protected_process_family(process_key).is_some()
+        || process_key
+            .rsplit('\\')
+            .next()
+            .is_some_and(|name| name.eq_ignore_ascii_case("explorer.exe"))
+    {
+        return "system_excluded";
+    }
+    if self_drawn_chrome_family(class_name).is_some() {
+        return "custom_chrome";
+    }
+    if style & WS_CAPTION != WS_CAPTION
+        || style & WS_THICKFRAME == 0
+        || style & WS_SYSMENU == 0
+        || exstyle
+            & (WS_EX_TOPMOST
+                | WS_EX_TOOLWINDOW
+                | WS_EX_NOACTIVATE
+                | WS_EX_LAYERED
+                | WS_EX_NOREDIRECTIONBITMAP)
+            != 0
+    {
+        return "nonstandard_window";
+    }
+    "standard_candidate_unverified"
+}
+
+// Read-only Win32/identity inspection for the Activities window list. It
+// changes no styles, hooks, caption controls, other processes or DWM state.
+pub fn frame_candidate_status(handle: &str) -> &'static str {
+    let Ok(hwnd) = handle.parse::<isize>() else {
+        return "unknown";
+    };
+    unsafe {
+        if hwnd == 0 || IsWindow(hwnd) == 0 {
+            return "unknown";
+        }
+        if IsWindowVisible(hwnd) == 0 || IsIconic(hwnd) != 0 || GetWindow(hwnd, GW_OWNER) != 0 {
+            return "nonstandard_window";
+        }
+        let pid = window_pid(hwnd);
+        if pid == 0 || pid == std::process::id() {
+            return "system_excluded";
+        }
+        let Some(identity) = window_identity(hwnd) else {
+            return "unknown";
+        };
+        if identity_is_excluded(identity) {
+            return "policy_excluded";
+        }
+        let Ok(process_key) = frame_policy::process_key(pid) else {
+            return "unknown";
+        };
+        let Ok(policy_excluded) = frame_policy::is_process_key_excluded(&process_key) else {
+            return "unknown";
+        };
+        if policy_excluded {
+            return "policy_excluded";
+        }
+        let mut class_name = [0u16; 256];
+        let length = GetClassNameW(hwnd, class_name.as_mut_ptr(), class_name.len() as i32);
+        if length <= 0 {
+            return "unknown";
+        }
+        let class_name = String::from_utf16_lossy(&class_name[..length as usize]);
+        let status = classify_frame_traits(
+            GetWindowLongPtrW(hwnd, GWL_STYLE),
+            GetWindowLongPtrW(hwnd, GWL_EXSTYLE),
+            &class_name,
+            &process_key,
+        );
+        if status != "standard_candidate_unverified" {
+            return status;
+        }
+        if read_attr::<i32>(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE) == Some(DWMWCP_DONOTROUND) {
+            return "custom_chrome";
+        }
+        match read_attr::<i32>(hwnd, DWMWA_CLOAKED) {
+            Some(0) => {}
+            Some(_) => return "nonstandard_window",
+            None => return "unknown",
+        }
+        if window_identity(hwnd) != Some(identity) {
+            return "unknown"; // HWND or process lifetime was recycled mid-scan.
+        }
+        "standard_candidate_unverified"
+    }
+}
+
 #[cfg(test)]
 fn has_known_self_drawn_chrome(class_name: &str) -> bool {
     self_drawn_chrome_family(class_name).is_some()
@@ -585,8 +692,9 @@ pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) -> Result<(), S
 #[cfg(test)]
 mod tests {
     use super::{
-        exclusions, has_known_self_drawn_chrome, identity_is_excluded, palette,
-        protected_process_family, self_drawn_chrome_family, WindowIdentity,
+        classify_frame_traits, exclusions, has_known_self_drawn_chrome, identity_is_excluded,
+        palette, protected_process_family, self_drawn_chrome_family, WindowIdentity, WS_CAPTION,
+        WS_EX_LAYERED, WS_EX_TOPMOST, WS_SYSMENU, WS_THICKFRAME,
     };
     use crate::shell::{AppearanceState, ThemeMode};
 
@@ -595,6 +703,62 @@ mod tests {
             theme,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn passive_frame_candidate_requires_standard_caption_resize_and_system_menu() {
+        let standard = WS_CAPTION | WS_THICKFRAME | WS_SYSMENU;
+        let process = r"C:\\Program Files\\Example\\notepad.exe";
+        assert_eq!(
+            classify_frame_traits(standard, 0, "Notepad", process),
+            "standard_candidate_unverified"
+        );
+        for style in [
+            standard & !WS_CAPTION,
+            standard & !WS_THICKFRAME,
+            standard & !WS_SYSMENU,
+        ] {
+            assert_eq!(
+                classify_frame_traits(style, 0, "Notepad", process),
+                "nonstandard_window"
+            );
+        }
+        for exstyle in [WS_EX_LAYERED, WS_EX_TOPMOST] {
+            assert_eq!(
+                classify_frame_traits(standard, exstyle, "Notepad", process),
+                "nonstandard_window"
+            );
+        }
+    }
+
+    #[test]
+    fn passive_frame_candidate_preserves_custom_chrome_explorer_and_unknowns() {
+        let standard = WS_CAPTION | WS_THICKFRAME | WS_SYSMENU;
+        let exe = r"C:\\Apps\\Example\\app.exe";
+        assert_eq!(
+            classify_frame_traits(standard, 0, "Chrome_WidgetWin_1", exe),
+            "custom_chrome"
+        );
+        assert_eq!(
+            classify_frame_traits(
+                standard,
+                0,
+                "WindowsForms10.Window.8.app.0.1",
+                r"C:\\Windows\\explorer.exe"
+            ),
+            "system_excluded"
+        );
+        assert_eq!(
+            classify_frame_traits(
+                standard,
+                0,
+                "Notepad",
+                r"C:\\Windows\\System32\\consent.exe"
+            ),
+            "system_excluded"
+        );
+        assert_eq!(classify_frame_traits(standard, 0, "", exe), "unknown");
+        assert_eq!(classify_frame_traits(standard, 0, "Notepad", ""), "unknown");
     }
 
     #[test]

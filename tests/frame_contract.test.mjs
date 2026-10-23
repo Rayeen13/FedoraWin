@@ -11,6 +11,22 @@ test('foreign native caption buttons and hit testing remain Windows-owned', () =
   assert.doesNotMatch(frame, /SetWindowLongPtrW|SetWindowSubclass|SetWindowPos/);
 });
 
+test('foreign window frame candidates are read-only hints, never attachment authority', () => {
+  assert.match(frame, /fn classify_frame_traits\(/);
+  assert.match(frame, /pub fn frame_candidate_status\(handle: &str\)/);
+  assert.match(frame, /"standard_candidate_unverified"/);
+  assert.match(frame, /"custom_chrome"/);
+  assert.match(frame, /"system_excluded"/);
+  assert.match(frame, /"policy_excluded"/);
+  assert.match(frame, /"nonstandard_window"/);
+  assert.match(frame, /"unknown"/);
+  assert.match(frame, /WS_THICKFRAME|WS_SYSMENU/);
+  assert.match(frame, /window_identity\(hwnd\) != Some\(identity\)/);
+  assert.match(frame, /passive_frame_candidate_preserves_custom_chrome_explorer_and_unknowns/);
+  assert.doesNotMatch(frame, /SetWindowLongPtrW|SetWindowSubclass|SetWindowPos/);
+  assert.match(readFileSync(new URL('../src-tauri/src/windows/windows_list.rs', import.meta.url), 'utf8'), /frame_candidate: String/);
+});
+
 test('custom application chrome and DWM opt-outs are excluded even with WS_CAPTION', () => {
   assert.match(frame, /GetClassNameW\(hwnd, class_name\.as_mut_ptr\(\)/);
   assert.match(frame, /if !owns_standard_caption\(hwnd\)/);
