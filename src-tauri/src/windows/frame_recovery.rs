@@ -15,6 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const PROCESS_SYNCHRONIZE: u32 = 0x0010_0000;
 const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
 const WAIT_OBJECT_0: u32 = 0;
+const ERROR_INVALID_PARAMETER: i32 = 87;
 const WAIT_FOREVER: u32 = 0xffff_ffff;
 const MOVEFILE_REPLACE_EXISTING: u32 = 1;
 const MOVEFILE_WRITE_THROUGH: u32 = 8;
@@ -77,6 +78,15 @@ pub struct Snapshot {
     pub text: Option<u32>,
 }
 
+fn process_creation_time_from_handle(process: isize) -> Option<u64> {
+    let mut created = FileTime::default();
+    let mut exited = FileTime::default();
+    let mut kernel = FileTime::default();
+    let mut user = FileTime::default();
+    let ok = unsafe { GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user) };
+    (ok != 0).then_some(((created.high as u64) << 32) | created.low as u64)
+}
+
 pub fn process_creation_time(pid: u32) -> Option<u64> {
     if pid == 0 {
         return None;
@@ -85,13 +95,34 @@ pub fn process_creation_time(pid: u32) -> Option<u64> {
     if process == 0 {
         return None;
     }
-    let mut created = FileTime::default();
-    let mut exited = FileTime::default();
-    let mut kernel = FileTime::default();
-    let mut user = FileTime::default();
-    let ok = unsafe { GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user) };
+    let created = process_creation_time_from_handle(process);
     unsafe { CloseHandle(process) };
-    (ok != 0).then_some(((created.high as u64) << 32) | created.low as u64)
+    created
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ParentLifetime {
+    Running,
+    Stopped,
+    Unknown,
+}
+
+// An absent/recycled PID proves the original parent's exit. If process access
+// fails for any other reason, recovery cannot safely infer termination.
+fn parent_lifetime(
+    expected_created: u64,
+    observed_created: Option<u64>,
+    open_error: Option<i32>,
+) -> ParentLifetime {
+    if expected_created == 0 {
+        return ParentLifetime::Unknown;
+    }
+    match observed_created {
+        Some(created) if created == expected_created => ParentLifetime::Running,
+        Some(_) => ParentLifetime::Stopped,
+        None if open_error == Some(ERROR_INVALID_PARAMETER) => ParentLifetime::Stopped,
+        None => ParentLifetime::Unknown,
+    }
 }
 
 fn wide(path: &Path) -> Vec<u16> {
@@ -154,10 +185,13 @@ pub fn start_guardian() -> Result<(), String> {
         .set(path.clone())
         .map_err(|_| "frame journal already initialized".to_string())?;
     persist(&[])?;
+    let parent_created = process_creation_time(std::process::id())
+        .ok_or("cannot identify frame guardian parent process lifetime")?;
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     Command::new(exe)
         .arg("--restore-frames-after")
         .arg(std::process::id().to_string())
+        .arg(parent_created.to_string())
         .arg(&path)
         .spawn()
         .map_err(|e| format!("independent frame guardian did not start: {e}"))?;
@@ -242,15 +276,44 @@ pub fn maybe_run_guardian() -> bool {
     let pid = args
         .next()
         .and_then(|s| s.to_string_lossy().parse::<u32>().ok());
+    let expected_created = args
+        .next()
+        .and_then(|s| s.to_string_lossy().parse::<u64>().ok());
     let path = args.next().map(PathBuf::from);
-    if let (Some(pid), Some(path)) = (pid, path) {
-        let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
+    if let (Some(pid), Some(expected_created), Some(path)) = (pid, expected_created, path) {
+        if pid == 0 || expected_created == 0 || args.next().is_some() {
+            return true;
+        }
+        let process = unsafe {
+            OpenProcess(
+                PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
+                0,
+                pid,
+            )
+        };
         let stopped = if process == 0 {
-            true
+            parent_lifetime(
+                expected_created,
+                None,
+                std::io::Error::last_os_error().raw_os_error(),
+            ) == ParentLifetime::Stopped
         } else {
-            let result = unsafe { WaitForSingleObject(process, WAIT_FOREVER) };
+            // Query the opened handle, avoiding a second PID lookup/reuse race.
+            let state = parent_lifetime(
+                expected_created,
+                process_creation_time_from_handle(process),
+                None,
+            );
+            let stopped = match state {
+                ParentLifetime::Running => {
+                    let result = unsafe { WaitForSingleObject(process, WAIT_FOREVER) };
+                    result == WAIT_OBJECT_0
+                }
+                ParentLifetime::Stopped => true,
+                ParentLifetime::Unknown => false,
+            };
             unsafe { CloseHandle(process) };
-            result == WAIT_OBJECT_0
+            stopped
         };
         if stopped {
             if let Ok(bytes) = fs::read(&path) {
@@ -265,4 +328,32 @@ pub fn maybe_run_guardian() -> bool {
         }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parent_lifetime, ParentLifetime, ERROR_INVALID_PARAMETER};
+
+    #[test]
+    fn guardian_waits_only_for_the_original_parent_lifetime() {
+        assert_eq!(
+            parent_lifetime(100, Some(100), None),
+            ParentLifetime::Running
+        );
+        assert_eq!(
+            parent_lifetime(100, Some(101), None),
+            ParentLifetime::Stopped
+        );
+    }
+
+    #[test]
+    fn guardian_fails_closed_when_parent_identity_is_unverifiable() {
+        assert_eq!(
+            parent_lifetime(100, None, Some(ERROR_INVALID_PARAMETER)),
+            ParentLifetime::Stopped
+        );
+        assert_eq!(parent_lifetime(100, None, Some(5)), ParentLifetime::Unknown);
+        assert_eq!(parent_lifetime(100, None, None), ParentLifetime::Unknown);
+        assert_eq!(parent_lifetime(0, Some(100), None), ParentLifetime::Unknown);
+    }
 }
