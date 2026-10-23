@@ -111,3 +111,23 @@ Research references:
   matrix on physical Windows. Do not ship while only CI test apps are passing.
 
 **Beta status:** Native *cross-process* injected frame engine remains unimplemented and untested. The disposable same-process proof, existing native shell CI, and separate real-libadwaita captures do not validate injection-specific release gates.
+
+## October 23 — passive candidate diagnostics (no frame attachment)
+
+The native Activities `list_windows` response now includes a
+`frameCandidate` string derived from read-only HWND inspection. Expected values
+are `standard_candidate_unverified`, `custom_chrome`, `system_excluded`,
+`policy_excluded`, `nonstandard_window`, and `unknown`. The classifier checks
+the HWND's original process lifetime, caption/resize/system-menu styles,
+class-based custom chrome exclusions, protected/Explorer process names, explicit
+per-window/per-app exclusions, and available DWM cloak/corner opt-outs.
+
+**Candidate does not mean safe to inject.** This metadata never calls
+`SetWindowLongPtrW`, `SetWindowSubclass`, installs a hook, or sends code into
+another process. Elevated/protected-process boundaries, ownership, cross-bitness,
+capture of the original WNDPROC, active callbacks, and crash-safe rollback
+remain unverified and must be checked again in an actual, separately reviewed
+same-process or explicit opt-in attachment design. Unknown is never permission.
+
+The existing conservative, reversible DWM fallback, native Windows captions,
+Windows Explorer, and physical Windows 11 beta validation gates are unchanged.
