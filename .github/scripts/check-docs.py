@@ -150,7 +150,7 @@ for key in [
         errors.append(f"gallery.html: missing runtime shot: {key}")
 
 
-for required in ("id=\"real-adwaita\"", "not yet wired into the production FedoraWin shell", "the 15 images above", "assets/adwaita/adwaita-dark.png", "assets/adwaita/adwaita-light.png"):
+for required in ('id="real-adwaita"', 'id="dwm-diagnostics"', 'not yet wired into the production FedoraWin shell', '13 main shell views', 'assets/adwaita/adwaita-dark.png', 'assets/adwaita/adwaita-light.png'):
     if required.lower() not in gallery.lower():
         errors.append(f"gallery.html: missing verified Adwaita separation: {required}")
 
@@ -184,6 +184,23 @@ if 'src="./assets/runtime/native_frame.png"' in index and "libadwaita" not in in
 for required in (".adwaita-frames__grid", ".adwaita-frames__shot:focus-visible", ".adwaita-frames__note"):
     if required not in (DOCS / "styles.css").read_text(encoding="utf-8"):
         errors.append(f"styles.css: missing accessible Adwaita evidence showcase: {required}")
+
+# Only actual FedoraWin shell captures belong in the primary album. DWM
+# diagnostics remain available in their own technical section, never as
+# examples of GTK4/libadwaita chrome.
+album = gallery.split('id="galleryGrid"', 1)[1].split('</div>', 1)[0]
+diagnostics = gallery.split('id="dwm-diagnostics"', 1)[1]
+if album.count('data-runtime-shot=') != 13:
+    errors.append("gallery.html: primary shell album must contain exactly 13 real shell screenshots")
+for frame_key in ("native_frame", "native_frame_light"):
+    if f'data-runtime-shot="{frame_key}"' in album:
+        errors.append(f"gallery.html: DWM diagnostic {frame_key} leaked into primary album")
+    if f'data-runtime-shot="{frame_key}"' not in diagnostics:
+        errors.append(f"gallery.html: missing separately labeled DWM diagnostic {frame_key}")
+if gallery.index('id="real-adwaita"') > gallery.index('id="dwm-diagnostics"'):
+    errors.append("gallery.html: genuine Adwaita evidence must appear before legacy DWM diagnostics")
+if 'Legacy Windows DWM diagnostics — not Adwaita' not in gallery:
+    errors.append("gallery.html: missing explicit non-Adwaita diagnostic label")
 
 # Gallery controls must operate on the real runtime shots, not copied mock cards.
 for mode in ("list", "grid", "card", "carousel"):
