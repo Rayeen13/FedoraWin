@@ -660,3 +660,24 @@ footer{border-top:1px solid var(--website-border)}
   .latest-capture-note{align-items:stretch;flex-direction:column;padding:17px}
   .latest-capture-note a{align-self:flex-start}
 }
+
+
+/* Genuine GTK4/libadwaita window proof, deliberately separate from FedoraWin.exe
+   runtime screenshots. Never synthesize or CSS-paint replacement caption bars. */
+.adwaita-frames{background:linear-gradient(180deg,var(--bg),var(--bg2));border-bottom:1px solid var(--line)}
+.adwaita-frames__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+.adwaita-frames__shot{appearance:none;display:flex;flex-direction:column;align-items:stretch;min-width:0;padding:0;overflow:hidden;cursor:zoom-in;text-align:left;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:24px;box-shadow:var(--shadow);transition:transform .2s,border-color .2s}
+.adwaita-frames__shot:hover{transform:translateY(-3px);border-color:var(--blue2)}
+.adwaita-frames__shot:focus-visible{outline:3px solid var(--blue2);outline-offset:4px}
+.adwaita-frames__shot img{display:block;width:100%;height:clamp(220px,34vw,410px);object-fit:contain;background:var(--bg2)}
+.adwaita-frames__shot span{display:grid;gap:3px;padding:18px 22px;border-top:1px solid var(--line)}
+.adwaita-frames__shot span b{font-size:18px}
+.adwaita-frames__shot span small{font-size:13px;color:var(--muted)}
+.adwaita-frames__note{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin-top:23px;padding:25px;border:1px solid var(--line);border-radius:20px;background:var(--card)}
+.adwaita-frames__note b{font-size:16px}
+.adwaita-frames__note p{color:var(--muted);font-size:14px;line-height:1.65;margin:7px 0 0}
+.adwaita-frames__sources{display:flex;flex-wrap:wrap;gap:12px 24px;margin:22px 0 0;font-size:13px;font-weight:800}
+.adwaita-frames__sources a{color:var(--blue2)}
+.adwaita-frames__sources a:hover{text-decoration:underline}
+@media(max-width:760px){.adwaita-frames__grid,.adwaita-frames__note{grid-template-columns:1fr}.adwaita-frames__shot img{height:clamp(210px,58vw,390px)}}
+@media(prefers-reduced-motion:reduce){.adwaita-frames__shot{transition:none}.adwaita-frames__shot:hover{transform:none}}
