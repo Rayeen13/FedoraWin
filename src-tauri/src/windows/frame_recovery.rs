@@ -302,7 +302,8 @@ pub fn maybe_run_guardian() -> bool {
             );
             let stopped = match state {
                 ParentLifetime::Running => {
-                    unsafe { WaitForSingleObject(process, WAIT_FOREVER) } == WAIT_OBJECT_0
+                    let result = unsafe { WaitForSingleObject(process, WAIT_FOREVER) };
+                    result == WAIT_OBJECT_0
                 }
                 ParentLifetime::Stopped => true,
                 ParentLifetime::Unknown => false,
@@ -331,14 +332,8 @@ mod tests {
 
     #[test]
     fn guardian_waits_only_for_the_original_parent_lifetime() {
-        assert_eq!(
-            parent_lifetime(100, Some(100), None),
-            ParentLifetime::Running
-        );
-        assert_eq!(
-            parent_lifetime(100, Some(101), None),
-            ParentLifetime::Stopped
-        );
+        assert_eq!(parent_lifetime(100, Some(100), None), ParentLifetime::Running);
+        assert_eq!(parent_lifetime(100, Some(101), None), ParentLifetime::Stopped);
     }
 
     #[test]
