@@ -19,6 +19,8 @@ pub struct WindowEntry {
     pub desktop_id: Option<String>,
     pub on_current_workspace: bool,
     pub frame_excluded: bool,
+    // Read-only classification hint, never an injection authorization.
+    pub frame_candidate: String,
 }
 
 #[link(name = "user32")]
@@ -97,6 +99,7 @@ unsafe extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
             desktop_id: None,
             on_current_workspace: true,
             frame_excluded: false,
+            frame_candidate: "unknown".into(),
         });
     }
     1
@@ -123,6 +126,7 @@ pub fn list() -> Result<Vec<WindowEntry>, String> {
             window.on_current_workspace = workspace.on_current_workspace;
         }
         window.frame_excluded = super::frame::is_app_excluded(&window.handle).unwrap_or(true);
+        window.frame_candidate = super::frame::frame_candidate_status(&window.handle).into();
     }
 
     Ok(windows)
