@@ -126,6 +126,7 @@ function Capture-AdwaitaSurface {
             $bitmap.Dispose()
         }
         if ((Get-Item -LiteralPath $path).Length -lt 4000) { throw "Capture uninitialized ($Surface / $Theme)." }
+        $captureSha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
 
         $process.Refresh()
         $workingSetMb=[Math]::Round($process.WorkingSet64 / 1MB, 1)
@@ -141,6 +142,7 @@ function Capture-AdwaitaSurface {
             height=$height
             working_set_mb=$workingSetMb
             capture=(Split-Path -Leaf $path)
+            sha256=$captureSha256
         }
     } finally {
         if (-not $process.HasExited) {
@@ -156,8 +158,25 @@ foreach ($theme in @('dark','light')) {
     $results.Add((Capture-AdwaitaSurface -Executable $preferencesExe -ExpectedTitle 'FedoraWin Preferences' -Theme $theme -CapturePrefix 'adwaita-preferences' -Surface 'preferences'))
 }
 
+# A single color scheme accidentally captured twice must never be promoted as
+# proof of real libadwaita dark/light behavior. Verify each independent HWND
+# pair and retain the screenshot hashes alongside the memory measurements.
+foreach ($surface in @('baseline-proof', 'preferences')) {
+    $dark = @($results | Where-Object { $_.surface -eq $surface -and $_.theme -eq 'dark' })
+    $light = @($results | Where-Object { $_.surface -eq $surface -and $_.theme -eq 'light' })
+    if ($dark.Count -ne 1 -or $light.Count -ne 1) {
+        throw "Adwaita $surface proof requires exactly one dark and one light capture."
+    }
+    if ($dark[0].sha256 -eq $light[0].sha256) {
+        throw "Adwaita $surface dark and light captures are identical; cannot validate distinct GTK themes."
+    }
+    Write-Host "ADWAITA THEME PAIR VERIFIED: $surface dark/light SHA-256 differ."
+}
+
 $memoryEvidence = [ordered]@{
     captured_utc = [DateTime]::UtcNow.ToString('o')
+    source_sha = $env:GITHUB_SHA
+    evidence = 'native GTK4/libadwaita HWND captures; dark/light SHA-256 pair verified'
     ceiling_mb = $memoryCeilingMb
     note = 'Per-process working set for temporary GTK4/libadwaita surfaces; this does not replace the separate idle shell process-tree budget.'
     samples = $results
