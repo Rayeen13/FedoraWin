@@ -74,6 +74,16 @@ test('original DWM values are committed to disk before first styling', () => {
   assert.match(recovery, /MOVEFILE_REPLACE_EXISTING \| MOVEFILE_WRITE_THROUGH/);
 });
 
+test('frame guardian binds parent wait to process creation time and refuses ambiguous identity', () => {
+  assert.match(recovery, /let parent_created = process_creation_time\(std::process::id\(\)\)/);
+  assert.match(recovery, /\.arg\(parent_created\.to_string\(\)\)/);
+  assert.match(recovery, /PROCESS_SYNCHRONIZE \| PROCESS_QUERY_LIMITED_INFORMATION/);
+  assert.match(recovery, /process_creation_time_from_handle\(process\)/);
+  assert.match(recovery, /ParentLifetime::Unknown => false/);
+  assert.match(recovery, /None if open_error == Some\(ERROR_INVALID_PARAMETER\) => ParentLifetime::Stopped/);
+  assert.doesNotMatch(recovery, /OpenProcess\(PROCESS_SYNCHRONIZE, 0, pid\)/);
+});
+
 test('force-kill guardian checks HWND process lifetime and respects external style changes', () => {
   assert.match(recovery, /WaitForSingleObject\(process, WAIT_FOREVER\)/);
   assert.match(recovery, /process_creation_time\(current_pid\) != Some\(snapshot\.created\)/);
