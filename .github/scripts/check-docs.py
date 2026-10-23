@@ -1,3 +1,4 @@
+from hashlib import sha256
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlparse
@@ -152,6 +153,37 @@ for key in [
 for required in ("id=\"real-adwaita\"", "not yet wired into the production FedoraWin shell", "the 15 images above", "assets/adwaita/adwaita-dark.png", "assets/adwaita/adwaita-light.png"):
     if required.lower() not in gallery.lower():
         errors.append(f"gallery.html: missing verified Adwaita separation: {required}")
+
+# Adwaita frames displayed on the homepage are original GTK-owned HWND
+# captures, NOT synthetic Windows/Fluent frames or FedoraWin.exe screenshots.
+# Freeze their verified PNG bytes; Pages deploy checks the same SHA-256 values.
+for image_name, expected_sha in {
+    "adwaita-dark.png": "e5526b58c95f32d2c59c758a7c3a6e305f5667c30bea6241016a5b6216e15264",
+    "adwaita-light.png": "6bfc8f9f6b20062d110507b68ef54aeca1855ab1cc31c12dc0269cdf51f6412c",
+}.items():
+    filename = DOCS / "assets" / "adwaita" / image_name
+    if not filename.is_file():
+        errors.append(f"verified libadwaita image missing: {filename}")
+    elif sha256(filename.read_bytes()).hexdigest() != expected_sha:
+        errors.append(f"libadwaita image SHA-256 changed without revalidation: {image_name}")
+
+for required in (
+    'id="adwaita-frames"',
+    'id="adwaita-frames-title"',
+    'data-image="./assets/adwaita/adwaita-dark.png"',
+    'data-image="./assets/adwaita/adwaita-light.png"',
+    'https://github.com/Rayeen13/FedoraWin/actions/runs/35572296452',
+    'System-wide replacement of Fluent/Windows frames is not implemented',
+    'not a screenshot of the production shell',
+):
+    if required not in index:
+        errors.append(f"index.html: verified native Adwaita boundary missing: {required}")
+if 'src="./assets/runtime/native_frame.png"' in index and "libadwaita" not in index:
+    errors.append("index.html: confusing native Windows DWM frame with GTK libadwaita")
+
+for required in (".adwaita-frames__grid", ".adwaita-frames__shot:focus-visible", ".adwaita-frames__note"):
+    if required not in (DOCS / "styles.css").read_text(encoding="utf-8"):
+        errors.append(f"styles.css: missing accessible Adwaita evidence showcase: {required}")
 
 # Gallery controls must operate on the real runtime shots, not copied mock cards.
 for mode in ("list", "grid", "card", "carousel"):
