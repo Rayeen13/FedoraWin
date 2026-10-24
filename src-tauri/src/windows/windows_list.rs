@@ -132,16 +132,68 @@ pub fn list() -> Result<Vec<WindowEntry>, String> {
     Ok(windows)
 }
 
+// Activities receives HWNDs from an earlier enumeration. An HWND can disappear
+// or be recycled before a click; never send actions to a newly owned target.
+// This is a best-effort pre-dispatch guard, not an atomic Win32 HWND lease.
+fn action_identity_matches(
+    expected_pid: u32,
+    expected_created: u64,
+    observed_pid: u32,
+    observed_created: Option<u64>,
+) -> bool {
+    expected_pid != 0
+        && expected_created != 0
+        && expected_pid == observed_pid
+        && observed_created == Some(expected_created)
+}
+
+fn same_action_target(hwnd: isize, pid: u32, created: u64) -> bool {
+    unsafe {
+        if hwnd == 0 || IsWindow(hwnd) == 0 || !eligible(hwnd) {
+            return false;
+        }
+        let mut current_pid = 0u32;
+        if GetWindowThreadProcessId(hwnd, &mut current_pid) == 0 {
+            return false;
+        }
+        action_identity_matches(
+            pid,
+            created,
+            current_pid,
+            super::frame_recovery::process_creation_time(current_pid),
+        )
+    }
+}
+
+fn action_target_identity(hwnd: isize) -> Result<(u32, u64), String> {
+    unsafe {
+        if hwnd == 0 || IsWindow(hwnd) == 0 || !eligible(hwnd) {
+            return Err("window is no longer available".into());
+        }
+        let mut pid = 0u32;
+        if GetWindowThreadProcessId(hwnd, &mut pid) == 0 || pid == 0 {
+            return Err("window identity is unavailable".into());
+        }
+        let created = super::frame_recovery::process_creation_time(pid)
+            .ok_or("window identity is unavailable")?;
+        if !same_action_target(hwnd, pid, created) {
+            return Err("window changed during validation".into());
+        }
+        Ok((pid, created))
+    }
+}
+
 pub fn activate(handle: &str) -> Result<(), String> {
     let hwnd = handle
         .parse::<isize>()
         .map_err(|_| "invalid window handle")?;
+    let (pid, created) = action_target_identity(hwnd)?;
     unsafe {
-        if hwnd == 0 || IsWindow(hwnd) == 0 {
-            return Err("window is no longer available".into());
-        }
         if IsIconic(hwnd) != 0 {
             ShowWindow(hwnd, SW_RESTORE);
+        }
+        if !same_action_target(hwnd, pid, created) {
+            return Err("window changed before activation".into());
         }
         if SetForegroundWindow(hwnd) == 0 {
             return Err("Windows refused to foreground the requested window".into());
@@ -154,13 +206,29 @@ pub fn close(handle: &str) -> Result<(), String> {
     let hwnd = handle
         .parse::<isize>()
         .map_err(|_| "invalid window handle")?;
+    let (pid, created) = action_target_identity(hwnd)?;
     unsafe {
-        if hwnd == 0 || IsWindow(hwnd) == 0 || !eligible(hwnd) {
-            return Err("window is no longer available".into());
+        if !same_action_target(hwnd, pid, created) {
+            return Err("window changed before closing".into());
         }
         if PostMessageW(hwnd, WM_CLOSE, 0, 0) == 0 {
             return Err("Windows refused to close the requested window".into());
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::action_identity_matches;
+
+    #[test]
+    fn activities_actions_reject_recycled_hwnd_process_identity() {
+        assert!(action_identity_matches(42, 100, 42, Some(100)));
+        assert!(!action_identity_matches(42, 100, 43, Some(100)));
+        assert!(!action_identity_matches(42, 100, 42, Some(101)));
+        assert!(!action_identity_matches(42, 100, 42, None));
+        assert!(!action_identity_matches(0, 100, 0, Some(100)));
+        assert!(!action_identity_matches(42, 0, 42, Some(0)));
+    }
 }
