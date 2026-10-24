@@ -76,6 +76,18 @@ native frame attach/detach proof. CI artifacts are not release approval.
    caption behavior, application content and window-state continuity. Preserve
    logs of any stranded HWND and block release until fixed.
 
+## Activities action identity checks
+
+The native Activities window list is a point-in-time snapshot. Focus and close
+commands now recheck that a selected HWND is still a visible, actionable window
+and that its owning process ID **and creation time** still match before
+dispatch. An unreadable identity or changed target fails closed rather than
+acting on a recycled HWND. This does not make Win32 HWND dispatch atomic:
+a target can still disappear between the final check and Windows handling the
+action. During **W11-08**, manually test rapidly closing/reopening windows,
+minimized-window activation, and a target disappearing during a click. Verify
+that FedoraWin never intentionally focuses or closes an unrelated window.
+
 ## Release decision
 
 A reviewer may mark a gate PASS only with reproducible evidence from the
