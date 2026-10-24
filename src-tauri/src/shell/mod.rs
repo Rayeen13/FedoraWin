@@ -58,7 +58,10 @@ impl AppearanceState {
 
 impl Default for AppearanceState {
     fn default() -> Self {
-        Self { theme: ThemeMode::Dark, accent: Accent::Blue }
+        Self {
+            theme: ThemeMode::Dark,
+            accent: Accent::Blue,
+        }
     }
 }
 
@@ -96,24 +99,80 @@ impl ShellState {
         Ok(())
     }
 
-    fn flip_activities(&self) -> bool {
-        let previous = self.activities_open.fetch_xor(true, Ordering::SeqCst);
-        !previous
+    fn set_activities_open(&self, open: bool) {
+        self.activities_open.store(open, Ordering::SeqCst);
     }
+}
+
+fn hide_popovers(app: &tauri::AppHandle) {
+    for label in ["date-menu", "quick-settings"] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.close();
+        }
+    }
+}
+
+pub fn hide_activities(app: &tauri::AppHandle) -> Result<(), String> {
+    let state = app.state::<std::sync::Arc<ShellState>>();
+    if let Some(window) = app.get_webview_window("activities") {
+        app.state::<crate::windows::thumbnails::ThumbnailManager>()
+            .clear();
+        window.close().map_err(|e| e.to_string())?;
+    }
+    state.set_activities_open(false);
+    Ok(())
+}
+
+pub fn toggle_surface(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
+    if !matches!(label, "date-menu" | "quick-settings") {
+        return Err("unsupported shell surface".into());
+    }
+
+    if let Some(window) = app.get_webview_window(label) {
+        if window.is_visible().map_err(|error| error.to_string())? {
+            window.close().map_err(|error| error.to_string())?;
+            return Ok(());
+        }
+    }
+
+    hide_activities(app)?;
+    for other in ["date-menu", "quick-settings"] {
+        if other != label {
+            if let Some(window) = app.get_webview_window(other) {
+                let _ = window.close();
+            }
+        }
+    }
+
+    let window = crate::ensure_shell_surface(app, label, label, true, None)?;
+    if let Err(error) = window.set_focus() {
+        let _ = window.close();
+        return Err(error.to_string());
+    }
+    Ok(())
 }
 
 pub fn toggle_activities(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<std::sync::Arc<ShellState>>();
-    let open = state.flip_activities();
-    let window = app
-        .get_webview_window("activities")
-        .ok_or_else(|| "activities window is unavailable".to_string())?;
+    let window = crate::ensure_activities_window(app)?;
+    let currently_visible = window.is_visible().map_err(|e| e.to_string())?;
 
-    if open {
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-    } else {
-        window.hide().map_err(|e| e.to_string())?;
+    if currently_visible {
+        app.state::<crate::windows::thumbnails::ThumbnailManager>()
+            .clear();
+        window.close().map_err(|e| e.to_string())?;
+        state.set_activities_open(false);
+        return Ok(());
     }
+
+    hide_popovers(app);
+    window.show().map_err(|e| e.to_string())?;
+    if let Err(error) = window.set_focus() {
+        let _ = window.close();
+        state.set_activities_open(false);
+        return Err(error.to_string());
+    }
+
+    state.set_activities_open(true);
     Ok(())
 }
