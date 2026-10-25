@@ -247,8 +247,13 @@ mod tests {
 
     #[test]
     fn activities_snapshot_identity_rejects_missing_or_malformed_lifetimes() {
-        assert_eq!(parse_action_identity("42:18446744073709551615"), Some((42, u64::MAX)));
-        for invalid in ["", "42", "0:100", "42:0", "x:100", "42:x", "42:100:1", "-1:100"] {
+        assert_eq!(
+            parse_action_identity("42:18446744073709551615"),
+            Some((42, u64::MAX))
+        );
+        for invalid in [
+            "", "42", "0:100", "42:0", "x:100", "42:x", "42:100:1", "-1:100",
+        ] {
             assert_eq!(parse_action_identity(invalid), None, "accepted {invalid}");
         }
     }
