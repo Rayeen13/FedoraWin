@@ -262,11 +262,11 @@ function renderWindowOverview() {
         <div class="window-card__bar">
           <span class="window-card__bar-title">${escapeHtml(w.title)}</span>
           <button class="window-card__frame-policy${w.frameExcluded ? ' is-excluded' : ''}" data-frame-policy-window="${escapeHtml(w.handle)}" data-frame-policy-excluded="${w.frameExcluded ? 'true' : 'false'}" aria-pressed="${w.frameExcluded ? 'true' : 'false'}" aria-label="${w.frameExcluded ? 'Allow FedoraWin frame styling for this app' : 'Never style this app'}" title="${w.frameExcluded ? 'Allow FedoraWin frame styling for this app' : 'Never style this app'}">${w.frameExcluded ? '⊘' : '○'}</button>
-          <button class="window-card__close" data-close-window="${escapeHtml(w.handle)}" aria-label="Close ${escapeHtml(w.title)}">×</button>
+          <button class="window-card__close" data-close-window="${escapeHtml(w.handle)}" data-action-identity="${escapeHtml(w.actionIdentity || '')}" aria-label="Close ${escapeHtml(w.title)}">×</button>
         </div>
-        <button class="window-card__live-preview" data-window="${escapeHtml(w.handle)}" data-thumbnail-window="${escapeHtml(w.handle)}" aria-label="Open ${escapeHtml(w.title)}"></button>
+        <button class="window-card__live-preview" data-window="${escapeHtml(w.handle)}" data-action-identity="${escapeHtml(w.actionIdentity || '')}" data-thumbnail-window="${escapeHtml(w.handle)}" aria-label="Open ${escapeHtml(w.title)}"></button>
       </div>
-      <button class="window-card__title-button" data-window="${escapeHtml(w.handle)}">${escapeHtml(w.title)}</button>
+      <button class="window-card__title-button" data-window="${escapeHtml(w.handle)}" data-action-identity="${escapeHtml(w.actionIdentity || '')}">${escapeHtml(w.title)}</button>
     </article>`).join('') : '<div class="overview-empty">No open windows on this desktop</div>';
   const count = Math.max(workspaceIds.length, 1);
   return `<div class="workspace-strip workspace-strip--native">
@@ -375,12 +375,12 @@ function bindActivitiesContent() {
   const content = document.querySelector('#activities-content');
   if (!content) return;
   content.querySelectorAll('[data-window]').forEach(button => button.addEventListener('click', async () => {
-    await call('activate_window', { handle: button.dataset.window });
+    await call('activate_window', { handle: button.dataset.window, identity: button.dataset.actionIdentity });
     await call('toggle_activities');
   }));
   content.querySelectorAll('[data-close-window]').forEach(button => button.addEventListener('click', async event => {
     event.stopPropagation();
-    await call('close_window', { handle: button.dataset.closeWindow });
+    await call('close_window', { handle: button.dataset.closeWindow, identity: button.dataset.actionIdentity });
     setTimeout(refreshNativeWindows, 120);
   }));
   content.querySelectorAll('[data-frame-policy-window]').forEach(button => button.addEventListener('click', async event => {

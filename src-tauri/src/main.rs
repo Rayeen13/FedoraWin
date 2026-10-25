@@ -137,12 +137,12 @@ fn list_windows() -> Result<Vec<windows::windows_list::WindowEntry>, String> {
     windows::windows_list::list()
 }
 #[tauri::command]
-fn activate_window(handle: String) -> Result<(), String> {
-    windows::windows_list::activate(&handle)
+fn activate_window(handle: String, identity: String) -> Result<(), String> {
+    windows::windows_list::activate(&handle, &identity)
 }
 #[tauri::command]
-fn close_window(handle: String) -> Result<(), String> {
-    windows::windows_list::close(&handle)
+fn close_window(handle: String, identity: String) -> Result<(), String> {
+    windows::windows_list::close(&handle, &identity)
 }
 #[tauri::command]
 fn move_window_to_workspace(

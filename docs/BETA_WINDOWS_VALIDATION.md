@@ -78,15 +78,17 @@ native frame attach/detach proof. CI artifacts are not release approval.
 
 ## Activities action identity checks
 
-The native Activities window list is a point-in-time snapshot. Focus and close
-commands now recheck that a selected HWND is still a visible, actionable window
-and that its owning process ID **and creation time** still match before
-dispatch. An unreadable identity or changed target fails closed rather than
-acting on a recycled HWND. This does not make Win32 HWND dispatch atomic:
-a target can still disappear between the final check and Windows handling the
-action. During **W11-08**, manually test rapidly closing/reopening windows,
-minimized-window activation, and a target disappearing during a click. Verify
-that FedoraWin never intentionally focuses or closes an unrelated window.
+Activities cards now carry the **enumerated** owning PID and process creation
+timestamp as an opaque decimal string (avoiding JavaScript precision loss).
+Focus and close must return that original snapshot identity. Missing, malformed,
+unreadable, or changed process lifetimes fail closed; a recycled HWND cannot
+silently acquire a new identity at click time. Both actions recheck identity
+immediately before dispatch. This is best-effort, not an atomic HWND lease.
+
+For **W11-08**, test a window disappearing between enumeration and click,
+rapid close/reopen cycles, minimized activation, and an old card after a new
+window reuses its handle. Verify no unrelated window is focused or closed.
+Record the original card identity and error outcome in manual evidence.
 
 ## Release decision
 
