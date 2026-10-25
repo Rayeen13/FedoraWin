@@ -225,6 +225,7 @@ pub mod windows_list {
     #[serde(rename_all = "camelCase")]
     pub struct WindowEntry {
         pub handle: String,
+        pub action_identity: String,
         pub title: String,
         pub minimized: bool,
         pub desktop_id: Option<String>,
@@ -235,10 +236,10 @@ pub mod windows_list {
     pub fn list() -> Result<Vec<WindowEntry>, String> {
         Ok(Vec::new())
     }
-    pub fn activate(_: &str) -> Result<(), String> {
+    pub fn activate(_: &str, _: &str) -> Result<(), String> {
         Err("window activation is Windows-only".into())
     }
-    pub fn close(_: &str) -> Result<(), String> {
+    pub fn close(_: &str, _: &str) -> Result<(), String> {
         Err("window closing is Windows-only".into())
     }
 }

@@ -14,6 +14,8 @@ const WM_CLOSE: u32 = 0x0010;
 #[serde(rename_all = "camelCase")]
 pub struct WindowEntry {
     pub handle: String,
+    // Identity captured during enumeration, never reconstructed at click time.
+    pub action_identity: String,
     pub title: String,
     pub minimized: bool,
     pub desktop_id: Option<String>,
@@ -92,8 +94,20 @@ unsafe extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
         if title.is_empty() {
             return 1;
         }
+        // Reject windows whose process lifetime is unreadable or changes mid-enumeration.
+        let mut pid = 0u32;
+        if GetWindowThreadProcessId(hwnd, &mut pid) == 0 || pid == 0 {
+            return 1;
+        }
+        let Some(created) = super::frame_recovery::process_creation_time(pid) else {
+            return 1;
+        };
+        if !same_action_target(hwnd, pid, created) {
+            return 1;
+        }
         windows.push(WindowEntry {
             handle: hwnd.to_string(),
+            action_identity: format!("{pid}:{created}"),
             title,
             minimized: IsIconic(hwnd) != 0,
             desktop_id: None,
@@ -117,6 +131,17 @@ pub fn list() -> Result<Vec<WindowEntry>, String> {
         return Err("EnumWindows failed".into());
     }
 
+    // Avoid displaying/enriching a handle recycled after EnumWindows.
+    windows.retain(|window| {
+        let (Some((pid, created)), Ok(hwnd)) = (
+            parse_action_identity(&window.action_identity),
+            window.handle.parse::<isize>(),
+        ) else {
+            return false;
+        };
+        same_action_target(hwnd, pid, created)
+    });
+
     for window in &mut windows {
         let Ok(hwnd) = window.handle.parse::<isize>() else {
             continue;
@@ -132,9 +157,16 @@ pub fn list() -> Result<Vec<WindowEntry>, String> {
     Ok(windows)
 }
 
-// Activities receives HWNDs from an earlier enumeration. An HWND can disappear
-// or be recycled before a click; never send actions to a newly owned target.
+// The UI must return the enumerated process lifetime, not one discovered
+// at click time. Decimal text avoids JavaScript's 53-bit integer limit.
 // This is a best-effort pre-dispatch guard, not an atomic Win32 HWND lease.
+fn parse_action_identity(identity: &str) -> Option<(u32, u64)> {
+    let (pid, created) = identity.split_once(':')?;
+    let pid = pid.parse::<u32>().ok()?;
+    let created = created.parse::<u64>().ok()?;
+    (pid != 0 && created != 0).then_some((pid, created))
+}
+
 fn action_identity_matches(
     expected_pid: u32,
     expected_created: u64,
@@ -165,29 +197,20 @@ fn same_action_target(hwnd: isize, pid: u32, created: u64) -> bool {
     }
 }
 
-fn action_target_identity(hwnd: isize) -> Result<(u32, u64), String> {
-    unsafe {
-        if hwnd == 0 || IsWindow(hwnd) == 0 || !eligible(hwnd) {
-            return Err("window is no longer available".into());
-        }
-        let mut pid = 0u32;
-        if GetWindowThreadProcessId(hwnd, &mut pid) == 0 || pid == 0 {
-            return Err("window identity is unavailable".into());
-        }
-        let created = super::frame_recovery::process_creation_time(pid)
-            .ok_or("window identity is unavailable")?;
-        if !same_action_target(hwnd, pid, created) {
-            return Err("window changed during validation".into());
-        }
-        Ok((pid, created))
+fn action_target_identity(hwnd: isize, identity: &str) -> Result<(u32, u64), String> {
+    let (pid, created) =
+        parse_action_identity(identity).ok_or("invalid Activities window identity")?;
+    if !same_action_target(hwnd, pid, created) {
+        return Err("window changed since Activities snapshot".into());
     }
+    Ok((pid, created))
 }
 
-pub fn activate(handle: &str) -> Result<(), String> {
+pub fn activate(handle: &str, identity: &str) -> Result<(), String> {
     let hwnd = handle
         .parse::<isize>()
         .map_err(|_| "invalid window handle")?;
-    let (pid, created) = action_target_identity(hwnd)?;
+    let (pid, created) = action_target_identity(hwnd, identity)?;
     unsafe {
         if IsIconic(hwnd) != 0 {
             ShowWindow(hwnd, SW_RESTORE);
@@ -202,11 +225,11 @@ pub fn activate(handle: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn close(handle: &str) -> Result<(), String> {
+pub fn close(handle: &str, identity: &str) -> Result<(), String> {
     let hwnd = handle
         .parse::<isize>()
         .map_err(|_| "invalid window handle")?;
-    let (pid, created) = action_target_identity(hwnd)?;
+    let (pid, created) = action_target_identity(hwnd, identity)?;
     unsafe {
         if !same_action_target(hwnd, pid, created) {
             return Err("window changed before closing".into());
@@ -220,7 +243,20 @@ pub fn close(handle: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::action_identity_matches;
+    use super::{action_identity_matches, parse_action_identity};
+
+    #[test]
+    fn activities_snapshot_identity_rejects_missing_or_malformed_lifetimes() {
+        assert_eq!(
+            parse_action_identity("42:18446744073709551615"),
+            Some((42, u64::MAX))
+        );
+        for invalid in [
+            "", "42", "0:100", "42:0", "x:100", "42:x", "42:100:1", "-1:100",
+        ] {
+            assert_eq!(parse_action_identity(invalid), None, "accepted {invalid}");
+        }
+    }
 
     #[test]
     fn activities_actions_reject_recycled_hwnd_process_identity() {

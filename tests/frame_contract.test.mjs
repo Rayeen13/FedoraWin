@@ -256,13 +256,24 @@ test('taskbar journal compaction retains unknown lifetimes and writes before hid
 });
 
 test('Activities focus and close actions reject ineligible and recycled HWND targets', () => {
-  assert.match(windowsList, /fn action_target_identity\(hwnd: isize\)/);
+  assert.match(windowsList, /fn action_target_identity\(hwnd: isize, identity: &str\)/);
   assert.match(windowsList, /fn same_action_target\(hwnd: isize, pid: u32, created: u64\)/);
   assert.match(windowsList, /fn action_identity_matches\(/);
+  assert.match(windowsList, /fn parse_action_identity\(identity: &str\)/);
+  assert.match(windowsList, /action_identity: format!\("\{pid\}:\{created\}"\)/);
+  assert.match(windowsList, /fn activities_snapshot_identity_rejects_missing_or_malformed_lifetimes\(/);
+  assert.match(windowsList, /windows\.retain\(\|window\|/);
+  assert.match(windowsList, /pub fn activate\(handle: &str, identity: &str\)/);
+  assert.match(windowsList, /pub fn close\(handle: &str, identity: &str\)/);
+  assert.match(runtime, /fn activate_window\(handle: String, identity: String\)/);
+  assert.match(runtime, /fn close_window\(handle: String, identity: String\)/);
+  assert.match(activitiesUi, /data-action-identity=/);
+  assert.match(activitiesUi, /activate_window', \{ handle: button\.dataset\.window, identity: button\.dataset\.actionIdentity \}/);
+  assert.match(activitiesUi, /close_window', \{ handle: button\.dataset\.closeWindow, identity: button\.dataset\.actionIdentity \}/);
   assert.match(windowsList, /super::frame_recovery::process_creation_time\(current_pid\)/);
   assert.match(windowsList, /fn activities_actions_reject_recycled_hwnd_process_identity\(/);
-  assert.match(windowsList, /pub fn activate\(handle: &str\)[\s\S]*?action_target_identity\(hwnd\)\?/);
-  assert.match(windowsList, /pub fn close\(handle: &str\)[\s\S]*?action_target_identity\(hwnd\)\?/);
+  assert.match(windowsList, /pub fn activate\(handle: &str, identity: &str\)[\s\S]*?action_target_identity\(hwnd, identity\)\?/);
+  assert.match(windowsList, /pub fn close\(handle: &str, identity: &str\)[\s\S]*?action_target_identity\(hwnd, identity\)\?/);
   assert.match(windowsList, /if !same_action_target\(hwnd, pid, created\) \{[\s\S]*?window changed before activation/);
   assert.match(windowsList, /if !same_action_target\(hwnd, pid, created\) \{[\s\S]*?window changed before closing/);
 });
