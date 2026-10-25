@@ -65,6 +65,28 @@ test('test date must be a real ISO calendar date', () => {
   }
 });
 
+test('manual test date cannot be in the future', () => {
+  const gates = complete();
+  gates[0].testDate = '2099-01-01';
+  const result = check(gates);
+  assert.equal(result.complete, false);
+  assert.match(result.errors.join(' '), /W11-01/);
+});
+
+test('Windows 11 OS edition and plausible build are required', () => {
+  for (const windows11Build of [
+    'Windows 10 Pro build 19045', 'Windows 11 Pro build 19045',
+    'Windows 11 Pro build unknown', 'Windows 11', 'Linux build 26100'
+  ]) {
+    const gates = complete();
+    gates[0].windows11Build = windows11Build;
+    assert.equal(check(gates).complete, false, windows11Build);
+  }
+  const gates = complete();
+  gates[0].windows11Build = 'Windows 11 Pro 25H2 (OS Build 26200.8875)';
+  assert.equal(check(gates).complete, true);
+});
+
 test('executable SHA-256 is mandatory and must be 64 hex characters', () => {
   for (const executableSha256 of [undefined, '', 'unknown', 'a'.repeat(63), 'g'.repeat(64)]) {
     const gates = complete();

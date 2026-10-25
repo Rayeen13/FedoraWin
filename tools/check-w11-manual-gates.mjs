@@ -10,7 +10,19 @@ const nonEmpty = (value) => typeof value === 'string' && value.trim().length > 0
 function validDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(value + 'T00:00:00Z');
-  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+  // A test date cannot be in the future. Allow the next UTC calendar day
+  // because a legitimate Windows 11 tester may be in UTC+14.
+  return !Number.isNaN(parsed.valueOf()) &&
+    parsed.toISOString().slice(0, 10) === value &&
+    parsed.getTime() <= Date.now() + 24 * 60 * 60 * 1000;
+}
+
+function validWindows11Build(value) {
+  if (!nonEmpty(value)) return false;
+  // Require an observed Windows 11 OS build, not an arbitrary nonempty label.
+  // Windows 11 started at build 22000; allow revision suffixes such as 26100.1.
+  const match = /\bWindows\s+11\b[\s\S]*?\b(?:OS\s+)?build\s+(\d{5,6})(?:\.\d+)?\b/i.exec(value);
+  return match !== null && Number(match[1]) >= 22000;
 }
 
 export function checkManualGateCoverage(gates) {
@@ -37,7 +49,9 @@ export function checkManualGateCoverage(gates) {
     }
     if (!nonEmpty(gate.tester)) errors.push(gate.id + ' has no named tester.');
     if (!validDate(gate.testDate)) errors.push(gate.id + ' has no valid YYYY-MM-DD test date.');
-    if (!nonEmpty(gate.windows11Build)) errors.push(gate.id + ' has no Windows 11 build.');
+    if (!validWindows11Build(gate.windows11Build)) {
+      errors.push(gate.id + ' has no valid Windows 11 OS build (22000 or later).');
+    }
     if (typeof gate.executableSha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(gate.executableSha256)) {
       errors.push(gate.id + ' has no valid executable SHA-256.');
     } else {
