@@ -273,7 +273,7 @@ test('Activities focus and close actions reject ineligible and recycled HWND tar
   assert.match(windowsList, /super::frame_recovery::process_creation_time\(current_pid\)/);
   assert.match(windowsList, /fn activities_actions_reject_recycled_hwnd_process_identity\(/);
   assert.match(windowsList, /pub fn activate\(handle: &str, identity: &str\)[\s\S]*?action_target_identity\(hwnd, identity\)\?/);
-  assert.match(windowsList, /pub fn close\(handle: &str\)[\s\S]*?action_target_identity\(hwnd, identity\)\?/);
+  assert.match(windowsList, /pub fn close\(handle: &str, identity: &str\)[\s\S]*?action_target_identity\(hwnd, identity\)\?/);
   assert.match(windowsList, /if !same_action_target\(hwnd, pid, created\) \{[\s\S]*?window changed before activation/);
   assert.match(windowsList, /if !same_action_target\(hwnd, pid, created\) \{[\s\S]*?window changed before closing/);
 });
