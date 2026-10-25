@@ -12,14 +12,16 @@ For **each** `W11-01` through `W11-14`, a PASS record must include:
 | `status` | `PASS` only after manual testing (otherwise FAIL/BLOCKED/NOT RUN) |
 | `environment` | `physical`, `vm`, or `remote-vm` |
 | `tester` | Named human tester, not a CI job |
-| `testDate` | Actual manual test date in `YYYY-MM-DD` format |
-| `windows11Build` | Windows 11 edition and build as observed on the test machine |
+| `testDate` | Actual manual test date in `YYYY-MM-DD` format; a future date is rejected (one UTC day of timezone tolerance) |
+| `windows11Build` | Observed Windows 11 edition and numeric OS build 22000 or later, e.g. `Windows 11 Pro 25H2 (OS Build 26200.8875)` |
 | `executableSha256` | Exact 64-digit hex SHA-256 of the **executed** CI-built binary |
 | `evidence` | Nonempty array of references to original screenshots, recordings, or logs |
 
 **W11-10, W11-11, W11-12 require a physical Windows 11 device.**
 For the other gates, an unmodified Windows 11 VM can provide exploratory/manual
-coverage under the matrix's criteria. A fabricated filename or SHA-shaped string
+coverage under the matrix's criteria. The structural validator rejects a Windows 10/unknown build or an impossible
+future test date, but these checks do **not** authenticate the tester or OS.
+A fabricated filename or SHA-shaped string
 is not proof: the reviewer must open each original, check timestamp/build and
 match the hash against the actual CI executable and run provenance.
 
