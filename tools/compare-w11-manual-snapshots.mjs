@@ -11,6 +11,8 @@ const DECIMAL_TICKS = /^\d{15,20}$/;
 const DECIMAL_HWND = /^-?\d{1,20}$/;
 const SHA256 = /^[a-f\d]{64}$/i;
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/;
+// DateTime.Ticks uses year 0001; captureUtcTicks uses the Unix epoch.
+const DOTNET_UNIX_EPOCH_TICKS = 621355968000000000n;
 
 /**
  * Compare .NET's seven-digit UTC fractions without losing 100 ns precision.
@@ -52,15 +54,18 @@ function inspect(snapshot, label, errors) {
     errors.push(`${label}: missing executable path.`);
   }
 
+  const capturedTicks = captureUtcTicks(snapshot.capturedAtUtc);
   const lifetimes = new Map();
   if (!Array.isArray(snapshot.explorerProcesses) || !snapshot.explorerProcesses.length) {
     errors.push(`${label}: missing Explorer processes.`);
   } else {
     for (const row of snapshot.explorerProcesses) {
+      const validTicks = typeof row?.startTimeUtcTicks === 'string' && DECIMAL_TICKS.test(row.startTimeUtcTicks);
+      const startTicks = validTicks ? BigInt(row.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS : null;
       if (!row || !Number.isSafeInteger(row.pid) || row.pid <= 0 ||
-          typeof row.startTimeUtcTicks !== 'string' || !DECIMAL_TICKS.test(row.startTimeUtcTicks) ||
+          !validTicks || startTicks < 0n || (capturedTicks !== null && startTicks > capturedTicks) ||
           lifetimes.has(row.pid)) {
-        errors.push(`${label}: invalid/duplicate Explorer PID or lossless start-time ticks.`);
+        errors.push(`${label}: invalid/duplicate Explorer PID, lossless start-time ticks, or future lifetime.`);
       } else {
         lifetimes.set(row.pid, row.startTimeUtcTicks);
       }
@@ -122,7 +127,15 @@ export function compareManualSnapshots(before, after) {
     const oldOwner = `${baseline.primary.ownerPid}:${baseline.primary.ownerStartTimeUtcTicks}`;
     const newOwner = `${observed.primary.ownerPid}:${observed.primary.ownerStartTimeUtcTicks}`;
     if (after.stage === 'after-explorer-restart') {
-      if (oldOwner === newOwner) errors.push('Explorer restart did not change primary taskbar owner lifetime.');
+      if (oldOwner === newOwner) {
+        errors.push('Explorer restart did not change primary taskbar owner lifetime.');
+      } else if (start !== null && end !== null) {
+        // A different already-running Explorer is not proof of a restart after baseline.
+        const ownerStarted = BigInt(observed.primary.ownerStartTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS;
+        if (ownerStarted <= start || ownerStarted > end) {
+          errors.push('Explorer restart owner lifetime must begin between snapshots.');
+        }
+      }
     } else if (AFTER_STAGES.has(after.stage) && oldOwner !== newOwner) {
       errors.push('Explorer primary taskbar owner changed during exit/force-kill recovery.');
     }
