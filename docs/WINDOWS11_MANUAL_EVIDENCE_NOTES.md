@@ -10,6 +10,13 @@ impossible calendar dates instead of accepting JavaScript date rollover.
 This is a structural consistency check, not proof that an operator actually
 performed a Windows 11 test or that native DWM rollback succeeded.
 
+Explorer start-time ticks must not be later than their own capture. For an
+intentional Explorer restart, the new primary taskbar owner's process lifetime
+must begin **after** the baseline snapshot and no later than the post-restart
+snapshot; merely switching to a pre-existing Explorer process is insufficient.
+This check still cannot establish that a restart command was executed or that
+all secondary-monitor taskbars and native caption controls behave correctly.
+
 For a candidate CI-built executable, keep the immutable run URL, commit SHA,
 downloaded artifact identifier, and SHA-256 measured on the binary actually
 executed. Note Windows 11 edition/build, tester, date, and VM or physical
