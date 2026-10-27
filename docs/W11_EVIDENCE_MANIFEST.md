@@ -52,6 +52,27 @@ launch or terminate applications, change DWM attributes, hide taskbars, or
 restart Explorer. It rejects non-Windows 11 hosts, absent Explorer/taskbars,
 and a mismatched expected executable hash.
 
+The snapshot collector writes Explorer process creation ticks and HWNDs as
+**decimal strings**, not JSON numbers: these Windows 64-bit identifiers can
+exceed JavaScript's exact integer range. Older numeric snapshots must be
+recaptured rather than rounded or reinterpreted.
+
+To compare two collected records without changing Windows state:
+
+```powershell
+node tools/compare-w11-manual-snapshots.mjs './artifacts/manual-w11/w11-before-....json' './artifacts/manual-w11/w11-after-force-kill-....json'
+```
+
+The comparator checks both snapshots' contracts, UTC ordering, Windows build,
+binary hash and path, Explorer taskbar PID + **process lifetime**, and baseline
+primary/secondary taskbar visibility. Clean exit and forced-kill observations
+must retain the primary Explorer owner's identity; an Explorer restart must
+change it. A missing taskbar, changed display count, or mismatch returns a
+nonzero exit code for investigation. The tool does **not** test DWM attributes,
+caption hit testing, actual user interaction, or original video provenance.
+Even a structurally consistent pair always reports `manualGateStatus: "NOT RUN"`
+and `betaApproved: false`; a human must review original evidence.
+
 Compare the **before** and **after** records with the original human-recorded
 video, noting that Explorer restart intentionally changes process identity.
 The JSON snapshots alone are **not** forced-kill proof, screenshot
