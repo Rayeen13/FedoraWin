@@ -9,7 +9,8 @@ test('snapshot is observational and cannot change Explorer or native DWM state',
   assert.match(script, /Get-FileHash\s+-LiteralPath\s+\$exe\s+-Algorithm\s+SHA256/);
   assert.match(script, /EnumWindows\(/);
   assert.match(script, /GetWindowThreadProcessId/);
-  assert.match(script, /StartTime\.ToUniversalTime\(\)\.Ticks/);
+  assert.match(script, /StartTime\.ToUniversalTime\(\)\.Ticks\.ToString\(/);
+  assert.match(script, /hwnd\s*=\s*\$bar\.Hwnd\.ToString\(/);
   assert.doesNotMatch(script, /\b(?:Stop-Process|Start-Process|ShowWindow|SetWindowPos|DwmSetWindowAttribute|taskkill|Restart-Computer)\b/i);
 });
 

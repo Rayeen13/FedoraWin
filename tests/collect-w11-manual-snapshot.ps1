@@ -89,7 +89,8 @@ if ($explorers.Count -eq 0) { throw 'Explorer is not running; manual snapshot is
 $explorerRows = @()
 $explorerLifetime = @{}
 foreach ($process in $explorers) {
-    $ticks = $process.StartTime.ToUniversalTime().Ticks
+    # JSON numbers lose Int64 precision in JavaScript; preserve .NET ticks as decimal text.
+    $ticks = $process.StartTime.ToUniversalTime().Ticks.ToString([System.Globalization.CultureInfo]::InvariantCulture)
     $explorerLifetime[[int]$process.Id] = $ticks
     $explorerRows += [ordered]@{
         pid = [int]$process.Id
@@ -106,7 +107,7 @@ foreach ($bar in $bars) {
         throw "Taskbar HWND $($bar.Hwnd) is not owned by an observed Explorer process."
     }
     $taskbarRows += [ordered]@{
-        hwnd = $bar.Hwnd
+        hwnd = $bar.Hwnd.ToString([System.Globalization.CultureInfo]::InvariantCulture)
         className = $bar.ClassName
         visible = $bar.Visible
         ownerPid = $ownerPid
