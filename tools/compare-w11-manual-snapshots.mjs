@@ -12,6 +12,22 @@ const DECIMAL_HWND = /^-?\d{1,20}$/;
 const SHA256 = /^[a-f\d]{64}$/i;
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/;
 
+/**
+ * Compare .NET's seven-digit UTC fractions without losing 100 ns precision.
+ * Date.parse rounds to milliseconds and normalizes impossible calendar dates.
+ * A strict round trip rejects such dates; BigInt preserves the remaining ticks.
+ */
+function captureUtcTicks(value) {
+  if (typeof value !== 'string' || !ISO_UTC.test(value)) return null;
+  const seconds = value.slice(0, 19);
+  const milliseconds = Date.parse(`${seconds}Z`);
+  if (!Number.isFinite(milliseconds) ||
+      new Date(milliseconds).toISOString().slice(0, 19) !== seconds) return null;
+  const fraction = /\.(\d{1,7})Z$/.exec(value)?.[1] ?? '';
+  return BigInt(milliseconds) * 10000n + BigInt(fraction.padEnd(7, '0') || '0');
+}
+
+
 function inspect(snapshot, label, errors) {
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
     errors.push(`${label}: expected a snapshot object.`);
@@ -22,8 +38,7 @@ function inspect(snapshot, label, errors) {
       snapshot.manualGateStatus !== 'NOT RUN' || snapshot.betaApproved !== false) {
     errors.push(`${label}: invalid snapshot contract; never use a manual PASS here.`);
   }
-  if (!ISO_UTC.test(snapshot.capturedAtUtc ?? '') ||
-      !Number.isFinite(Date.parse(snapshot.capturedAtUtc))) {
+  if (captureUtcTicks(snapshot.capturedAtUtc) === null) {
     errors.push(`${label}: invalid UTC capture timestamp.`);
   }
   const build = /\bWindows\s+11\b[\s\S]*?\b(?:OS\s+)?build\s+(\d{5,6})(?:\.\d+)?\b/i.exec(snapshot.windows11Build ?? '');
@@ -86,9 +101,9 @@ export function compareManualSnapshots(before, after) {
   if (!baseline || !observed) return outcome(errors);
   if (before.stage !== 'before') errors.push('Baseline stage must be before.');
   if (!AFTER_STAGES.has(after.stage)) errors.push('Unknown post-test stage.');
-  const start = Date.parse(before.capturedAtUtc);
-  const end = Date.parse(after.capturedAtUtc);
-  if (Number.isFinite(start) && Number.isFinite(end) && end <= start) {
+  const start = captureUtcTicks(before.capturedAtUtc);
+  const end = captureUtcTicks(after.capturedAtUtc);
+  if (start !== null && end !== null && end <= start) {
     errors.push('Post-test snapshot must be captured after baseline.');
   }
   if (before.windows11Build !== after.windows11Build) {

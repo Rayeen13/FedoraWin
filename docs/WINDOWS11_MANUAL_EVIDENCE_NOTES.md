@@ -4,6 +4,12 @@ Use [the 14-gate Windows 11 beta matrix](BETA_WINDOWS_VALIDATION.md)
 and [the evidence record contract](W11_EVIDENCE_MANIFEST.md) together.
 Passing GitHub Actions cannot turn a manual `NOT RUN` into `PASS`.
 
+The read-only before/after comparator preserves the collector's seven-digit UTC
+fractions (100 ns resolution) when checking snapshot order, and rejects
+impossible calendar dates instead of accepting JavaScript date rollover.
+This is a structural consistency check, not proof that an operator actually
+performed a Windows 11 test or that native DWM rollback succeeded.
+
 For a candidate CI-built executable, keep the immutable run URL, commit SHA,
 downloaded artifact identifier, and SHA-256 measured on the binary actually
 executed. Note Windows 11 edition/build, tester, date, and VM or physical

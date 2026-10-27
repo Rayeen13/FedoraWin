@@ -110,3 +110,27 @@ test('rejects malformed inputs without claiming beta approval', () => {
     assert.equal(result.betaApproved, false);
   }
 });
+
+test('compares 100 ns capture ordering without millisecond truncation', () => {
+  const baseline = before();
+  baseline.capturedAtUtc = '2026-10-26T08:00:00.1234567Z';
+  const later = after();
+  later.capturedAtUtc = '2026-10-26T08:00:00.1234568Z';
+  assert.equal(check(baseline, later).structurallyConsistent, true);
+  later.capturedAtUtc = baseline.capturedAtUtc;
+  assert.match(check(baseline, later).errors.join(' '), /captured after baseline/);
+  later.capturedAtUtc = '2026-10-26T08:00:00.1234566Z';
+  assert.match(check(baseline, later).errors.join(' '), /captured after baseline/);
+});
+
+test('rejects normalized impossible UTC dates instead of accepting Date.parse rollover', () => {
+  for (const timestamp of [
+    '2026-02-30T08:05:00.0000000Z',
+    '2026-02-29T08:05:00.0000000Z',
+    '2026-04-31T08:05:00.0000000Z'
+  ]) {
+    const invalid = after();
+    invalid.capturedAtUtc = timestamp;
+    assert.match(check(before(), invalid).errors.join(' '), /invalid UTC capture timestamp/);
+  }
+});
