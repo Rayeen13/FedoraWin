@@ -67,6 +67,8 @@ jobs:
         run: node --test tests/manual_beta_gate_contract.test.mjs
       - name: Windows 11 read-only snapshot contract tests
         run: node --test tests/manual_w11_snapshot_contract.test.mjs
+      - name: Windows 11 before/after snapshot comparison regression tests
+        run: node --test tests/manual_w11_snapshot_compare.test.mjs
       - name: Native frame lifecycle contract tests
         run: node --test tests/frame_contract.test.mjs
       - name: Rust unit tests
