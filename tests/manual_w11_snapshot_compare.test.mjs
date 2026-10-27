@@ -4,7 +4,9 @@ import { compareManualSnapshots } from '../tools/compare-w11-manual-snapshots.mj
 
 // Synthetic fixtures only: not actual Windows 11 testing or beta approval.
 const oldTicks = '638971111111111111';
-const newTicks = '638971111111111112';
+// .NET DateTime ticks for an Explorer restart two minutes after baseline.
+const dotnetEpoch = 621355968000000000n;
+const newTicks = String(dotnetEpoch + BigInt(Date.parse('2026-10-26T08:02:00Z')) * 10000n);
 const sha = 'a'.repeat(64);
 const before = () => ({
   schemaVersion: 1, evidenceType: 'read-only-environment-snapshot',
@@ -44,6 +46,25 @@ test('Explorer restart requires a new primary owner lifetime', () => {
   }
   assert.equal(check(before(), changed).structurallyConsistent, true);
   assert.equal(check(before(), changed).betaApproved, false);
+});
+
+
+test('Explorer restart must actually start after the baseline capture', () => {
+  const stale = after('after-explorer-restart');
+  stale.explorerProcesses = [{ pid: 222, startTimeUtcTicks: oldTicks }];
+  for (const bar of stale.taskbars) {
+    bar.ownerPid = 222;
+    bar.ownerStartTimeUtcTicks = oldTicks;
+  }
+  assert.match(check(before(), stale).errors.join(' '), /between snapshots/);
+});
+
+test('rejects Explorer process start times later than their own capture', () => {
+  const future = after();
+  const futureTicks = String(dotnetEpoch + BigInt(Date.parse('2026-10-26T08:06:00Z')) * 10000n);
+  future.explorerProcesses[0].startTimeUtcTicks = futureTicks;
+  for (const bar of future.taskbars) bar.ownerStartTimeUtcTicks = futureTicks;
+  assert.match(check(before(), future).errors.join(' '), /future lifetime/);
 });
 
 test('forced termination cannot silently restart Explorer', () => {
