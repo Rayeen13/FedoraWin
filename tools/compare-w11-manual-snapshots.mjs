@@ -80,7 +80,7 @@ function inspect(snapshot, label, errors) {
   } else {
     for (const bar of snapshot.taskbars) {
       if (!bar || typeof bar.hwnd !== 'string' || !DECIMAL_HWND.test(bar.hwnd) ||
-          BigInt(bar.hwnd) === 0n || seenHwnds.has(bar.hwnd) ||
+          BigInt(bar.hwnd) === 0n || seenHwnds.has(BigInt(bar.hwnd).toString()) ||
           !['Shell_TrayWnd', 'Shell_SecondaryTrayWnd'].includes(bar.className) ||
           typeof bar.visible !== 'boolean' || !Number.isSafeInteger(bar.ownerPid) ||
           bar.ownerPid <= 0 || typeof bar.ownerStartTimeUtcTicks !== 'string' ||
@@ -89,12 +89,23 @@ function inspect(snapshot, label, errors) {
         errors.push(`${label}: invalid taskbar HWND, ownership, or lossless lifetime.`);
         continue;
       }
-      seenHwnds.add(bar.hwnd);
+      // Decimal aliases (e.g. '01' and '1') are the same native HWND.
+      seenHwnds.add(BigInt(bar.hwnd).toString());
       (bar.className === 'Shell_TrayWnd' ? primary : secondary).push(bar);
     }
   }
   if (primary.length !== 1) {
     errors.push(`${label}: expected exactly one Explorer-owned primary taskbar.`);
+  } else {
+    // Every taskbar on the captured desktop must belong to the same Explorer
+    // process lifetime. A secondary bar from an older Explorer generation is
+    // not evidence that an Explorer restart restored the whole taskbar set.
+    for (const bar of secondary) {
+      if (bar.ownerPid !== primary[0].ownerPid ||
+          bar.ownerStartTimeUtcTicks !== primary[0].ownerStartTimeUtcTicks) {
+        errors.push(`${label}: secondary taskbar belongs to a different Explorer lifetime.`);
+      }
+    }
   }
   return { snapshot, primary: primary[0], secondary };
 }

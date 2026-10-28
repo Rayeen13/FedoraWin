@@ -14,7 +14,11 @@ Explorer start-time ticks must not be later than their own capture. For an
 intentional Explorer restart, the new primary taskbar owner's process lifetime
 must begin **after** the baseline snapshot and no later than the post-restart
 snapshot; merely switching to a pre-existing Explorer process is insufficient.
-This check still cannot establish that a restart command was executed or that
+Every captured secondary taskbar must also have the **same Explorer PID and
+creation lifetime as the primary taskbar**. A mixed-generation set after a
+restart is inconsistent even when the new primary and secondary visibility
+counts look correct. Numeric aliases of the same HWND are rejected as duplicates.
+These checks still cannot establish that a restart command was executed or that
 all secondary-monitor taskbars and native caption controls behave correctly.
 
 For a candidate CI-built executable, keep the immutable run URL, commit SHA,
