@@ -65,7 +65,9 @@ node tools/compare-w11-manual-snapshots.mjs './artifacts/manual-w11/w11-before-.
 
 The comparator checks both snapshots' contracts, UTC ordering, Windows build,
 binary hash and path, Explorer taskbar PID + **process lifetime**, and baseline
-primary/secondary taskbar visibility. Clean exit and forced-kill observations
+primary/secondary taskbar visibility. All taskbar HWNDs in each snapshot must
+share the primary taskbar's Explorer PID and creation lifetime; mixed-generation
+secondary taskbars and duplicate numeric HWND aliases are rejected. Clean exit and forced-kill observations
 must retain the primary Explorer owner's identity; an Explorer restart must
 change it. A missing taskbar, changed display count, or mismatch returns a
 nonzero exit code for investigation. The tool does **not** test DWM attributes,

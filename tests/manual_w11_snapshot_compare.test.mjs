@@ -67,6 +67,35 @@ test('rejects Explorer process start times later than their own capture', () => 
   assert.match(check(before(), future).errors.join(' '), /future lifetime/);
 });
 
+test('Explorer restart rejects secondary taskbars left with the previous Explorer lifetime', () => {
+  const changed = after('after-explorer-restart');
+  // The new primary taskbar is valid, but an old Explorer process still owns
+  // the secondary bar. This must not masquerade as a complete restart.
+  changed.explorerProcesses.push({ pid: 222, startTimeUtcTicks: newTicks });
+  changed.taskbars[0].ownerPid = 222;
+  changed.taskbars[0].ownerStartTimeUtcTicks = newTicks;
+  const result = check(before(), changed);
+  assert.equal(result.structurallyConsistent, false);
+  assert.match(result.errors.join(' '), /secondary taskbar belongs to a different Explorer lifetime/);
+  assert.equal(result.betaApproved, false);
+});
+
+test('rejects mixed Explorer taskbar ownership even without an explicit restart', () => {
+  const mixed = after('after-clean-exit');
+  mixed.explorerProcesses.push({ pid: 222, startTimeUtcTicks: newTicks });
+  mixed.taskbars[1].ownerPid = 222;
+  mixed.taskbars[1].ownerStartTimeUtcTicks = newTicks;
+  assert.match(check(before(), mixed).errors.join(' '), /secondary taskbar belongs to a different Explorer lifetime/);
+});
+
+test('rejects decimal aliases of the same HWND', () => {
+  const duplicate = after();
+  duplicate.taskbars.push({
+    ...duplicate.taskbars[0], hwnd: '0' + duplicate.taskbars[0].hwnd
+  });
+  assert.match(check(before(), duplicate).errors.join(' '), /invalid taskbar HWND/);
+});
+
 test('forced termination cannot silently restart Explorer', () => {
   const changed = after();
   changed.explorerProcesses = [{ pid: 222, startTimeUtcTicks: newTicks }];
