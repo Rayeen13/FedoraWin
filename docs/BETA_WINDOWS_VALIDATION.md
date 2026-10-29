@@ -90,6 +90,14 @@ rapid close/reopen cycles, minimized activation, and an old card after a new
 window reuses its handle. Verify no unrelated window is focused or closed.
 Record the original card identity and error outcome in manual evidence.
 
+For desktop switching, FedoraWin injects Win+Ctrl+Left/Right through Windows
+`SendInput`. If Windows accepts only part of the six-event shortcut, FedoraWin
+attempts to release only synthetic keys still held by that accepted prefix,
+reports the accepted/cleanup counts, and returns an error. The cleanup is
+best-effort: blocked injection can also block key-up events. During **W11-08**,
+verify normal switching and error recovery on the actual interactive desktop;
+CI unit tests only validate the partial-batch cleanup plan, not OS delivery.
+
 ## Release decision
 
 A reviewer may mark a gate PASS only with reproducible evidence from the

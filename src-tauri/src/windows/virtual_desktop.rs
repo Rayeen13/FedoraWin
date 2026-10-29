@@ -265,10 +265,28 @@ fn keyboard_input(virtual_key: u16, key_up: bool) -> Input {
     }
 }
 
+// SendInput may insert only a prefix of a keyboard batch. Release exactly
+// the keys whose synthetic key-down events were accepted but whose matching
+// key-up events were not. Releasing keys not injected by us can interfere with
+// real user input, so never send unconditional modifier key-ups.
+fn pending_key_releases(accepted: u32, arrow: u16) -> Vec<u16> {
+    let mut keys = Vec::new();
+    if accepted >= 3 && accepted < 4 {
+        keys.push(arrow);
+    }
+    if accepted >= 2 && accepted < 5 {
+        keys.push(VK_CONTROL);
+    }
+    if accepted >= 1 && accepted < 6 {
+        keys.push(VK_LWIN);
+    }
+    keys
+}
+
 /// Switches the Windows virtual desktop only after an explicit user action.
 /// This does not change Explorer configuration or write persistent shell state.
 pub fn navigate(direction: i32) -> Result<(), String> {
-    let arrow = match direction.signum() {
+    let arrow = match direction {
         -1 => VK_LEFT,
         1 => VK_RIGHT,
         _ => return Err("workspace direction must be -1 or 1".into()),
@@ -290,7 +308,28 @@ pub fn navigate(direction: i32) -> Result<(), String> {
         )
     };
     if sent != inputs.len() as u32 {
-        return Err("Windows did not accept the workspace navigation input".into());
+        let cleanup: Vec<Input> = pending_key_releases(sent, arrow)
+            .into_iter()
+            .map(|key| keyboard_input(key, true))
+            .collect();
+        // Best effort: UIPI or a blocked input desktop can reject cleanup too.
+        // Never report successful navigation or claim that key state recovered.
+        let cleaned = if cleanup.is_empty() {
+            0
+        } else {
+            unsafe {
+                SendInput(
+                    cleanup.len() as u32,
+                    cleanup.as_ptr(),
+                    size_of::<Input>() as i32,
+                )
+            }
+        };
+        return Err(format!(
+            "Windows accepted {sent}/{} workspace inputs; released {cleaned}/{} pending keys",
+            inputs.len(),
+            cleanup.len()
+        ));
     }
     Ok(())
 }
@@ -428,7 +467,30 @@ extern "system" {
 
 #[cfg(test)]
 mod tests {
-    use super::{Guid, WindowIdentity, WorkspaceMoveJournal};
+    use super::{
+        pending_key_releases, Guid, WindowIdentity, WorkspaceMoveJournal, VK_CONTROL, VK_LEFT,
+        VK_LWIN, VK_RIGHT,
+    };
+
+    #[test]
+    fn partial_workspace_shortcuts_release_only_unmatched_synthetic_keydowns() {
+        let expected = [
+            vec![],
+            vec![VK_LWIN],
+            vec![VK_CONTROL, VK_LWIN],
+            vec![VK_LEFT, VK_CONTROL, VK_LWIN],
+            vec![VK_CONTROL, VK_LWIN],
+            vec![VK_LWIN],
+            vec![],
+        ];
+        for (accepted, keys) in expected.into_iter().enumerate() {
+            assert_eq!(pending_key_releases(accepted as u32, VK_LEFT), keys);
+        }
+        assert_eq!(
+            pending_key_releases(3, VK_RIGHT),
+            vec![VK_RIGHT, VK_CONTROL, VK_LWIN]
+        );
+    }
 
     #[test]
     fn virtual_desktop_guid_round_trips() {
