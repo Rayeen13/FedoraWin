@@ -467,7 +467,10 @@ extern "system" {
 
 #[cfg(test)]
 mod tests {
-    use super::{pending_key_releases, Guid, WindowIdentity, WorkspaceMoveJournal, VK_CONTROL, VK_LEFT, VK_LWIN, VK_RIGHT};
+    use super::{
+        pending_key_releases, Guid, WindowIdentity, WorkspaceMoveJournal, VK_CONTROL, VK_LEFT,
+        VK_LWIN, VK_RIGHT,
+    };
 
     #[test]
     fn partial_workspace_shortcuts_release_only_unmatched_synthetic_keydowns() {
