@@ -27,9 +27,23 @@ struct Guid {
 
 impl Guid {
     fn parse(value: &str) -> Result<Self, String> {
-        let cleaned = value.trim().trim_matches(|ch| ch == '{' || ch == '}');
+        let value = value.trim();
+        let cleaned = match (value.strip_prefix('{'), value.strip_suffix('}')) {
+            (Some(_), Some(_)) => &value[1..value.len() - 1],
+            (None, None) => value,
+            _ => return Err("invalid virtual desktop id".into()),
+        };
         let parts: Vec<&str> = cleaned.split('-').collect();
-        if parts.len() != 5 || parts[3].len() != 4 || parts[4].len() != 12 {
+        // Validate every component before byte slicing. A malformed desktop ID
+        // containing multibyte UTF-8 could otherwise panic at [0..2] below.
+        if parts.len() != 5
+            || !parts
+                .iter()
+                .zip([8usize, 4, 4, 4, 12])
+                .all(|(part, length)| {
+                    part.len() == length && part.bytes().all(|byte| byte.is_ascii_hexdigit())
+                })
+        {
             return Err("invalid virtual desktop id".into());
         }
 
@@ -500,8 +514,24 @@ mod tests {
     }
 
     #[test]
-    fn malformed_desktop_guid_is_rejected() {
-        assert!(Guid::parse("not-a-guid").is_err());
+    fn malformed_desktop_guid_is_rejected_without_panicking() {
+        for value in [
+            "not-a-guid",
+            "01234567-89ab-cdef-0123-456789abcde",
+            "01234567-89ab-cdef-aéa-456789abcdef",
+            "01234567-89ab-cdef-0123-aéaaaaaaaaa",
+            "{01234567-89ab-cdef-0123-456789abcdef",
+            "01234567-89ab-cdef-0123-456789abcdef}",
+            "{{01234567-89ab-cdef-0123-456789abcdef}}",
+        ] {
+            assert!(Guid::parse(value).is_err(), "accepted invalid ID: {value}");
+        }
+        assert_eq!(
+            Guid::parse(" {01234567-89ab-cdef-0123-456789abcdef} ")
+                .unwrap()
+                .as_string(),
+            "01234567-89ab-cdef-0123-456789abcdef"
+        );
     }
 
     #[test]
