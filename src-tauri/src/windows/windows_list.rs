@@ -74,10 +74,7 @@ pub(crate) fn is_workspace_safe_window(hwnd: isize) -> bool {
             return false;
         }
         let mut pid = 0u32;
-        if GetWindowThreadProcessId(hwnd, &mut pid) == 0
-            || pid == 0
-            || pid == std::process::id()
-        {
+        if GetWindowThreadProcessId(hwnd, &mut pid) == 0 || pid == 0 || pid == std::process::id() {
             return false;
         }
         let mut class_name = [0u16; 256];
