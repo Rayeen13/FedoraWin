@@ -90,6 +90,15 @@ rapid close/reopen cycles, minimized activation, and an old card after a new
 window reuses its handle. Verify no unrelated window is focused or closed.
 Record the original card identity and error outcome in manual evidence.
 
+Workspace move and undo now use the same live Activities window-eligibility
+check before dispatch: desktop/taskbar shell classes, hidden or owned tool
+windows, and FedoraWin windows must not be movable. Test W11-08 by attempting
+a move of an ordinary File Explorer window (CabinetWClass), then verify its
+undo; confirm that primary/secondary taskbars and desktop shell HWNDs cannot
+be moved, even if a stale or manually supplied handle reaches the backend.
+These guards are best-effort HWND checks, not a substitute for interactive
+Windows 11 verification or an atomic window-handle lease.
+
 For desktop switching, FedoraWin injects Win+Ctrl+Left/Right through Windows
 `SendInput`. If Windows accepts only part of the six-event shortcut, FedoraWin
 attempts to release only synthetic keys still held by that accepted prefix,

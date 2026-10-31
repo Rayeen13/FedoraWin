@@ -356,7 +356,7 @@ struct WindowIdentity {
 }
 
 fn window_identity(hwnd: isize) -> Option<WindowIdentity> {
-    if hwnd == 0 || unsafe { IsWindow(hwnd) } == 0 {
+    if !super::windows_list::is_workspace_safe_window(hwnd) {
         return None;
     }
     let mut pid = 0u32;
@@ -365,7 +365,7 @@ fn window_identity(hwnd: isize) -> Option<WindowIdentity> {
     }
     let created = frame_recovery::process_creation_time(pid)?;
     let mut current_pid = 0u32;
-    if unsafe { IsWindow(hwnd) } == 0
+    if !super::windows_list::is_workspace_safe_window(hwnd)
         || unsafe { GetWindowThreadProcessId(hwnd, &mut current_pid) } == 0
         || current_pid != pid
         || frame_recovery::process_creation_time(pid) != Some(created)
@@ -414,6 +414,12 @@ impl WorkspaceMoveJournal {
         let hwnd = handle
             .parse::<isize>()
             .map_err(|_| "invalid window handle")?;
+        // A move must start from an actual Activities app window. Undo below
+        // deliberately uses the less restrictive structural guard because a
+        // successful move can cloak the target on its new virtual desktop.
+        if !super::windows_list::is_actionable_window(hwnd) {
+            return Err("window is not an eligible Activities app window".into());
+        }
         let identity = window_identity(hwnd).ok_or("window is no longer available")?;
         let mut journal = self.original_desktops.lock();
         let manager = VirtualDesktopManager::new()?;
@@ -475,7 +481,6 @@ extern "system" {
 #[link(name = "user32")]
 extern "system" {
     fn SendInput(count: u32, inputs: *const Input, size: i32) -> u32;
-    fn IsWindow(hwnd: isize) -> i32;
     fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
 }
 
