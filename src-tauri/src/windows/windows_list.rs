@@ -10,6 +10,20 @@ const DWM_CLOAKED_SHELL: i32 = 0x2;
 const SW_RESTORE: i32 = 9;
 const WM_CLOSE: u32 = 0x0010;
 
+// Shell-owned surfaces must never appear as movable Activities app windows.
+// Ordinary File Explorer windows (CabinetWClass) remain eligible.
+fn is_shell_surface_class(class_name: &str) -> bool {
+    [
+        "Shell_TrayWnd",
+        "Shell_SecondaryTrayWnd",
+        "Progman",
+        "WorkerW",
+        "NotifyIconOverflowWindow",
+    ]
+    .iter()
+    .any(|protected| class_name.eq_ignore_ascii_case(protected))
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowEntry {
@@ -34,6 +48,7 @@ extern "system" {
     fn GetWindow(hwnd: isize, command: u32) -> isize;
     fn GetWindowLongPtrW(hwnd: isize, index: i32) -> isize;
     fn GetWindowTextLengthW(hwnd: isize) -> i32;
+    fn GetClassNameW(hwnd: isize, class_name: *mut u16, capacity: i32) -> i32;
     fn GetWindowTextW(hwnd: isize, text: *mut u16, max_count: i32) -> i32;
     fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
     fn ShowWindow(hwnd: isize, command: i32) -> i32;
@@ -46,16 +61,31 @@ extern "system" {
     fn DwmGetWindowAttribute(hwnd: isize, attribute: u32, value: *mut c_void, size: u32) -> i32;
 }
 
+// Workspace undo must still find an app window after Windows cloaks it on
+// another virtual desktop. Reject shell/tool/owned windows without requiring
+// visibility or a current-desktop title.
+pub(crate) fn is_workspace_safe_window(hwnd: isize) -> bool {
+    unsafe {
+        if hwnd == 0
+            || IsWindow(hwnd) == 0
+            || GetWindow(hwnd, GW_OWNER) != 0
+            || GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW != 0
+        {
+            return false;
+        }
+        let mut pid = 0u32;
+        if GetWindowThreadProcessId(hwnd, &mut pid) == 0 || pid == 0 || pid == std::process::id() {
+            return false;
+        }
+        let mut class_name = [0u16; 256];
+        let length = GetClassNameW(hwnd, class_name.as_mut_ptr(), class_name.len() as i32);
+        length > 0
+            && !is_shell_surface_class(&String::from_utf16_lossy(&class_name[..length as usize]))
+    }
+}
+
 unsafe fn eligible(hwnd: isize) -> bool {
-    if hwnd == 0 || IsWindowVisible(hwnd) == 0 || GetWindow(hwnd, GW_OWNER) != 0 {
-        return false;
-    }
-    if GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW != 0 {
-        return false;
-    }
-    let mut pid = 0u32;
-    GetWindowThreadProcessId(hwnd, &mut pid);
-    if pid == 0 || pid == std::process::id() {
+    if !is_workspace_safe_window(hwnd) || IsWindowVisible(hwnd) == 0 {
         return false;
     }
     let mut cloaked = 0i32;
@@ -71,6 +101,12 @@ unsafe fn eligible(hwnd: isize) -> bool {
         return false;
     }
     GetWindowTextLengthW(hwnd) > 0
+}
+
+// Shared guard for Activities actions and workspace moves. Re-evaluate the
+// current HWND instead of trusting a stale handle supplied by the UI.
+pub(crate) fn is_actionable_window(hwnd: isize) -> bool {
+    unsafe { hwnd != 0 && IsWindow(hwnd) != 0 && eligible(hwnd) }
 }
 
 unsafe extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
@@ -181,7 +217,7 @@ fn action_identity_matches(
 
 fn same_action_target(hwnd: isize, pid: u32, created: u64) -> bool {
     unsafe {
-        if hwnd == 0 || IsWindow(hwnd) == 0 || !eligible(hwnd) {
+        if !is_actionable_window(hwnd) {
             return false;
         }
         let mut current_pid = 0u32;
@@ -243,7 +279,24 @@ pub fn close(handle: &str, identity: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{action_identity_matches, parse_action_identity};
+    use super::{action_identity_matches, is_shell_surface_class, parse_action_identity};
+
+    #[test]
+    fn shell_taskbars_and_desktop_surfaces_are_not_activities_app_windows() {
+        for class_name in [
+            "Shell_TrayWnd",
+            "Shell_SecondaryTrayWnd",
+            "Progman",
+            "WorkerW",
+            "NotifyIconOverflowWindow",
+            "shell_traywnd",
+        ] {
+            assert!(is_shell_surface_class(class_name), "{class_name}");
+        }
+        for class_name in ["CabinetWClass", "Chrome_WidgetWin_1", "Notepad", ""] {
+            assert!(!is_shell_surface_class(class_name), "{class_name}");
+        }
+    }
 
     #[test]
     fn activities_snapshot_identity_rejects_missing_or_malformed_lifetimes() {
