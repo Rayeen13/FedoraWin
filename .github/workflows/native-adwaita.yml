@@ -1,0 +1,100 @@
+name: Native Adwaita proof
+
+on:
+  push:
+    branches: [dev/gnome-native-20260914]
+    paths:
+      - 'native/adwaita/**'
+      - 'src-tauri/src/windows/native_preferences.rs'
+      - 'src-tauri/src/main.rs'
+      - 'ui/app.js'
+      - '.github/workflows/native-adwaita.yml'
+  pull_request:
+    paths:
+      - 'native/adwaita/**'
+      - 'src-tauri/src/windows/native_preferences.rs'
+      - 'src-tauri/src/main.rs'
+      - 'ui/app.js'
+      - '.github/workflows/native-adwaita.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-gtk4-adwaita:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-libadwaita
+            mingw-w64-ucrt-x86_64-ntldd
+      - name: Compile real libadwaita API
+        shell: msys2 {0}
+        run: |
+          mkdir -p native/adwaita/out
+          gcc -std=c11 -Wall -Wextra -Werror native/adwaita/adwaita-window.c \
+            -o native/adwaita/out/fedorawin-adwaita.exe \
+            $(pkg-config --cflags --libs libadwaita-1)
+          gcc -std=c11 -Wall -Wextra -Werror native/adwaita/preferences-window.c \
+            -o native/adwaita/out/fedorawin-preferences.exe \
+            $(pkg-config --cflags --libs libadwaita-1)
+          test -s native/adwaita/out/fedorawin-adwaita.exe
+          test -s native/adwaita/out/fedorawin-preferences.exe
+      - name: Verify real Adwaita HWNDs and memory
+        shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./native/adwaita/check-window.ps1
+      - name: Stage portable Preferences runtime
+        shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./native/adwaita/package-runtime.ps1
+      - name: Verify portable Preferences runtime without MSYS2 PATH
+        shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: ./native/adwaita/check-portable-runtime.ps1
+      - name: Upload portable Preferences staging
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedorawin-preferences-portable-staging
+          path: |
+            native/adwaita/out/preferences-runtime
+            native/adwaita/out/portable-runtime.json
+          if-no-files-found: error
+          retention-days: 1
+      - name: Upload real Windows captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedorawin-native-adwaita-evidence
+          path: |
+            native/adwaita/out/adwaita-*.png
+            native/adwaita/out/adwaita-memory.json
+            native/adwaita/out/portable-runtime.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  portable-preferences-clean-runner:
+    needs: windows-gtk4-adwaita
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download portable Preferences staging only
+        uses: actions/download-artifact@v4
+        with:
+          name: fedorawin-preferences-portable-staging
+          path: native/adwaita/out
+      - name: Verify portable Preferences on fresh Windows runner
+        shell: pwsh
+        run: ./native/adwaita/check-portable-runtime.ps1

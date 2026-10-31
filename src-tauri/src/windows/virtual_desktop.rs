@@ -1,0 +1,574 @@
+use super::frame_recovery;
+use parking_lot::Mutex;
+use serde::Serialize;
+use std::ffi::c_void;
+use std::mem::size_of;
+use std::ptr;
+
+const CLSCTX_INPROC_SERVER: u32 = 0x1;
+const COINIT_MULTITHREADED: u32 = 0x0;
+const RPC_E_CHANGED_MODE: i32 = 0x80010106u32 as i32;
+
+const INPUT_KEYBOARD: u32 = 1;
+const KEYEVENTF_KEYUP: u32 = 0x0002;
+const VK_CONTROL: u16 = 0x11;
+const VK_LEFT: u16 = 0x25;
+const VK_RIGHT: u16 = 0x27;
+const VK_LWIN: u16 = 0x5B;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Guid {
+    data1: u32,
+    data2: u16,
+    data3: u16,
+    data4: [u8; 8],
+}
+
+impl Guid {
+    fn parse(value: &str) -> Result<Self, String> {
+        let value = value.trim();
+        let cleaned = match (value.strip_prefix('{'), value.strip_suffix('}')) {
+            (Some(_), Some(_)) => &value[1..value.len() - 1],
+            (None, None) => value,
+            _ => return Err("invalid virtual desktop id".into()),
+        };
+        let parts: Vec<&str> = cleaned.split('-').collect();
+        // Validate every component before byte slicing. A malformed desktop ID
+        // containing multibyte UTF-8 could otherwise panic at [0..2] below.
+        if parts.len() != 5
+            || !parts
+                .iter()
+                .zip([8usize, 4, 4, 4, 12])
+                .all(|(part, length)| {
+                    part.len() == length && part.bytes().all(|byte| byte.is_ascii_hexdigit())
+                })
+        {
+            return Err("invalid virtual desktop id".into());
+        }
+
+        let data1 = u32::from_str_radix(parts[0], 16).map_err(|_| "invalid virtual desktop id")?;
+        let data2 = u16::from_str_radix(parts[1], 16).map_err(|_| "invalid virtual desktop id")?;
+        let data3 = u16::from_str_radix(parts[2], 16).map_err(|_| "invalid virtual desktop id")?;
+        let mut data4 = [0u8; 8];
+        data4[0] =
+            u8::from_str_radix(&parts[3][0..2], 16).map_err(|_| "invalid virtual desktop id")?;
+        data4[1] =
+            u8::from_str_radix(&parts[3][2..4], 16).map_err(|_| "invalid virtual desktop id")?;
+        for index in 0..6 {
+            let start = index * 2;
+            data4[index + 2] = u8::from_str_radix(&parts[4][start..start + 2], 16)
+                .map_err(|_| "invalid virtual desktop id")?;
+        }
+
+        Ok(Self {
+            data1,
+            data2,
+            data3,
+            data4,
+        })
+    }
+
+    fn as_string(&self) -> String {
+        format!(
+            "{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            self.data1,
+            self.data2,
+            self.data3,
+            self.data4[0],
+            self.data4[1],
+            self.data4[2],
+            self.data4[3],
+            self.data4[4],
+            self.data4[5],
+            self.data4[6],
+            self.data4[7]
+        )
+    }
+}
+
+const CLSID_VIRTUAL_DESKTOP_MANAGER: Guid = Guid {
+    data1: 0xaa509086,
+    data2: 0x5ca9,
+    data3: 0x4c25,
+    data4: [0x8f, 0x95, 0x58, 0x9d, 0x3c, 0x07, 0xb4, 0x8a],
+};
+
+const IID_VIRTUAL_DESKTOP_MANAGER: Guid = Guid {
+    data1: 0xa5cd92ff,
+    data2: 0x29be,
+    data3: 0x454c,
+    data4: [0x8d, 0x04, 0xd8, 0x28, 0x79, 0xfb, 0x3f, 0x1b],
+};
+
+#[repr(C)]
+struct VirtualDesktopManagerVTable {
+    query_interface: unsafe extern "system" fn(*mut c_void, *const Guid, *mut *mut c_void) -> i32,
+    add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
+    release: unsafe extern "system" fn(*mut c_void) -> u32,
+    is_window_on_current_virtual_desktop:
+        unsafe extern "system" fn(*mut c_void, isize, *mut i32) -> i32,
+    get_window_desktop_id: unsafe extern "system" fn(*mut c_void, isize, *mut Guid) -> i32,
+    move_window_to_desktop: unsafe extern "system" fn(*mut c_void, isize, *const Guid) -> i32,
+}
+
+#[repr(C)]
+struct VirtualDesktopManagerObject {
+    vtable: *const VirtualDesktopManagerVTable,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct KeyboardInput {
+    virtual_key: u16,
+    scan_code: u16,
+    flags: u32,
+    time: u32,
+    extra_info: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct MouseInput {
+    dx: i32,
+    dy: i32,
+    mouse_data: u32,
+    flags: u32,
+    time: u32,
+    extra_info: usize,
+}
+
+#[repr(C)]
+union InputPayload {
+    mouse: MouseInput,
+    keyboard: KeyboardInput,
+}
+
+#[repr(C)]
+struct Input {
+    kind: u32,
+    payload: InputPayload,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowWorkspaceInfo {
+    pub desktop_id: String,
+    pub on_current_workspace: bool,
+}
+
+struct VirtualDesktopManager {
+    object: *mut VirtualDesktopManagerObject,
+    uninitialize_com: bool,
+}
+
+impl VirtualDesktopManager {
+    fn new() -> Result<Self, String> {
+        let initialized = unsafe { CoInitializeEx(ptr::null_mut(), COINIT_MULTITHREADED) };
+        let uninitialize_com = initialized >= 0;
+        if initialized < 0 && initialized != RPC_E_CHANGED_MODE {
+            return Err(format!(
+                "CoInitializeEx failed: 0x{:08x}",
+                initialized as u32
+            ));
+        }
+
+        let mut object: *mut c_void = ptr::null_mut();
+        let result = unsafe {
+            CoCreateInstance(
+                &CLSID_VIRTUAL_DESKTOP_MANAGER,
+                ptr::null_mut(),
+                CLSCTX_INPROC_SERVER,
+                &IID_VIRTUAL_DESKTOP_MANAGER,
+                &mut object,
+            )
+        };
+        if result < 0 || object.is_null() {
+            if uninitialize_com {
+                unsafe { CoUninitialize() };
+            }
+            return Err(format!(
+                "VirtualDesktopManager is unavailable: 0x{:08x}",
+                result as u32
+            ));
+        }
+
+        Ok(Self {
+            object: object as *mut VirtualDesktopManagerObject,
+            uninitialize_com,
+        })
+    }
+
+    fn vtable(&self) -> &VirtualDesktopManagerVTable {
+        unsafe { &*(*self.object).vtable }
+    }
+
+    fn window_info(&self, hwnd: isize) -> Result<WindowWorkspaceInfo, String> {
+        let mut id = Guid::default();
+        let desktop_result =
+            unsafe { (self.vtable().get_window_desktop_id)(self.object.cast(), hwnd, &mut id) };
+        if desktop_result < 0 {
+            return Err(format!(
+                "GetWindowDesktopId failed: 0x{:08x}",
+                desktop_result as u32
+            ));
+        }
+
+        let mut current = 0i32;
+        let current_result = unsafe {
+            (self.vtable().is_window_on_current_virtual_desktop)(
+                self.object.cast(),
+                hwnd,
+                &mut current,
+            )
+        };
+        if current_result < 0 {
+            return Err(format!(
+                "IsWindowOnCurrentVirtualDesktop failed: 0x{:08x}",
+                current_result as u32
+            ));
+        }
+
+        Ok(WindowWorkspaceInfo {
+            desktop_id: id.as_string(),
+            on_current_workspace: current != 0,
+        })
+    }
+
+    fn move_window(&self, hwnd: isize, desktop_id: &str) -> Result<(), String> {
+        let id = Guid::parse(desktop_id)?;
+        let result =
+            unsafe { (self.vtable().move_window_to_desktop)(self.object.cast(), hwnd, &id) };
+        if result < 0 {
+            return Err(format!(
+                "MoveWindowToDesktop failed: 0x{:08x}",
+                result as u32
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Drop for VirtualDesktopManager {
+    fn drop(&mut self) {
+        if !self.object.is_null() {
+            unsafe {
+                (self.vtable().release)(self.object.cast());
+            }
+        }
+        if self.uninitialize_com {
+            unsafe { CoUninitialize() };
+        }
+    }
+}
+
+pub fn window_info(hwnd: isize) -> Result<WindowWorkspaceInfo, String> {
+    VirtualDesktopManager::new()?.window_info(hwnd)
+}
+
+fn keyboard_input(virtual_key: u16, key_up: bool) -> Input {
+    Input {
+        kind: INPUT_KEYBOARD,
+        payload: InputPayload {
+            keyboard: KeyboardInput {
+                virtual_key,
+                flags: if key_up { KEYEVENTF_KEYUP } else { 0 },
+                ..KeyboardInput::default()
+            },
+        },
+    }
+}
+
+// SendInput may insert only a prefix of a keyboard batch. Release exactly
+// the keys whose synthetic key-down events were accepted but whose matching
+// key-up events were not. Releasing keys not injected by us can interfere with
+// real user input, so never send unconditional modifier key-ups.
+fn pending_key_releases(accepted: u32, arrow: u16) -> Vec<u16> {
+    let mut keys = Vec::new();
+    if accepted >= 3 && accepted < 4 {
+        keys.push(arrow);
+    }
+    if accepted >= 2 && accepted < 5 {
+        keys.push(VK_CONTROL);
+    }
+    if accepted >= 1 && accepted < 6 {
+        keys.push(VK_LWIN);
+    }
+    keys
+}
+
+/// Switches the Windows virtual desktop only after an explicit user action.
+/// This does not change Explorer configuration or write persistent shell state.
+pub fn navigate(direction: i32) -> Result<(), String> {
+    let arrow = match direction {
+        -1 => VK_LEFT,
+        1 => VK_RIGHT,
+        _ => return Err("workspace direction must be -1 or 1".into()),
+    };
+
+    let inputs = [
+        keyboard_input(VK_LWIN, false),
+        keyboard_input(VK_CONTROL, false),
+        keyboard_input(arrow, false),
+        keyboard_input(arrow, true),
+        keyboard_input(VK_CONTROL, true),
+        keyboard_input(VK_LWIN, true),
+    ];
+    let sent = unsafe {
+        SendInput(
+            inputs.len() as u32,
+            inputs.as_ptr(),
+            size_of::<Input>() as i32,
+        )
+    };
+    if sent != inputs.len() as u32 {
+        let cleanup: Vec<Input> = pending_key_releases(sent, arrow)
+            .into_iter()
+            .map(|key| keyboard_input(key, true))
+            .collect();
+        // Best effort: UIPI or a blocked input desktop can reject cleanup too.
+        // Never report successful navigation or claim that key state recovered.
+        let cleaned = if cleanup.is_empty() {
+            0
+        } else {
+            unsafe {
+                SendInput(
+                    cleanup.len() as u32,
+                    cleanup.as_ptr(),
+                    size_of::<Input>() as i32,
+                )
+            }
+        };
+        return Err(format!(
+            "Windows accepted {sent}/{} workspace inputs; released {cleaned}/{} pending keys",
+            inputs.len(),
+            cleanup.len()
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WindowIdentity {
+    hwnd: isize,
+    pid: u32,
+    created: u64,
+}
+
+fn window_identity(hwnd: isize) -> Option<WindowIdentity> {
+    if !super::windows_list::is_workspace_safe_window(hwnd) {
+        return None;
+    }
+    let mut pid = 0u32;
+    if unsafe { GetWindowThreadProcessId(hwnd, &mut pid) } == 0 || pid == 0 {
+        return None;
+    }
+    let created = frame_recovery::process_creation_time(pid)?;
+    let mut current_pid = 0u32;
+    if !super::windows_list::is_workspace_safe_window(hwnd)
+        || unsafe { GetWindowThreadProcessId(hwnd, &mut current_pid) } == 0
+        || current_pid != pid
+        || frame_recovery::process_creation_time(pid) != Some(created)
+    {
+        return None;
+    }
+    Some(WindowIdentity { hwnd, pid, created })
+}
+
+#[derive(Clone, Debug)]
+struct WorkspaceMoveRecord {
+    identity: WindowIdentity,
+    original_desktop: String,
+}
+
+pub struct WorkspaceMoveJournal {
+    original_desktops: Mutex<Vec<WorkspaceMoveRecord>>,
+}
+
+impl Default for WorkspaceMoveJournal {
+    fn default() -> Self {
+        Self {
+            original_desktops: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl WorkspaceMoveJournal {
+    fn record_successful_move(
+        journal: &mut Vec<WorkspaceMoveRecord>,
+        identity: WindowIdentity,
+        origin: String,
+    ) {
+        // Keep the first successful move's origin for each process-lifetime-bound
+        // HWND. An old record must never apply to a different process that reused
+        // the same numeric window handle.
+        if !journal.iter().any(|entry| entry.identity == identity) {
+            journal.push(WorkspaceMoveRecord {
+                identity,
+                original_desktop: origin,
+            });
+        }
+    }
+
+    pub fn move_window(&self, handle: &str, target_desktop_id: &str) -> Result<(), String> {
+        let hwnd = handle
+            .parse::<isize>()
+            .map_err(|_| "invalid window handle")?;
+        // A move must start from an actual Activities app window. Undo below
+        // deliberately uses the less restrictive structural guard because a
+        // successful move can cloak the target on its new virtual desktop.
+        if !super::windows_list::is_actionable_window(hwnd) {
+            return Err("window is not an eligible Activities app window".into());
+        }
+        let identity = window_identity(hwnd).ok_or("window is no longer available")?;
+        let mut journal = self.original_desktops.lock();
+        let manager = VirtualDesktopManager::new()?;
+        let origin = manager.window_info(hwnd)?.desktop_id;
+        if origin.eq_ignore_ascii_case(target_desktop_id) {
+            return Ok(());
+        }
+        if window_identity(hwnd) != Some(identity) {
+            return Err("window identity changed before workspace move".into());
+        }
+
+        // Windows must confirm the move BEFORE we offer an undo. A failed COM
+        // call must not leave an undo entry for a move that never happened.
+        manager.move_window(hwnd, target_desktop_id)?;
+        if window_identity(hwnd) != Some(identity) {
+            return Err("window identity changed after workspace move".into());
+        }
+        Self::record_successful_move(&mut journal, identity, origin);
+        Ok(())
+    }
+
+    pub fn undo_last(&self) -> Result<Option<String>, String> {
+        let mut journal = self.original_desktops.lock();
+        let Some(entry) = journal.last().cloned() else {
+            return Ok(None);
+        };
+        if window_identity(entry.identity.hwnd) != Some(entry.identity) {
+            // An HWND can be recycled. Never move an unrelated window back to
+            // someone else's old workspace, and discard this unusable entry.
+            journal.pop();
+            return Err("original window exited or its handle was reused".into());
+        }
+
+        // Keep the record when the native operation fails, so the user can
+        // retry instead of silently losing their only rollback opportunity.
+        VirtualDesktopManager::new()?.move_window(entry.identity.hwnd, &entry.original_desktop)?;
+        journal.pop();
+        Ok(Some(entry.identity.hwnd.to_string()))
+    }
+
+    pub fn pending_count(&self) -> usize {
+        self.original_desktops.lock().len()
+    }
+}
+
+#[link(name = "ole32")]
+extern "system" {
+    fn CoInitializeEx(reserved: *mut c_void, apartment: u32) -> i32;
+    fn CoUninitialize();
+    fn CoCreateInstance(
+        class_id: *const Guid,
+        outer: *mut c_void,
+        context: u32,
+        interface_id: *const Guid,
+        object: *mut *mut c_void,
+    ) -> i32;
+}
+
+#[link(name = "user32")]
+extern "system" {
+    fn SendInput(count: u32, inputs: *const Input, size: i32) -> u32;
+    fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        pending_key_releases, Guid, WindowIdentity, WorkspaceMoveJournal, VK_CONTROL, VK_LEFT,
+        VK_LWIN, VK_RIGHT,
+    };
+
+    #[test]
+    fn partial_workspace_shortcuts_release_only_unmatched_synthetic_keydowns() {
+        let expected = [
+            vec![],
+            vec![VK_LWIN],
+            vec![VK_CONTROL, VK_LWIN],
+            vec![VK_LEFT, VK_CONTROL, VK_LWIN],
+            vec![VK_CONTROL, VK_LWIN],
+            vec![VK_LWIN],
+            vec![],
+        ];
+        for (accepted, keys) in expected.into_iter().enumerate() {
+            assert_eq!(pending_key_releases(accepted as u32, VK_LEFT), keys);
+        }
+        assert_eq!(
+            pending_key_releases(3, VK_RIGHT),
+            vec![VK_RIGHT, VK_CONTROL, VK_LWIN]
+        );
+    }
+
+    #[test]
+    fn virtual_desktop_guid_round_trips() {
+        let value = "01234567-89ab-cdef-0123-456789abcdef";
+        let guid = Guid::parse(value).unwrap();
+        assert_eq!(guid.as_string(), value);
+    }
+
+    #[test]
+    fn malformed_desktop_guid_is_rejected_without_panicking() {
+        for value in [
+            "not-a-guid",
+            "01234567-89ab-cdef-0123-456789abcde",
+            "01234567-89ab-cdef-aéa-456789abcdef",
+            "01234567-89ab-cdef-0123-aéaaaaaaaaa",
+            "{01234567-89ab-cdef-0123-456789abcdef",
+            "01234567-89ab-cdef-0123-456789abcdef}",
+            "{{01234567-89ab-cdef-0123-456789abcdef}}",
+        ] {
+            assert!(Guid::parse(value).is_err(), "accepted invalid ID: {value}");
+        }
+        assert_eq!(
+            Guid::parse(" {01234567-89ab-cdef-0123-456789abcdef} ")
+                .unwrap()
+                .as_string(),
+            "01234567-89ab-cdef-0123-456789abcdef"
+        );
+    }
+
+    #[test]
+    fn workspace_undo_preserves_first_successful_origin() {
+        let first = WindowIdentity {
+            hwnd: 123,
+            pid: 456,
+            created: 789,
+        };
+        let mut entries = Vec::new();
+        WorkspaceMoveJournal::record_successful_move(&mut entries, first, "desktop-A".into());
+        WorkspaceMoveJournal::record_successful_move(&mut entries, first, "desktop-B".into());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].original_desktop, "desktop-A");
+    }
+
+    #[test]
+    fn recycled_window_handles_never_share_workspace_undo_identity() {
+        let original = WindowIdentity {
+            hwnd: 123,
+            pid: 456,
+            created: 789,
+        };
+        let reused = WindowIdentity {
+            hwnd: 123,
+            pid: 456,
+            created: 790,
+        };
+        let mut entries = Vec::new();
+        WorkspaceMoveJournal::record_successful_move(&mut entries, original, "desktop-A".into());
+        WorkspaceMoveJournal::record_successful_move(&mut entries, reused, "desktop-B".into());
+        assert_eq!(entries.len(), 2);
+        assert_ne!(entries[0].identity, entries[1].identity);
+    }
+}
