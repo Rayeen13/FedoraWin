@@ -100,6 +100,15 @@ taskbars and desktop shell HWNDs cannot be moved even with a manually supplied
 handle. These guards are best-effort HWND checks, not a substitute for
 interactive Windows 11 verification or an atomic window-handle lease.
 
+For **W11-08 undo ordering**, move app A from desktop 1 to desktop 2,
+then app B from desktop 1 to desktop 2, then move app A again to desktop 3.
+"Undo last" must restore **A** to desktop 1 first (not B, and not A's
+intermediate desktop 2); the next undo must restore **B** to desktop 1.
+Confirm that moving the same app multiple times does not create duplicate
+undo records and that closing/recreating a window does not apply its stale
+undo record to a new process lifetime. Rust tests cover journal ordering,
+not real COM window moves; record a genuine Windows 11 video.
+
 For desktop switching, FedoraWin injects Win+Ctrl+Left/Right through Windows
 `SendInput`. If Windows accepts only part of the six-event shortcut, FedoraWin
 attempts to release only synthetic keys still held by that accepted prefix,
