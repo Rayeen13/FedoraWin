@@ -399,10 +399,13 @@ impl WorkspaceMoveJournal {
         identity: WindowIdentity,
         origin: String,
     ) {
-        // Keep the first successful move's origin for each process-lifetime-bound
-        // HWND. An old record must never apply to a different process that reused
-        // the same numeric window handle.
-        if !journal.iter().any(|entry| entry.identity == identity) {
+        // Preserve the first successful origin for each process-lifetime-bound
+        // HWND, but make the most recently moved window the next undo target.
+        // A recycled numeric HWND with a different lifetime remains distinct.
+        if let Some(index) = journal.iter().position(|entry| entry.identity == identity) {
+            let previous = journal.remove(index);
+            journal.push(previous);
+        } else {
             journal.push(WorkspaceMoveRecord {
                 identity,
                 original_desktop: origin,
@@ -551,6 +554,36 @@ mod tests {
         WorkspaceMoveJournal::record_successful_move(&mut entries, first, "desktop-B".into());
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].original_desktop, "desktop-A");
+    }
+
+    #[test]
+    fn workspace_undo_targets_most_recently_moved_window() {
+        let first = WindowIdentity {
+            hwnd: 123,
+            pid: 456,
+            created: 789,
+        };
+        let second = WindowIdentity {
+            hwnd: 124,
+            pid: 456,
+            created: 789,
+        };
+        let mut entries = Vec::new();
+        WorkspaceMoveJournal::record_successful_move(&mut entries, first, "desktop-A".into());
+        WorkspaceMoveJournal::record_successful_move(&mut entries, second, "desktop-B".into());
+        // Moving first again must make it the next undo target, without
+        // overwriting its original desktop with the intermediate location.
+        WorkspaceMoveJournal::record_successful_move(&mut entries, first, "desktop-C".into());
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].identity, second);
+        assert_eq!(entries[1].identity, first);
+        assert_eq!(entries[1].original_desktop, "desktop-A");
+
+        // Another successful move of second should now make second the latest.
+        WorkspaceMoveJournal::record_successful_move(&mut entries, second, "desktop-D".into());
+        assert_eq!(entries[0].identity, first);
+        assert_eq!(entries[1].identity, second);
+        assert_eq!(entries[1].original_desktop, "desktop-B");
     }
 
     #[test]
