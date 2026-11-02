@@ -39,10 +39,29 @@ test('custom application chrome and DWM opt-outs are excluded even with WS_CAPTI
 test('DWM original values are journaled and restored only after successful writes', () => {
   for (const property of ['dark', 'corner', 'border', 'caption', 'text']) {
     assert.match(frame, new RegExp(`changed_${property}: bool`));
+  }
+  for (const property of ['corner', 'border']) {
     assert.match(frame, new RegExp(`original\\.changed_${property} \\|=\\s*set_attr`));
+  }
+  for (const [property, attribute] of [
+    ['dark', 'USE_IMMERSIVE_DARK_MODE'],
+    ['caption', 'CAPTION_COLOR'],
+    ['text', 'TEXT_COLOR'],
+  ]) {
+    assert.match(frame, new RegExp(`applied_${property}: Option<`));
+    assert.match(frame, new RegExp(`if set_attr\\(hwnd, DWMWA_${attribute}, &${property}\\) \\{\\s*original\\.changed_${property} = true;\\s*original\\.applied_${property} = Some\\(${property}\\)`));
   }
   assert.match(frame, /window_pid\(hwnd\) != original\.pid/);
   assert.match(frame, /restore_colors\(hwnd, original\)/);
+});
+
+test('normal color rollback leaves newer application-owned DWM values intact', () => {
+  assert.match(frame, /fn should_restore_color<T: PartialEq>/);
+  assert.match(frame, /now == ours && now != before/);
+  assert.match(frame, /let Some\(current\) = read_attr::<T>\(hwnd, attribute\) else/);
+  assert.match(frame, /should_restore_color\(original, applied, Some\(current\)\)/);
+  assert.match(frame, /if !set_attr\(hwnd, attribute, &value\) \{/);
+  assert.match(frame, /fn color_rollback_only_restores_the_last_fedorawin_value\(\)/);
 });
 
 test('reset prevents in-flight and future watcher mutations', () => {

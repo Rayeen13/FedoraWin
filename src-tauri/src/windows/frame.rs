@@ -72,6 +72,10 @@ struct OriginalFrame {
     changed_border: bool,
     changed_caption: bool,
     changed_text: bool,
+    // Last values FedoraWin successfully wrote, for owner-safe rollback.
+    applied_dark: Option<i32>,
+    applied_caption: Option<u32>,
+    applied_text: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -242,28 +246,71 @@ unsafe fn snapshot_frame(hwnd: isize, pid: u32, created: u64) -> OriginalFrame {
         changed_border: false,
         changed_caption: false,
         changed_text: false,
+        applied_dark: None,
+        applied_caption: None,
+        applied_text: None,
     }
 }
 
+// A foreign application may change its DWM colors after FedoraWin styled it.
+// Only restore an attribute if the observed value is still our last write.
+fn should_restore_color<T: PartialEq>(
+    original: Option<T>,
+    applied: Option<T>,
+    current: Option<T>,
+) -> bool {
+    matches!(
+        (original, applied, current),
+        (Some(before), Some(ours), Some(now)) if now == ours && now != before
+    )
+}
+
+unsafe fn restore_color<T: Copy + Default + PartialEq>(
+    hwnd: isize,
+    attribute: u32,
+    original: Option<T>,
+    applied: Option<T>,
+    changed: &mut bool,
+) {
+    if !*changed {
+        return;
+    }
+    let Some(current) = read_attr::<T>(hwnd, attribute) else {
+        return; // Unknown current state: do not overwrite or claim restoration.
+    };
+    if should_restore_color(original, applied, Some(current)) {
+        if let Some(value) = original {
+            if !set_attr(hwnd, attribute, &value) {
+                return; // Keep pending for a possible later retry.
+            }
+        }
+    }
+    // If the owner changed the attribute, its new value takes precedence.
+    *changed = false;
+}
+
 unsafe fn restore_colors(hwnd: isize, original: &mut OriginalFrame) {
-    if original.changed_dark {
-        if let Some(value) = original.dark {
-            set_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &value);
-        }
-        original.changed_dark = false;
-    }
-    if original.changed_caption {
-        if let Some(value) = original.caption {
-            set_attr(hwnd, DWMWA_CAPTION_COLOR, &value);
-        }
-        original.changed_caption = false;
-    }
-    if original.changed_text {
-        if let Some(value) = original.text {
-            set_attr(hwnd, DWMWA_TEXT_COLOR, &value);
-        }
-        original.changed_text = false;
-    }
+    restore_color(
+        hwnd,
+        DWMWA_USE_IMMERSIVE_DARK_MODE,
+        original.dark,
+        original.applied_dark,
+        &mut original.changed_dark,
+    );
+    restore_color(
+        hwnd,
+        DWMWA_CAPTION_COLOR,
+        original.caption,
+        original.applied_caption,
+        &mut original.changed_caption,
+    );
+    restore_color(
+        hwnd,
+        DWMWA_TEXT_COLOR,
+        original.text,
+        original.applied_text,
+        &mut original.changed_text,
+    );
 }
 
 unsafe fn restore_frame(hwnd: isize, mut original: OriginalFrame) {
@@ -618,7 +665,10 @@ unsafe extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
         let original = journal.get_mut(&hwnd).expect("frame journal entry");
         if let Some(dark) = ctx.palette.dark {
             if original.dark.is_some() {
-                original.changed_dark |= set_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark);
+                if set_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark) {
+                    original.changed_dark = true;
+                    original.applied_dark = Some(dark);
+                }
             }
         } else {
             restore_colors(hwnd, original);
@@ -629,12 +679,18 @@ unsafe extern "system" fn apply_callback(hwnd: isize, lparam: isize) -> i32 {
         }
         if let Some(caption) = ctx.palette.caption {
             if original.caption.is_some() {
-                original.changed_caption |= set_attr(hwnd, DWMWA_CAPTION_COLOR, &caption);
+                if set_attr(hwnd, DWMWA_CAPTION_COLOR, &caption) {
+                    original.changed_caption = true;
+                    original.applied_caption = Some(caption);
+                }
             }
         }
         if let Some(text) = ctx.palette.text {
             if original.text.is_some() {
-                original.changed_text |= set_attr(hwnd, DWMWA_TEXT_COLOR, &text);
+                if set_attr(hwnd, DWMWA_TEXT_COLOR, &text) {
+                    original.changed_text = true;
+                    original.applied_text = Some(text);
+                }
             }
         }
         if original.border.is_some() {
@@ -697,6 +753,20 @@ mod tests {
         WS_EX_LAYERED, WS_EX_TOPMOST, WS_SYSMENU, WS_THICKFRAME,
     };
     use crate::shell::{AppearanceState, ThemeMode};
+
+    #[test]
+    fn color_rollback_only_restores_the_last_fedorawin_value() {
+        use super::should_restore_color;
+        assert!(should_restore_color(Some(10u32), Some(20), Some(20)));
+        assert!(!should_restore_color(Some(10u32), Some(20), Some(30)));
+        assert!(!should_restore_color(Some(10u32), Some(20), Some(10)));
+        assert!(!should_restore_color(Some(10u32), Some(10), Some(10)));
+        assert!(!should_restore_color(Some(10u32), None, Some(20)));
+        assert!(!should_restore_color(Some(10u32), Some(20), None));
+        // Both Windows dark-mode values must be treated as distinct writes.
+        assert!(should_restore_color(Some(0i32), Some(1), Some(1)));
+        assert!(!should_restore_color(Some(0i32), Some(1), Some(0)));
+    }
 
     fn appearance(theme: ThemeMode) -> AppearanceState {
         AppearanceState {
