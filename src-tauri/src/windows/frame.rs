@@ -259,7 +259,10 @@ fn should_restore_color<T: PartialEq>(
     applied: Option<T>,
     current: Option<T>,
 ) -> bool {
-    matches!((original, applied, current), (Some(before), Some(ours), Some(now)) if now == ours && now != before)
+    matches!(
+        (original, applied, current),
+        (Some(before), Some(ours), Some(now)) if now == ours && now != before
+    )
 }
 
 unsafe fn restore_color<T: Copy + Default + PartialEq>(
@@ -744,6 +747,13 @@ pub fn start_frame_watcher(state: Arc<crate::shell::ShellState>) -> Result<(), S
 
 #[cfg(test)]
 mod tests {
+    use super::{
+        classify_frame_traits, exclusions, has_known_self_drawn_chrome, identity_is_excluded,
+        palette, protected_process_family, self_drawn_chrome_family, WindowIdentity, WS_CAPTION,
+        WS_EX_LAYERED, WS_EX_TOPMOST, WS_SYSMENU, WS_THICKFRAME,
+    };
+    use crate::shell::{AppearanceState, ThemeMode};
+
     #[test]
     fn color_rollback_only_restores_the_last_fedorawin_value() {
         use super::should_restore_color;
@@ -757,12 +767,6 @@ mod tests {
         assert!(should_restore_color(Some(0i32), Some(1), Some(1)));
         assert!(!should_restore_color(Some(0i32), Some(1), Some(0)));
     }
-    use super::{
-        classify_frame_traits, exclusions, has_known_self_drawn_chrome, identity_is_excluded,
-        palette, protected_process_family, self_drawn_chrome_family, WindowIdentity, WS_CAPTION,
-        WS_EX_LAYERED, WS_EX_TOPMOST, WS_SYSMENU, WS_THICKFRAME,
-    };
-    use crate::shell::{AppearanceState, ThemeMode};
 
     fn appearance(theme: ThemeMode) -> AppearanceState {
         AppearanceState {
