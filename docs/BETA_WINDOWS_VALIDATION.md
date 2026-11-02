@@ -63,6 +63,11 @@ native frame attach/detach proof. CI artifacts are not release approval.
 3. Use a disposable standard-frame Win32 window for frame interaction before
    testing more applications. Confirm native Windows still owns caption input
    and system actions. Compare the same HWND's DWM state before/after OFF.
+   For a controlled owner-change regression, have the test app set a different
+   caption/text DWM color after FedoraWin's last write, then exclude it or
+   switch FedoraWin OFF before the next watcher tick. The app's newer value
+   must survive; unchanged FedoraWin-written colors must return to baseline.
+   Record timing and actual attribute values, not just screenshots.
 4. Record a real video of Task Manager force termination and recovery, and
    verify the *same baseline Explorer process* remained alive. On failure,
    restore a VM snapshot; do not claim recovery based on a screenshot alone.
