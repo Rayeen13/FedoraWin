@@ -612,9 +612,21 @@ mod tests {
 
     #[test]
     fn recycled_handle_discards_only_its_stale_undo_record() {
-        let old = WindowIdentity { hwnd: 123, pid: 456, created: 789 };
-        let other = WindowIdentity { hwnd: 124, pid: 456, created: 789 };
-        let reused = WindowIdentity { hwnd: 123, pid: 999, created: 900 };
+        let old = WindowIdentity {
+            hwnd: 123,
+            pid: 456,
+            created: 789,
+        };
+        let other = WindowIdentity {
+            hwnd: 124,
+            pid: 456,
+            created: 789,
+        };
+        let reused = WindowIdentity {
+            hwnd: 123,
+            pid: 999,
+            created: 900,
+        };
         let mut entries = Vec::new();
         WorkspaceMoveJournal::record_successful_move(&mut entries, old, "desktop-A".into());
         WorkspaceMoveJournal::record_successful_move(&mut entries, other, "desktop-C".into());
