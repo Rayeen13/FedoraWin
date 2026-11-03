@@ -401,7 +401,11 @@ impl WorkspaceMoveJournal {
     ) {
         // Preserve the first successful origin for each process-lifetime-bound
         // HWND, but make the most recently moved window the next undo target.
-        // A recycled numeric HWND with a different lifetime remains distinct.
+        // A recycled numeric HWND must not leave a stale undo entry behind.
+        // Its previous process lifetime can never be restored safely.
+        journal.retain(|entry| {
+            entry.identity.hwnd != identity.hwnd || entry.identity == identity
+        });
         if let Some(index) = journal.iter().position(|entry| entry.identity == identity) {
             let previous = journal.remove(index);
             journal.push(previous);
@@ -601,7 +605,23 @@ mod tests {
         let mut entries = Vec::new();
         WorkspaceMoveJournal::record_successful_move(&mut entries, original, "desktop-A".into());
         WorkspaceMoveJournal::record_successful_move(&mut entries, reused, "desktop-B".into());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].identity, reused);
+        assert_eq!(entries[0].original_desktop, "desktop-B");
+    }
+
+    #[test]
+    fn recycled_handle_discards_only_its_stale_undo_record() {
+        let old = WindowIdentity { hwnd: 123, pid: 456, created: 789 };
+        let other = WindowIdentity { hwnd: 124, pid: 456, created: 789 };
+        let reused = WindowIdentity { hwnd: 123, pid: 999, created: 900 };
+        let mut entries = Vec::new();
+        WorkspaceMoveJournal::record_successful_move(&mut entries, old, "desktop-A".into());
+        WorkspaceMoveJournal::record_successful_move(&mut entries, other, "desktop-C".into());
+        WorkspaceMoveJournal::record_successful_move(&mut entries, reused, "desktop-B".into());
         assert_eq!(entries.len(), 2);
-        assert_ne!(entries[0].identity, entries[1].identity);
+        assert_eq!(entries[0].identity, other);
+        assert_eq!(entries[1].identity, reused);
+        assert_eq!(entries[1].original_desktop, "desktop-B");
     }
 }
