@@ -33,6 +33,13 @@ release build, force-kill frame recovery, taskbar recovery, Explorer restart,
 memory budget and executable captures), native Adwaita proof, and disposable
 native frame attach/detach proof. CI artifacts are not release approval.
 
+The native GTK4/libadwaita and disposable Win32 frame proof workflows are
+required on **every** pull request and every push to the native development
+branch, including Rust-only and documentation changes. Path filters must not
+silently skip these independent Windows checks. A skipped, missing, or failing
+proof cannot be counted as a passing validation gate. Successful CI still does
+not replace any of the fourteen interactive Windows 11 manual tests.
+
 ## Manual gate matrix
 
 | ID | Gate | Required result | Result |

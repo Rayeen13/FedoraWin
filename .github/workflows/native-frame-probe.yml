@@ -3,13 +3,7 @@ name: Native frame attach/detach proof
 on:
   push:
     branches: [dev/gnome-native-20260914]
-    paths:
-      - 'native/frame-probe/**'
-      - '.github/workflows/native-frame-probe.yml'
   pull_request:
-    paths:
-      - 'native/frame-probe/**'
-      - '.github/workflows/native-frame-probe.yml'
 
 permissions:
   contents: read
