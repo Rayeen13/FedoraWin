@@ -89,10 +89,7 @@ fn source_identity(hwnd: isize) -> Option<SourceIdentity> {
     Some(SourceIdentity { pid, created })
 }
 
-fn registration_matches(
-    registered: SourceIdentity,
-    current: Option<SourceIdentity>,
-) -> bool {
+fn registration_matches(registered: SourceIdentity, current: Option<SourceIdentity>) -> bool {
     current == Some(registered)
 }
 
