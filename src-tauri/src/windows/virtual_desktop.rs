@@ -403,9 +403,7 @@ impl WorkspaceMoveJournal {
         // HWND, but make the most recently moved window the next undo target.
         // A recycled numeric HWND must not leave a stale undo entry behind.
         // Its previous process lifetime can never be restored safely.
-        journal.retain(|entry| {
-            entry.identity.hwnd != identity.hwnd || entry.identity == identity
-        });
+        journal.retain(|entry| entry.identity.hwnd != identity.hwnd || entry.identity == identity);
         if let Some(index) = journal.iter().position(|entry| entry.identity == identity) {
             let previous = journal.remove(index);
             journal.push(previous);
