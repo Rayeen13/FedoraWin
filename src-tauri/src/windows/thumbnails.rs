@@ -43,14 +43,54 @@ pub struct ThumbnailPlacement {
     pub height: f64,
 }
 
+// DWM thumbnail handles are only valid for the HWND's original owning
+// process lifetime. Windows may recycle the same numeric HWND for another app.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SourceIdentity {
+    pid: u32,
+    created: u64,
+}
+
+#[derive(Clone, Copy)]
+struct ThumbnailRegistration {
+    handle: isize,
+    source: SourceIdentity,
+}
+
 #[derive(Default)]
 pub struct ThumbnailManager {
-    thumbnails: Mutex<HashMap<isize, isize>>,
+    thumbnails: Mutex<HashMap<isize, ThumbnailRegistration>>,
 }
 
 #[link(name = "user32")]
 extern "system" {
-    fn IsWindow(hwnd: isize) -> i32;
+    fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
+}
+
+fn source_identity(hwnd: isize) -> Option<SourceIdentity> {
+    // This guard deliberately allows cloaked windows on another workspace but
+    // refuses FedoraWin windows, Explorer shell surfaces and owned tool windows.
+    if !super::windows_list::is_workspace_safe_window(hwnd) {
+        return None;
+    }
+    let mut pid = 0u32;
+    if unsafe { GetWindowThreadProcessId(hwnd, &mut pid) } == 0 || pid == 0 {
+        return None;
+    }
+    let created = super::frame_recovery::process_creation_time(pid)?;
+    let mut current_pid = 0u32;
+    if !super::windows_list::is_workspace_safe_window(hwnd)
+        || unsafe { GetWindowThreadProcessId(hwnd, &mut current_pid) } == 0
+        || current_pid != pid
+        || super::frame_recovery::process_creation_time(pid) != Some(created)
+    {
+        return None;
+    }
+    Some(SourceIdentity { pid, created })
+}
+
+fn registration_matches(registered: SourceIdentity, current: Option<SourceIdentity>) -> bool {
+    current == Some(registered)
 }
 
 #[link(name = "dwmapi")]
@@ -106,12 +146,14 @@ impl ThumbnailManager {
             .filter_map(|placement| placement.handle.parse::<isize>().ok())
             .collect();
 
-        thumbnails.retain(|source, thumbnail| {
-            if requested.contains(source) && unsafe { IsWindow(*source) } != 0 {
+        thumbnails.retain(|source, registration| {
+            if requested.contains(source)
+                && registration_matches(registration.source, source_identity(*source))
+            {
                 true
             } else {
                 unsafe {
-                    DwmUnregisterThumbnail(*thumbnail);
+                    DwmUnregisterThumbnail(registration.handle);
                 }
                 false
             }
@@ -123,21 +165,55 @@ impl ThumbnailManager {
                 .handle
                 .parse::<isize>()
                 .map_err(|_| "invalid window handle in thumbnail placement")?;
-            if source == 0 || unsafe { IsWindow(source) } == 0 {
+            let Some(identity) = source_identity(source) else {
                 continue;
+            };
+            // A recycled HWND must not inherit a stale DWM registration.
+            // Recheck here as well: the lifetime may change after retain().
+            if thumbnails
+                .get(&source)
+                .is_some_and(|entry| !registration_matches(entry.source, Some(identity)))
+            {
+                if let Some(previous) = thumbnails.remove(&source) {
+                    unsafe {
+                        DwmUnregisterThumbnail(previous.handle);
+                    }
+                }
             }
 
             let thumbnail = if let Some(existing) = thumbnails.get(&source) {
-                *existing
+                existing.handle
             } else {
                 let mut thumbnail = 0isize;
                 let result = unsafe { DwmRegisterThumbnail(destination, source, &mut thumbnail) };
                 if result != 0 || thumbnail == 0 {
                     continue;
                 }
-                thumbnails.insert(source, thumbnail);
+                if !registration_matches(identity, source_identity(source)) {
+                    unsafe {
+                        DwmUnregisterThumbnail(thumbnail);
+                    }
+                    continue;
+                }
+                thumbnails.insert(
+                    source,
+                    ThumbnailRegistration {
+                        handle: thumbnail,
+                        source: identity,
+                    },
+                );
                 thumbnail
             };
+            // Do not update a registration if its HWND now names a different
+            // process lifetime or is no longer an eligible app window.
+            if !registration_matches(identity, source_identity(source)) {
+                if let Some(previous) = thumbnails.remove(&source) {
+                    unsafe {
+                        DwmUnregisterThumbnail(previous.handle);
+                    }
+                }
+                continue;
+            }
 
             let mut source_size = Size::default();
             let _ = unsafe { DwmQueryThumbnailSourceSize(thumbnail, &mut source_size) };
@@ -151,7 +227,16 @@ impl ThumbnailManager {
                 source_client_area_only: 1,
             };
 
-            if unsafe { DwmUpdateThumbnailProperties(thumbnail, &properties) } == 0 {
+            let updated = unsafe { DwmUpdateThumbnailProperties(thumbnail, &properties) } == 0;
+            if !registration_matches(identity, source_identity(source)) {
+                if let Some(previous) = thumbnails.remove(&source) {
+                    unsafe {
+                        DwmUnregisterThumbnail(previous.handle);
+                    }
+                }
+                continue;
+            }
+            if updated {
                 visible += 1;
             }
         }
@@ -161,9 +246,9 @@ impl ThumbnailManager {
 
     pub fn clear(&self) {
         let mut thumbnails = self.thumbnails.lock();
-        for (_, thumbnail) in thumbnails.drain() {
+        for (_, registration) in thumbnails.drain() {
             unsafe {
-                DwmUnregisterThumbnail(thumbnail);
+                DwmUnregisterThumbnail(registration.handle);
             }
         }
     }
@@ -177,7 +262,7 @@ impl Drop for ThumbnailManager {
 
 #[cfg(test)]
 mod tests {
-    use super::{fit_rect, Size, ThumbnailPlacement};
+    use super::{fit_rect, registration_matches, Size, SourceIdentity, ThumbnailPlacement};
 
     #[test]
     fn thumbnail_fit_preserves_source_aspect_ratio() {
@@ -208,5 +293,29 @@ mod tests {
         assert_eq!(rect.top, 45);
         assert_eq!(rect.right - rect.left, 450);
         assert_eq!(rect.bottom - rect.top, 300);
+    }
+
+    #[test]
+    fn thumbnail_registration_rejects_recycled_or_unverifiable_source() {
+        let original = SourceIdentity {
+            pid: 41,
+            created: 100,
+        };
+        assert!(registration_matches(original, Some(original)));
+        assert!(!registration_matches(
+            original,
+            Some(SourceIdentity {
+                pid: 42,
+                created: 100,
+            })
+        ));
+        assert!(!registration_matches(
+            original,
+            Some(SourceIdentity {
+                pid: 41,
+                created: 101,
+            })
+        ));
+        assert!(!registration_matches(original, None));
     }
 }
