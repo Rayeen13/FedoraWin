@@ -121,6 +121,15 @@ undo records and that closing/recreating a window does not apply its stale
 undo record to a new process lifetime. Rust tests cover journal ordering,
 not real COM window moves; record a genuine Windows 11 video.
 
+For **W11-08 Activities thumbnail lifetime**, open Activities with a
+normal application window, close that app, and reopen new app windows while
+refreshing the overview. Existing DWM thumbnail registrations must not be
+reused for a different owning process lifetime, including when Windows
+recycles an HWND. Verify real content, no obsolete previews, and cleanup after
+Activities closes. The process-lifetime guard is best-effort and cannot prove
+an atomic HWND lease or distinguish same-process same-lifetime reuse. Record
+real interactive Windows 11 video; unit tests alone do not pass this gate.
+
 For **W11-08 closed-window undo**, move app A and then app B to another
 desktop, close B, and press Undo once. A must return directly to its original
 desktop without a first-click error caused by B's stale entry. Repeat with
