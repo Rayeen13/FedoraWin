@@ -446,21 +446,44 @@ impl WorkspaceMoveJournal {
         Ok(())
     }
 
+    // A closed or recycled top-most window must not block undoing an earlier
+    // still-live move. Retain all earlier entries until they reach the top,
+    // preserving the most-recently-moved ordering.
+    fn prune_stale_undo_tail(
+        journal: &mut Vec<WorkspaceMoveRecord>,
+        mut is_live: impl FnMut(WindowIdentity) -> bool,
+    ) -> usize {
+        let mut removed = 0;
+        while journal.last().is_some_and(|entry| !is_live(entry.identity)) {
+            journal.pop();
+            removed += 1;
+        }
+        removed
+    }
+
     pub fn undo_last(&self) -> Result<Option<String>, String> {
         let mut journal = self.original_desktops.lock();
+        Self::prune_stale_undo_tail(&mut journal, |identity| {
+            window_identity(identity.hwnd) == Some(identity)
+        });
         let Some(entry) = journal.last().cloned() else {
             return Ok(None);
         };
+
+        // Recheck immediately before dispatch. HWND identity is not an atomic
+        // lease, so always fail closed if it changes during the operation.
         if window_identity(entry.identity.hwnd) != Some(entry.identity) {
-            // An HWND can be recycled. Never move an unrelated window back to
-            // someone else's old workspace, and discard this unusable entry.
             journal.pop();
-            return Err("original window exited or its handle was reused".into());
+            return Err("original window changed before workspace undo".into());
         }
 
         // Keep the record when the native operation fails, so the user can
         // retry instead of silently losing their only rollback opportunity.
         VirtualDesktopManager::new()?.move_window(entry.identity.hwnd, &entry.original_desktop)?;
+        if window_identity(entry.identity.hwnd) != Some(entry.identity) {
+            journal.pop();
+            return Err("original window changed during workspace undo".into());
+        }
         journal.pop();
         Ok(Some(entry.identity.hwnd.to_string()))
     }
@@ -606,6 +629,77 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].identity, reused);
         assert_eq!(entries[0].original_desktop, "desktop-B");
+    }
+
+    #[test]
+    fn workspace_undo_skips_closed_tail_without_losing_earlier_live_move() {
+        let first = WindowIdentity {
+            hwnd: 101,
+            pid: 201,
+            created: 301,
+        };
+        let closed = WindowIdentity {
+            hwnd: 102,
+            pid: 202,
+            created: 302,
+        };
+        let recycled = WindowIdentity {
+            hwnd: 103,
+            pid: 203,
+            created: 303,
+        };
+        let mut entries = Vec::new();
+        WorkspaceMoveJournal::record_successful_move(&mut entries, first, "desktop-A".into());
+        WorkspaceMoveJournal::record_successful_move(&mut entries, closed, "desktop-B".into());
+        WorkspaceMoveJournal::record_successful_move(&mut entries, recycled, "desktop-C".into());
+
+        assert_eq!(
+            WorkspaceMoveJournal::prune_stale_undo_tail(&mut entries, |identity| identity == first),
+            2
+        );
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].identity, first);
+        assert_eq!(entries[0].original_desktop, "desktop-A");
+        assert_eq!(
+            WorkspaceMoveJournal::prune_stale_undo_tail(&mut entries, |identity| identity == first),
+            0
+        );
+    }
+
+    #[test]
+    fn workspace_undo_drops_recycled_tail_without_touching_unrelated_history() {
+        let original = WindowIdentity {
+            hwnd: 101,
+            pid: 201,
+            created: 301,
+        };
+        let unrelated = WindowIdentity {
+            hwnd: 102,
+            pid: 202,
+            created: 302,
+        };
+        let reused = WindowIdentity {
+            hwnd: 101,
+            pid: 999,
+            created: 999,
+        };
+        let mut entries = Vec::new();
+        WorkspaceMoveJournal::record_successful_move(&mut entries, unrelated, "desktop-B".into());
+        WorkspaceMoveJournal::record_successful_move(&mut entries, original, "desktop-A".into());
+        assert_eq!(
+            WorkspaceMoveJournal::prune_stale_undo_tail(&mut entries, |identity| {
+                identity == unrelated || identity == reused
+            }),
+            1
+        );
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].identity, unrelated);
+
+        assert_eq!(
+            WorkspaceMoveJournal::prune_stale_undo_tail(&mut entries, |_| false),
+            1
+        );
+        assert!(entries.is_empty());
     }
 
     #[test]

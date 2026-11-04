@@ -121,6 +121,14 @@ undo records and that closing/recreating a window does not apply its stale
 undo record to a new process lifetime. Rust tests cover journal ordering,
 not real COM window moves; record a genuine Windows 11 video.
 
+For **W11-08 closed-window undo**, move app A and then app B to another
+desktop, close B, and press Undo once. A must return directly to its original
+desktop without a first-click error caused by B's stale entry. Repeat with
+multiple closed windows, then with no live moved windows: Undo must report
+nothing pending and must never move a recycled HWND. Keep a recording and the
+original process-lifetime identities. These are best-effort identity checks,
+not atomic HWND leases, and Rust unit tests do not replace interactive proof.
+
 For desktop switching, FedoraWin injects Win+Ctrl+Left/Right through Windows
 `SendInput`. If Windows accepts only part of the six-event shortcut, FedoraWin
 attempts to release only synthetic keys still held by that accepted prefix,
