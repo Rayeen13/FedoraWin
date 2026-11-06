@@ -115,9 +115,41 @@ foreach ($bar in $bars) {
     }
 }
 
+# Observe every live process using this *exact* candidate image, including
+# independent frame/taskbar guardians. A "force-kill" snapshot taken while
+# FedoraWin is still running must never look like clean recovery evidence.
+# Do not terminate processes here: a human controls the lifecycle test.
+$binaryName = [IO.Path]::GetFileName($exe).Replace("'", "''")
+$possibleProcesses = @(Get-CimInstance -ClassName Win32_Process -Filter "Name = '$binaryName'" -ErrorAction Stop)
+$candidateProcesses = @()
+foreach ($candidate in $possibleProcesses) {
+    if ([string]::IsNullOrWhiteSpace([string]$candidate.ExecutablePath)) {
+        throw "Cannot read executable path for matching-name PID $($candidate.ProcessId); process identity is ambiguous."
+    }
+    if (-not [string]::Equals(
+        [IO.Path]::GetFullPath([string]$candidate.ExecutablePath),
+        [IO.Path]::GetFullPath($exe),
+        [StringComparison]::OrdinalIgnoreCase)) {
+        continue
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$candidate.CommandLine) -or -not $candidate.CreationDate) {
+        throw "Cannot inspect command line and creation lifetime for candidate PID $($candidate.ProcessId)."
+    }
+    $role = if ([string]$candidate.CommandLine -match '(?i)(?:^|\s)--restore-(?:frames|taskbar)-after(?:\s|$)') {
+        'guardian'
+    } else {
+        'runtime'
+    }
+    $candidateProcesses += [ordered]@{
+        pid = [int]$candidate.ProcessId
+        startTimeUtcTicks = ([DateTime]$candidate.CreationDate).ToUniversalTime().Ticks.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+        role = $role
+    }
+}
+
 $timestamp = [DateTime]::UtcNow
 $record = [ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
     evidenceType = 'read-only-environment-snapshot'
     stage = $Stage
     capturedAtUtc = $timestamp.ToString('o')
@@ -126,6 +158,7 @@ $record = [ordered]@{
     executablePath = $exe
     explorerProcesses = $explorerRows
     taskbars = $taskbarRows
+    candidateProcesses = $candidateProcesses
     manualGateStatus = 'NOT RUN'
     betaApproved = $false
 }
