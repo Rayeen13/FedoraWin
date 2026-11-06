@@ -24,6 +24,28 @@ into a GTK/Adwaita widget.
 
 The existing reversible DWM-colour/corner engine remains the compatible fallback.
 
+## Implementation decision: reversible in-process renderer is an allowed fallback
+
+FedoraWin is allowed to use a narrowly scoped, user-enabled in-process helper for
+compatible third-party Win32 applications when Windows' out-of-process DWM APIs
+cannot reproduce the intended GNOME 51 frame faithfully. This is **not** permission
+to patch Windows globally. The helper path must remain per-application, allowlisted,
+same-integrity, architecture-matched and fully subordinate to the rollback contract
+below.
+
+The normal OFF path is a live detach: stop new attachments, remove the target's
+FedoraWin frame handler on its owning GUI thread, restore the exact saved frame/DWM
+state, remove the scoped hook after callbacks are quiescent, and return the app to
+its original frame **without rebooting Windows or restarting Explorer**. If FedoraWin
+cannot prove that live detach is safe for a particular target, it must not enable
+the injected renderer for that target. An application restart is an exceptional
+recovery path for a failed/hung target, not the normal disable mechanism.
+
+Global theme patching remains out of scope: no uxtheme/System32 replacement,
+Explorer injection, driver/service installation, desktop-global hook, boot patch or
+reboot-required theme state. The objective is theme-patcher-level visual reach with
+strictly narrower process scope and a reversible runtime lifecycle.
+
 ## Why in-process code may be necessary
 
 DWM can recolour captions and request corners, but cannot draw a replacement
