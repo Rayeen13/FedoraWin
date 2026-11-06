@@ -35,7 +35,7 @@ function inspect(snapshot, label, errors) {
     errors.push(`${label}: expected a snapshot object.`);
     return null;
   }
-  if (snapshot.schemaVersion !== 1 ||
+  if (snapshot.schemaVersion !== 2 ||
       snapshot.evidenceType !== 'read-only-environment-snapshot' ||
       snapshot.manualGateStatus !== 'NOT RUN' || snapshot.betaApproved !== false) {
     errors.push(`${label}: invalid snapshot contract; never use a manual PASS here.`);
@@ -55,6 +55,29 @@ function inspect(snapshot, label, errors) {
   }
 
   const capturedTicks = captureUtcTicks(snapshot.capturedAtUtc);
+  // This field is mandatory in schema v2. An unchanged Explorer taskbar
+  // does not prove FedoraWin (or an independent guardian) has exited.
+  const running = [];
+  if (!Array.isArray(snapshot.candidateProcesses)) {
+    errors.push(`${label}: missing candidate process observations.`);
+  } else {
+    const seenCandidatePids = new Set();
+    for (const proc of snapshot.candidateProcesses) {
+      const validTicks = typeof proc?.startTimeUtcTicks === 'string' &&
+        DECIMAL_TICKS.test(proc.startTimeUtcTicks);
+      const startTicks = validTicks
+        ? BigInt(proc.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS : null;
+      if (!proc || !Number.isSafeInteger(proc.pid) || proc.pid <= 0 ||
+          seenCandidatePids.has(proc.pid) || !validTicks || startTicks < 0n ||
+          (capturedTicks !== null && startTicks > capturedTicks) ||
+          !['runtime', 'guardian'].includes(proc.role)) {
+        errors.push(`${label}: invalid/duplicate candidate PID, lifetime, or process role.`);
+        continue;
+      }
+      seenCandidatePids.add(proc.pid);
+      running.push(proc);
+    }
+  }
   const lifetimes = new Map();
   if (!Array.isArray(snapshot.explorerProcesses) || !snapshot.explorerProcesses.length) {
     errors.push(`${label}: missing Explorer processes.`);
@@ -107,7 +130,7 @@ function inspect(snapshot, label, errors) {
       }
     }
   }
-  return { snapshot, primary: primary[0], secondary };
+  return { snapshot, primary: primary[0], secondary, running };
 }
 
 export function compareManualSnapshots(before, after) {
@@ -115,6 +138,16 @@ export function compareManualSnapshots(before, after) {
   const baseline = inspect(before, 'before', errors);
   const observed = inspect(after, 'after', errors);
   if (!baseline || !observed) return outcome(errors);
+  if (baseline.running.length > 0) {
+    errors.push('Baseline was captured with a candidate FedoraWin process already running.');
+  }
+  if (after.stage === 'after-explorer-restart') {
+    if (!observed.running.some((proc) => proc.role === 'runtime')) {
+      errors.push('Explorer-restart snapshot has no running FedoraWin runtime.');
+    }
+  } else if (AFTER_STAGES.has(after.stage) && observed.running.length > 0) {
+    errors.push('Candidate FedoraWin process or guardian still running after exit/force-kill.');
+  }
   if (before.stage !== 'before') errors.push('Baseline stage must be before.');
   if (!AFTER_STAGES.has(after.stage)) errors.push('Unknown post-test stage.');
   const start = captureUtcTicks(before.capturedAtUtc);
