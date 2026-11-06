@@ -82,7 +82,8 @@ share the primary taskbar's Explorer PID and creation lifetime; mixed-generation
 secondary taskbars and duplicate numeric HWND aliases are rejected. Clean exit and forced-kill observations
 must retain the primary Explorer owner's identity; an Explorer restart must
 change it. A missing taskbar, changed display count, or mismatch returns a
-nonzero exit code for investigation. The process check is observational and cannot authenticate that a person actually\nperformed the interaction; a separate original video is still required. The tool does **not** test DWM attributes,
+nonzero exit code for investigation. The process check is observational and cannot authenticate that a person actually
+performed the interaction; a separate original video is still required. The tool does **not** test DWM attributes,
 caption hit testing, actual user interaction, or original video provenance.
 Even a structurally consistent pair always reports `manualGateStatus: "NOT RUN"`
 and `betaApproved: false`; a human must review original evidence.
