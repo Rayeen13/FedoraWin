@@ -9,11 +9,12 @@ const dotnetEpoch = 621355968000000000n;
 const newTicks = String(dotnetEpoch + BigInt(Date.parse('2026-10-26T08:02:00Z')) * 10000n);
 const sha = 'a'.repeat(64);
 const before = () => ({
-  schemaVersion: 1, evidenceType: 'read-only-environment-snapshot',
+  schemaVersion: 2, evidenceType: 'read-only-environment-snapshot',
   stage: 'before', capturedAtUtc: '2026-10-26T08:00:00.0000000Z',
   windows11Build: 'Microsoft Windows 11 Pro (OS Build 26200)',
   executableSha256: sha, executablePath: 'C:\\FedoraWin\\fedorawin.exe',
   explorerProcesses: [{ pid: 111, startTimeUtcTicks: oldTicks }],
+  candidateProcesses: [],
   taskbars: [
     { hwnd: '123456789012345678', className: 'Shell_TrayWnd', visible: true, ownerPid: 111, ownerStartTimeUtcTicks: oldTicks },
     { hwnd: '987654321098765432', className: 'Shell_SecondaryTrayWnd', visible: false, ownerPid: 111, ownerStartTimeUtcTicks: oldTicks }
@@ -21,7 +22,9 @@ const before = () => ({
   manualGateStatus: 'NOT RUN', betaApproved: false
 });
 const after = (stage = 'after-force-kill') => ({
-  ...structuredClone(before()), stage, capturedAtUtc: '2026-10-26T08:05:00.0000000Z'
+  ...structuredClone(before()), stage, capturedAtUtc: '2026-10-26T08:05:00.0000000Z',
+  candidateProcesses: stage === 'after-explorer-restart'
+    ? [{ pid: 999, startTimeUtcTicks: newTicks, role: 'runtime' }] : []
 });
 const check = (a, b) => compareManualSnapshots(a, b);
 
@@ -183,4 +186,62 @@ test('rejects normalized impossible UTC dates instead of accepting Date.parse ro
     invalid.capturedAtUtc = timestamp;
     assert.match(check(before(), invalid).errors.join(' '), /invalid UTC capture timestamp/);
   }
+});
+
+test('post-exit and force-kill snapshots reject lingering runtime or guardian processes', () => {
+  for (const stage of ['after-clean-exit', 'after-force-kill']) {
+    for (const role of ['runtime', 'guardian']) {
+      const observed = after(stage);
+      observed.candidateProcesses = [{ pid: 999, startTimeUtcTicks: newTicks, role }];
+      const result = check(before(), observed);
+      assert.equal(result.structurallyConsistent, false);
+      assert.match(result.errors.join(' '), /still running/);
+      assert.equal(result.betaApproved, false);
+    }
+  }
+});
+
+test('before snapshot must be captured before FedoraWin starts', () => {
+  const started = before();
+  started.candidateProcesses = [{ pid: 999, startTimeUtcTicks: oldTicks, role: 'runtime' }];
+  assert.match(check(started, after()).errors.join(' '), /already running/);
+});
+
+test('Explorer-restart snapshot requires the live runtime, not just a guardian', () => {
+  for (const processes of [
+    [],
+    [{ pid: 999, startTimeUtcTicks: newTicks, role: 'guardian' }]
+  ]) {
+    const observed = after('after-explorer-restart');
+    observed.candidateProcesses = processes;
+    const result = check(before(), observed);
+    assert.equal(result.structurallyConsistent, false);
+    assert.match(result.errors.join(' '), /no running FedoraWin runtime/);
+  }
+});
+
+test('candidate process records must have lossless, plausible and unique lifetimes', () => {
+  for (const candidateProcesses of [
+    null,
+    [{ pid: 999, startTimeUtcTicks: Number(newTicks), role: 'runtime' }],
+    [{ pid: 999, startTimeUtcTicks: '0', role: 'runtime' }],
+    [{ pid: 999, startTimeUtcTicks: newTicks, role: 'unknown' }],
+    [{ pid: 999, startTimeUtcTicks: newTicks, role: 'runtime' },
+      { pid: 999, startTimeUtcTicks: newTicks, role: 'guardian' }]
+  ]) {
+    const observed = after('after-explorer-restart');
+    observed.candidateProcesses = candidateProcesses;
+    const result = check(before(), observed);
+    assert.equal(result.structurallyConsistent, false);
+    assert.equal(result.betaApproved, false);
+  }
+});
+
+test('schema v1 snapshots cannot silently bypass the new process observations', () => {
+  const old = before();
+  old.schemaVersion = 1;
+  delete old.candidateProcesses;
+  const result = check(old, after());
+  assert.equal(result.structurallyConsistent, false);
+  assert.equal(result.betaApproved, false);
 });

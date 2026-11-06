@@ -63,6 +63,18 @@ To compare two collected records without changing Windows state:
 node tools/compare-w11-manual-snapshots.mjs './artifacts/manual-w11/w11-before-....json' './artifacts/manual-w11/w11-after-force-kill-....json'
 ```
 
+Snapshot schema v2 also records `candidateProcesses`: the PIDs, lossless
+process creation ticks and runtime/guardian roles of **currently running processes
+using the selected executable path**. It observes both the main runtime and its
+independently launched frame/taskbar guardians without terminating them.
+The comparator rejects a baseline taken after FedoraWin started, an
+`after-clean-exit` or `after-force-kill` snapshot with any candidate or guardian
+still running, and an `after-explorer-restart` snapshot lacking a live runtime.
+Wait for guardian recovery to finish before collecting post-exit evidence.
+Snapshots collected with schema v1 must be recaptured; they cannot establish
+the absence of lingering processes. If a candidate process's path, command line
+or creation lifetime cannot be read, collection fails closed.
+
 The comparator checks both snapshots' contracts, UTC ordering, Windows build,
 binary hash and path, Explorer taskbar PID + **process lifetime**, and baseline
 primary/secondary taskbar visibility. All taskbar HWNDs in each snapshot must
@@ -70,7 +82,8 @@ share the primary taskbar's Explorer PID and creation lifetime; mixed-generation
 secondary taskbars and duplicate numeric HWND aliases are rejected. Clean exit and forced-kill observations
 must retain the primary Explorer owner's identity; an Explorer restart must
 change it. A missing taskbar, changed display count, or mismatch returns a
-nonzero exit code for investigation. The tool does **not** test DWM attributes,
+nonzero exit code for investigation. The process check is observational and cannot authenticate that a person actually
+performed the interaction; a separate original video is still required. The tool does **not** test DWM attributes,
 caption hit testing, actual user interaction, or original video provenance.
 Even a structurally consistent pair always reports `manualGateStatus: "NOT RUN"`
 and `betaApproved: false`; a human must review original evidence.
