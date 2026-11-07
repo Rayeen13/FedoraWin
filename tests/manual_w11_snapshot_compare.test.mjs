@@ -245,3 +245,18 @@ test('schema v1 snapshots cannot silently bypass the new process observations', 
   assert.equal(result.structurallyConsistent, false);
   assert.equal(result.betaApproved, false);
 });
+
+
+test('Explorer-restart rejects a runtime that predates the clean baseline', () => {
+  const observed = after('after-explorer-restart');
+  observed.candidateProcesses[0].startTimeUtcTicks = oldTicks;
+  observed.explorerProcesses = [{ pid: 222, startTimeUtcTicks: newTicks }];
+  for (const bar of observed.taskbars) {
+    bar.ownerPid = 222;
+    bar.ownerStartTimeUtcTicks = newTicks;
+  }
+  const result = check(before(), observed);
+  assert.equal(result.structurallyConsistent, false);
+  assert.match(result.errors.join(' '), /runtime predates the baseline/);
+  assert.equal(result.betaApproved, false);
+});
