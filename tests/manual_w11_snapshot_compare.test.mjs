@@ -260,3 +260,46 @@ test('Explorer-restart rejects a runtime that predates the clean baseline', () =
   assert.match(result.errors.join(' '), /runtime predates the baseline/);
   assert.equal(result.betaApproved, false);
 });
+
+
+test('Explorer restart rejects multiple simultaneous runtimes with valid lifetimes', () => {
+  const observed = after('after-explorer-restart');
+  observed.explorerProcesses = [{ pid: 222, startTimeUtcTicks: newTicks }];
+  for (const bar of observed.taskbars) {
+    bar.ownerPid = 222;
+    bar.ownerStartTimeUtcTicks = newTicks;
+  }
+  observed.candidateProcesses.push({ pid: 998, startTimeUtcTicks: newTicks, role: 'runtime' });
+  const result = check(before(), observed);
+  assert.equal(result.structurallyConsistent, false);
+  assert.match(result.errors.join(' '), /exactly one FedoraWin runtime/);
+  assert.equal(result.betaApproved, false);
+});
+
+test('Explorer restart rejects a guardian that predates the clean baseline', () => {
+  const observed = after('after-explorer-restart');
+  observed.explorerProcesses = [{ pid: 222, startTimeUtcTicks: newTicks }];
+  for (const bar of observed.taskbars) {
+    bar.ownerPid = 222;
+    bar.ownerStartTimeUtcTicks = newTicks;
+  }
+  observed.candidateProcesses.push({ pid: 998, startTimeUtcTicks: oldTicks, role: 'guardian' });
+  const result = check(before(), observed);
+  assert.equal(result.structurallyConsistent, false);
+  assert.match(result.errors.join(' '), /guardian predates the baseline/);
+  assert.equal(result.betaApproved, false);
+});
+
+test('Explorer restart allows one new runtime and a new recovery guardian without approving beta', () => {
+  const observed = after('after-explorer-restart');
+  observed.explorerProcesses = [{ pid: 222, startTimeUtcTicks: newTicks }];
+  for (const bar of observed.taskbars) {
+    bar.ownerPid = 222;
+    bar.ownerStartTimeUtcTicks = newTicks;
+  }
+  observed.candidateProcesses.push({ pid: 998, startTimeUtcTicks: newTicks, role: 'guardian' });
+  const result = check(before(), observed);
+  assert.equal(result.structurallyConsistent, true);
+  assert.equal(result.manualGateStatus, 'NOT RUN');
+  assert.equal(result.betaApproved, false);
+});
