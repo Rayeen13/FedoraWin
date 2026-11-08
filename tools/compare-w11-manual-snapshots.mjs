@@ -142,8 +142,13 @@ export function compareManualSnapshots(before, after) {
     errors.push('Baseline was captured with a candidate FedoraWin process already running.');
   }
   if (after.stage === 'after-explorer-restart') {
-    if (!observed.running.some((proc) => proc.role === 'runtime')) {
+    const runtimes = observed.running.filter((proc) => proc.role === 'runtime');
+    if (runtimes.length === 0) {
       errors.push('Explorer-restart snapshot has no running FedoraWin runtime.');
+    } else if (runtimes.length !== 1) {
+      // Multiple live runtimes make the manually observed UI/frame owner
+      // ambiguous even when every process has a valid lifetime.
+      errors.push('Explorer-restart snapshot requires exactly one FedoraWin runtime.');
     }
     // The baseline contains no candidate process. A runtime whose creation
     // predates that baseline cannot establish this test session's launch.
@@ -152,6 +157,11 @@ export function compareManualSnapshots(before, after) {
       proc.role === 'runtime' &&
       BigInt(proc.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS <= baselineTicks)) {
       errors.push('Explorer-restart runtime predates the baseline capture.');
+    }
+    if (baselineTicks !== null && observed.running.some((proc) =>
+      proc.role === 'guardian' &&
+      BigInt(proc.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS <= baselineTicks)) {
+      errors.push('Explorer-restart guardian predates the baseline capture.');
     }
   } else if (AFTER_STAGES.has(after.stage) && observed.running.length > 0) {
     errors.push('Candidate FedoraWin process or guardian still running after exit/force-kill.');
