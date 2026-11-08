@@ -145,6 +145,14 @@ export function compareManualSnapshots(before, after) {
     if (!observed.running.some((proc) => proc.role === 'runtime')) {
       errors.push('Explorer-restart snapshot has no running FedoraWin runtime.');
     }
+    // The baseline contains no candidate process. A runtime whose creation
+    // predates that baseline cannot establish this test session's launch.
+    const baselineTicks = captureUtcTicks(before.capturedAtUtc);
+    if (baselineTicks !== null && observed.running.some((proc) =>
+      proc.role === 'runtime' &&
+      BigInt(proc.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS <= baselineTicks)) {
+      errors.push('Explorer-restart runtime predates the baseline capture.');
+    }
   } else if (AFTER_STAGES.has(after.stage) && observed.running.length > 0) {
     errors.push('Candidate FedoraWin process or guardian still running after exit/force-kill.');
   }
