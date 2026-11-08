@@ -70,6 +70,11 @@ independently launched frame/taskbar guardians without terminating them.
 The comparator rejects a baseline taken after FedoraWin started, an
 `after-clean-exit` or `after-force-kill` snapshot with any candidate or guardian
 still running, and an `after-explorer-restart` snapshot lacking a live runtime.
+For Explorer-restart evidence, require **exactly one** observed runtime and reject
+runtime or guardian lifetimes that predate the clean baseline. Multiple runtime
+instances make ownership of the manually exercised UI ambiguous. A guardian
+started after the baseline is permitted but is not proof of recovery or DWM
+rollback.
 Wait for guardian recovery to finish before collecting post-exit evidence.
 Snapshots collected with schema v1 must be recaptured; they cannot establish
 the absence of lingering processes. If a candidate process's path, command line
