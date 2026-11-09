@@ -8,10 +8,12 @@ const oldTicks = '638971111111111111';
 const dotnetEpoch = 621355968000000000n;
 const newTicks = String(dotnetEpoch + BigInt(Date.parse('2026-10-26T08:02:00Z')) * 10000n);
 const sha = 'a'.repeat(64);
+const bootTicks = String(dotnetEpoch + BigInt(Date.parse('2025-10-01T08:00:00Z')) * 10000n);
 const before = () => ({
-  schemaVersion: 2, evidenceType: 'read-only-environment-snapshot',
+  schemaVersion: 3, evidenceType: 'read-only-environment-snapshot',
   stage: 'before', capturedAtUtc: '2026-10-26T08:00:00.0000000Z',
   windows11Build: 'Microsoft Windows 11 Pro (OS Build 26200)',
+  sessionId: 2, bootTimeUtcTicks: bootTicks,
   executableSha256: sha, executablePath: 'C:\\FedoraWin\\fedorawin.exe',
   explorerProcesses: [{ pid: 111, startTimeUtcTicks: oldTicks }],
   candidateProcesses: [],
@@ -237,13 +239,49 @@ test('candidate process records must have lossless, plausible and unique lifetim
   }
 });
 
-test('schema v1 snapshots cannot silently bypass the new process observations', () => {
-  const old = before();
-  old.schemaVersion = 1;
-  delete old.candidateProcesses;
-  const result = check(old, after());
+test('older snapshot schemas cannot silently bypass session or process observations', () => {
+  for (const version of [1, 2]) {
+    const old = before();
+    old.schemaVersion = version;
+    delete old.sessionId;
+    delete old.bootTimeUtcTicks;
+    if (version === 1) delete old.candidateProcesses;
+    const result = check(old, after());
+    assert.equal(result.structurallyConsistent, false);
+    assert.equal(result.betaApproved, false);
+  }
+});
+
+test('rejects post-test evidence from a different interactive logon session', () => {
+  const observed = after();
+  observed.sessionId = 3;
+  const result = check(before(), observed);
   assert.equal(result.structurallyConsistent, false);
+  assert.match(result.errors.join(' '), /session changed/);
   assert.equal(result.betaApproved, false);
+});
+
+test('rejects rebooted Windows even if Explorer taskbar appears unchanged', () => {
+  const observed = after();
+  observed.bootTimeUtcTicks = String(BigInt(bootTicks) + 10000000n);
+  const result = check(before(), observed);
+  assert.equal(result.structurallyConsistent, false);
+  assert.match(result.errors.join(' '), /boot lifetime changed/);
+  assert.equal(result.betaApproved, false);
+});
+
+test('rejects missing, session-zero, numeric and future boot identity fields', () => {
+  for (const sessionId of [undefined, null, 0, '2', 1.5]) {
+    const observed = after();
+    observed.sessionId = sessionId;
+    assert.match(check(before(), observed).errors.join(' '), /invalid interactive Windows session ID/);
+  }
+  for (const bootTimeUtcTicks of [undefined, Number(bootTicks), '0',
+    String(dotnetEpoch + BigInt(Date.parse('2026-10-27T08:00:00Z')) * 10000n)]) {
+    const observed = after();
+    observed.bootTimeUtcTicks = bootTimeUtcTicks;
+    assert.match(check(before(), observed).errors.join(' '), /invalid or future Windows boot lifetime/);
+  }
 });
 
 

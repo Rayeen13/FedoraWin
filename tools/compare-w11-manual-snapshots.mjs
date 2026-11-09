@@ -35,7 +35,7 @@ function inspect(snapshot, label, errors) {
     errors.push(`${label}: expected a snapshot object.`);
     return null;
   }
-  if (snapshot.schemaVersion !== 2 ||
+  if (snapshot.schemaVersion !== 3 ||
       snapshot.evidenceType !== 'read-only-environment-snapshot' ||
       snapshot.manualGateStatus !== 'NOT RUN' || snapshot.betaApproved !== false) {
     errors.push(`${label}: invalid snapshot contract; never use a manual PASS here.`);
@@ -55,7 +55,18 @@ function inspect(snapshot, label, errors) {
   }
 
   const capturedTicks = captureUtcTicks(snapshot.capturedAtUtc);
-  // This field is mandatory in schema v2. An unchanged Explorer taskbar
+  if (!Number.isSafeInteger(snapshot.sessionId) || snapshot.sessionId <= 0) {
+    errors.push(`${label}: invalid interactive Windows session ID.`);
+  }
+  const bootValid = typeof snapshot.bootTimeUtcTicks === 'string' &&
+    DECIMAL_TICKS.test(snapshot.bootTimeUtcTicks) &&
+    BigInt(snapshot.bootTimeUtcTicks) >= DOTNET_UNIX_EPOCH_TICKS &&
+    (capturedTicks === null ||
+      BigInt(snapshot.bootTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS <= capturedTicks);
+  if (!bootValid) {
+    errors.push(`${label}: invalid or future Windows boot lifetime.`);
+  }
+  // This field is mandatory in schema v3. An unchanged Explorer taskbar
   // does not prove FedoraWin (or an independent guardian) has exited.
   const running = [];
   if (!Array.isArray(snapshot.candidateProcesses)) {
@@ -175,6 +186,12 @@ export function compareManualSnapshots(before, after) {
   }
   if (before.windows11Build !== after.windows11Build) {
     errors.push('Windows build changed between snapshots.');
+  }
+  if (before.sessionId !== after.sessionId) {
+    errors.push('Interactive Windows session changed between snapshots.');
+  }
+  if (before.bootTimeUtcTicks !== after.bootTimeUtcTicks) {
+    errors.push('Windows boot lifetime changed between snapshots; reboot cannot prove rollback.');
   }
   if (typeof before.executableSha256 === 'string' && typeof after.executableSha256 === 'string' &&
       before.executableSha256.toLowerCase() !== after.executableSha256.toLowerCase()) {
