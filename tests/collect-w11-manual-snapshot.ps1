@@ -36,6 +36,14 @@ if (-not [int]::TryParse([string]$os.BuildNumber, [ref]$build) -or
     throw "An unmodified Windows 11 host is required; observed $($os.Caption), build $($os.BuildNumber)."
 }
 
+# Bind observations to one interactive logon session and one Windows boot.
+# A reboot or new logon can conceal failed forced-kill rollback.
+$sessionId = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
+if ($sessionId -le 0) {
+    throw 'Manual snapshots require an interactive Windows session (not session 0).'
+}
+$bootTimeUtcTicks = ([DateTime]$os.LastBootUpTime).ToUniversalTime().Ticks.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+
 # Bind taskbar HWNDs to Explorer PID AND process creation time. The enumeration
 # is observational only; it never changes taskbar visibility or window styles.
 if (-not ('FedoraWinManualTaskbarSnapshot' -as [type])) {
@@ -149,11 +157,13 @@ foreach ($candidate in $possibleProcesses) {
 
 $timestamp = [DateTime]::UtcNow
 $record = [ordered]@{
-    schemaVersion = 2
+    schemaVersion = 3
     evidenceType = 'read-only-environment-snapshot'
     stage = $Stage
     capturedAtUtc = $timestamp.ToString('o')
     windows11Build = "$($os.Caption) (OS Build $($os.BuildNumber))"
+    sessionId = $sessionId
+    bootTimeUtcTicks = $bootTimeUtcTicks
     executableSha256 = $hash
     executablePath = $exe
     explorerProcesses = $explorerRows
