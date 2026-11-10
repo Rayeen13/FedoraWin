@@ -78,10 +78,13 @@ The comparator rejects a baseline taken after FedoraWin started, an
 `after-clean-exit` or `after-force-kill` snapshot with any candidate or guardian
 still running, and an `after-explorer-restart` snapshot lacking a live runtime.
 For Explorer-restart evidence, require **exactly one** observed runtime and reject
-runtime or guardian lifetimes that predate the clean baseline. Multiple runtime
-instances make ownership of the manually exercised UI ambiguous. A guardian
-started after the baseline is permitted but is not proof of recovery or DWM
-rollback.
+runtime or guardian lifetimes that predate the clean baseline. The runtime
+must also predate the replacement Explorer process: launching FedoraWin only
+after Explorer has recovered is not a valid W11-03 continuity observation.
+Explorer and candidate process creation lifetimes must fall within the
+observed Windows boot lifetime. Multiple runtime instances make ownership of
+the manually exercised UI ambiguous. A guardian started after the baseline is
+permitted but is not proof of recovery or DWM rollback.
 Wait for guardian recovery to finish before collecting post-exit evidence.
 Snapshots collected with schema v1/v2 must be recaptured; they cannot establish
 the absence of lingering processes. If a candidate process's path, command line
