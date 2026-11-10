@@ -7,6 +7,7 @@ const oldTicks = '638971111111111111';
 // .NET DateTime ticks for an Explorer restart two minutes after baseline.
 const dotnetEpoch = 621355968000000000n;
 const newTicks = String(dotnetEpoch + BigInt(Date.parse('2026-10-26T08:02:00Z')) * 10000n);
+const runtimeTicks = String(dotnetEpoch + BigInt(Date.parse('2026-10-26T08:01:00Z')) * 10000n);
 const sha = 'a'.repeat(64);
 const bootTicks = String(dotnetEpoch + BigInt(Date.parse('2025-10-01T08:00:00Z')) * 10000n);
 const before = () => ({
@@ -26,7 +27,7 @@ const before = () => ({
 const after = (stage = 'after-force-kill') => ({
   ...structuredClone(before()), stage, capturedAtUtc: '2026-10-26T08:05:00.0000000Z',
   candidateProcesses: stage === 'after-explorer-restart'
-    ? [{ pid: 999, startTimeUtcTicks: newTicks, role: 'runtime' }] : []
+    ? [{ pid: 999, startTimeUtcTicks: runtimeTicks, role: 'runtime' }] : []
 });
 const check = (a, b) => compareManualSnapshots(a, b);
 
@@ -340,4 +341,32 @@ test('Explorer restart allows one new runtime and a new recovery guardian withou
   assert.equal(result.structurallyConsistent, true);
   assert.equal(result.manualGateStatus, 'NOT RUN');
   assert.equal(result.betaApproved, false);
+});
+
+test('Explorer restart rejects FedoraWin launched only after Explorer recovered', () => {
+  const observed = after('after-explorer-restart');
+  observed.explorerProcesses = [{ pid: 222, startTimeUtcTicks: newTicks }];
+  for (const bar of observed.taskbars) {
+    bar.ownerPid = 222;
+    bar.ownerStartTimeUtcTicks = newTicks;
+  }
+  for (const lateStart of [newTicks, String(BigInt(newTicks) + 1n)]) {
+    observed.candidateProcesses[0].startTimeUtcTicks = lateStart;
+    const result = check(before(), observed);
+    assert.equal(result.structurallyConsistent, false);
+    assert.match(result.errors.join(' '), /runtime must start before the replacement Explorer lifetime/);
+    assert.equal(result.betaApproved, false);
+  }
+});
+
+test('rejects candidate and Explorer lifetimes from before the observed boot', () => {
+  const staleTicks = String(BigInt(bootTicks) - 1n);
+  const staleExplorer = after();
+  staleExplorer.explorerProcesses[0].startTimeUtcTicks = staleTicks;
+  for (const bar of staleExplorer.taskbars) bar.ownerStartTimeUtcTicks = staleTicks;
+  assert.match(check(before(), staleExplorer).errors.join(' '), /Explorer process lifetime predates Windows boot/);
+
+  const staleCandidate = after('after-explorer-restart');
+  staleCandidate.candidateProcesses[0].startTimeUtcTicks = staleTicks;
+  assert.match(check(before(), staleCandidate).errors.join(' '), /candidate process lifetime predates Windows boot/);
 });

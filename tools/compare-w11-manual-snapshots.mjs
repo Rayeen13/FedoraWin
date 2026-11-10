@@ -66,6 +66,8 @@ function inspect(snapshot, label, errors) {
   if (!bootValid) {
     errors.push(`${label}: invalid or future Windows boot lifetime.`);
   }
+  const bootTicks = bootValid
+    ? BigInt(snapshot.bootTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS : null;
   // This field is mandatory in schema v3. An unchanged Explorer taskbar
   // does not prove FedoraWin (or an independent guardian) has exited.
   const running = [];
@@ -78,11 +80,14 @@ function inspect(snapshot, label, errors) {
         DECIMAL_TICKS.test(proc.startTimeUtcTicks);
       const startTicks = validTicks
         ? BigInt(proc.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS : null;
+      const beforeBoot = bootTicks !== null && startTicks !== null && startTicks < bootTicks;
       if (!proc || !Number.isSafeInteger(proc.pid) || proc.pid <= 0 ||
           seenCandidatePids.has(proc.pid) || !validTicks || startTicks < 0n ||
-          (capturedTicks !== null && startTicks > capturedTicks) ||
+          beforeBoot || (capturedTicks !== null && startTicks > capturedTicks) ||
           !['runtime', 'guardian'].includes(proc.role)) {
-        errors.push(`${label}: invalid/duplicate candidate PID, lifetime, or process role.`);
+        errors.push(beforeBoot
+          ? `${label}: candidate process lifetime predates Windows boot.`
+          : `${label}: invalid/duplicate candidate PID, lifetime, or process role.`);
         continue;
       }
       seenCandidatePids.add(proc.pid);
@@ -96,10 +101,13 @@ function inspect(snapshot, label, errors) {
     for (const row of snapshot.explorerProcesses) {
       const validTicks = typeof row?.startTimeUtcTicks === 'string' && DECIMAL_TICKS.test(row.startTimeUtcTicks);
       const startTicks = validTicks ? BigInt(row.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS : null;
+      const beforeBoot = bootTicks !== null && startTicks !== null && startTicks < bootTicks;
       if (!row || !Number.isSafeInteger(row.pid) || row.pid <= 0 ||
-          !validTicks || startTicks < 0n || (capturedTicks !== null && startTicks > capturedTicks) ||
-          lifetimes.has(row.pid)) {
-        errors.push(`${label}: invalid/duplicate Explorer PID, lossless start-time ticks, or future lifetime.`);
+          !validTicks || startTicks < 0n || beforeBoot ||
+          (capturedTicks !== null && startTicks > capturedTicks) || lifetimes.has(row.pid)) {
+        errors.push(beforeBoot
+          ? `${label}: Explorer process lifetime predates Windows boot.`
+          : `${label}: invalid/duplicate Explorer PID, lossless start-time ticks, or future lifetime.`);
       } else {
         lifetimes.set(row.pid, row.startTimeUtcTicks);
       }
@@ -173,6 +181,16 @@ export function compareManualSnapshots(before, after) {
       proc.role === 'guardian' &&
       BigInt(proc.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS <= baselineTicks)) {
       errors.push('Explorer-restart guardian predates the baseline capture.');
+    }
+    // W11-03 restarts Explorer while FedoraWin is already running. Launching
+    // FedoraWin only after Explorer recovers cannot demonstrate continuity.
+    if (runtimes.length === 1 && observed.primary) {
+      const runtimeStarted = BigInt(runtimes[0].startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS;
+      const replacementExplorerStarted =
+        BigInt(observed.primary.ownerStartTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS;
+      if (runtimeStarted >= replacementExplorerStarted) {
+        errors.push('Explorer-restart runtime must start before the replacement Explorer lifetime.');
+      }
     }
   } else if (AFTER_STAGES.has(after.stage) && observed.running.length > 0) {
     errors.push('Candidate FedoraWin process or guardian still running after exit/force-kill.');
