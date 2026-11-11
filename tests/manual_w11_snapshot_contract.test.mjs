@@ -32,5 +32,5 @@ test('captured environment cannot be mistaken for a completed manual gate', () =
   assert.match(script, /evidenceType\s*=\s*'read-only-environment-snapshot'/);
   assert.match(script, /manualGateStatus\s*=\s*'NOT RUN'/);
   assert.match(script, /betaApproved\s*=\s*\$false/);
-  assert.match(script, /ValidateSet\('before', 'after-clean-exit', 'after-force-kill', 'after-explorer-restart'\)/);
+  assert.match(script, /ValidateSet\('before', 'during', 'after-clean-exit', 'after-force-kill', 'after-explorer-restart'\)/);
 });

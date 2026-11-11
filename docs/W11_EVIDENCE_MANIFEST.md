@@ -39,7 +39,9 @@ The optional expected hash should be copied from the trusted CI artifact:
 
 ```powershell
 pwsh ./tests/collect-w11-manual-snapshot.ps1 -Executable './fedorawin.exe' -Stage before -ExpectedExecutableSha256 '<64-character CI artifact SHA-256>'
-# Perform the W11 manual procedure and record the original screen video.
+# Start the exact candidate, confirm it is running, and record original screen video.
+pwsh ./tests/collect-w11-manual-snapshot.ps1 -Executable './fedorawin.exe' -Stage during -ExpectedExecutableSha256 '<same SHA-256>'
+# Perform the human-operated exit/kill/restart procedure; capture the post-test state.
 pwsh ./tests/collect-w11-manual-snapshot.ps1 -Executable './fedorawin.exe' -Stage after-force-kill -ExpectedExecutableSha256 '<same SHA-256>'
 ```
 
@@ -60,7 +62,7 @@ recaptured rather than rounded or reinterpreted.
 To compare two collected records without changing Windows state:
 
 ```powershell
-node tools/compare-w11-manual-snapshots.mjs './artifacts/manual-w11/w11-before-....json' './artifacts/manual-w11/w11-after-force-kill-....json'
+node tools/compare-w11-manual-snapshots.mjs './artifacts/manual-w11/w11-before-....json' './artifacts/manual-w11/w11-during-....json' './artifacts/manual-w11/w11-after-force-kill-....json'
 ```
 
 Snapshot schema v3 binds both snapshots to the same interactive Windows
@@ -90,7 +92,9 @@ Snapshots collected with schema v1/v2 must be recaptured; they cannot establish
 the absence of lingering processes. If a candidate process's path, command line
 or creation lifetime cannot be read, collection fails closed.
 
-The comparator checks both snapshots' contracts, UTC ordering, Windows build,
+The comparator requires **three** snapshots: a clean `before`, a `during` capture observing exactly one live FedoraWin runtime before the manual action, and an `after-*` capture. It rejects a missing, pre-baseline, or ambiguous live runtime; a guardian older than the observed runtime; changes in binary, session, boot, or Explorer owner during startup; and invalid ordering. For Explorer restart, the same runtime PID **and creation lifetime** must survive, and the replacement Explorer must start after the `during` capture. This prevents an empty baseline and empty post-kill snapshot from masquerading as evidence that FedoraWin ever ran. Three structurally consistent JSON files still do not prove a human performed the kill, or that DWM rollback succeeded.
+
+The comparator checks the snapshots' contracts, UTC ordering, Windows build,
 binary hash and path, interactive session and boot lifetime, Explorer taskbar PID + **process lifetime**, and baseline
 primary/secondary taskbar visibility. All taskbar HWNDs in each snapshot must
 share the primary taskbar's Explorer PID and creation lifetime; mixed-generation
@@ -103,7 +107,7 @@ caption hit testing, actual user interaction, or original video provenance.
 Even a structurally consistent pair always reports `manualGateStatus: "NOT RUN"`
 and `betaApproved: false`; a human must review original evidence.
 
-Compare the **before** and **after** records with the original human-recorded
+Compare the **before**, **during**, and **after** records with the original human-recorded
 video, noting that Explorer restart intentionally changes process identity.
 The JSON snapshots alone are **not** forced-kill proof, screenshot
 authentication, human sign-off, or a PASS record. The collector always emits

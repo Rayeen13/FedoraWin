@@ -248,6 +248,87 @@ export function compareManualSnapshots(before, after) {
   return outcome(errors);
 }
 
+
+/**
+ * Three read-only observations close the empty-before/empty-after gap: an
+ * intermediate capture must actually observe the candidate running before
+ * the human performs a shutdown, force-kill, or Explorer restart. This still
+ * cannot authenticate a manual action, DWM restoration, or original video.
+ */
+export function compareManualSnapshotSequence(before, during, after) {
+  const errors = [...compareManualSnapshots(before, after).errors];
+  const active = inspect(during, 'during', errors);
+  const baseline = inspect(before, 'before', []);
+  const observed = inspect(after, 'after', []);
+  if (!active || !baseline || !observed) return outcome(errors);
+
+  if (during.stage !== 'during') {
+    errors.push('Intermediate snapshot stage must be during.');
+  }
+  const start = captureUtcTicks(before.capturedAtUtc);
+  const middle = captureUtcTicks(during.capturedAtUtc);
+  const end = captureUtcTicks(after.capturedAtUtc);
+  if (start !== null && middle !== null && middle <= start) {
+    errors.push('Running snapshot must be captured after baseline.');
+  }
+  if (middle !== null && end !== null && middle >= end) {
+    errors.push('Running snapshot must be captured before post-test evidence.');
+  }
+  for (const key of ['windows11Build', 'sessionId', 'bootTimeUtcTicks']) {
+    if (during[key] !== before[key] || during[key] !== after[key]) {
+      errors.push('Running snapshot ' + key + ' differs from the test session.');
+    }
+  }
+  for (const key of ['executableSha256', 'executablePath']) {
+    const values = [before[key], during[key], after[key]];
+    if (!values.every((value) => typeof value === 'string') ||
+        new Set(values.map((value) => value.toLowerCase())).size !== 1) {
+      errors.push('Running snapshot ' + key + ' differs from the release candidate.');
+    }
+  }
+
+  const runtimes = active.running.filter((proc) => proc.role === 'runtime');
+  if (runtimes.length !== 1) {
+    errors.push('Running snapshot requires exactly one observed FedoraWin runtime.');
+  } else {
+    const runtime = runtimes[0];
+    const started = BigInt(runtime.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS;
+    if (start !== null && started <= start) {
+      errors.push('Running FedoraWin runtime predates the clean baseline.');
+    }
+    for (const guardian of active.running.filter((proc) => proc.role === 'guardian')) {
+      if (BigInt(guardian.startTimeUtcTicks) < BigInt(runtime.startTimeUtcTicks)) {
+        errors.push('Running guardian predates the observed FedoraWin runtime.');
+      }
+    }
+    if (after.stage === 'after-explorer-restart') {
+      const surviving = observed.running.filter((proc) => proc.role === 'runtime');
+      if (surviving.length === 1 &&
+          (surviving[0].pid !== runtime.pid ||
+           surviving[0].startTimeUtcTicks !== runtime.startTimeUtcTicks)) {
+        errors.push('Explorer restart did not preserve the observed FedoraWin runtime lifetime.');
+      }
+    }
+  }
+
+  if (baseline.primary && active.primary &&
+      (baseline.primary.ownerPid !== active.primary.ownerPid ||
+       baseline.primary.ownerStartTimeUtcTicks !== active.primary.ownerStartTimeUtcTicks)) {
+    errors.push('Explorer changed before the running snapshot was captured.');
+  }
+  if (baseline.secondary.length !== active.secondary.length) {
+    errors.push('Running snapshot lost or added Explorer secondary taskbars.');
+  }
+  if (after.stage === 'after-explorer-restart' && observed.primary && middle !== null) {
+    const replacementStarted =
+      BigInt(observed.primary.ownerStartTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS;
+    if (replacementStarted <= middle) {
+      errors.push('Replacement Explorer must start after the running snapshot.');
+    }
+  }
+  return outcome(errors);
+}
+
 function outcome(errors) {
   return {
     structurallyConsistent: errors.length === 0,
@@ -260,13 +341,13 @@ function outcome(errors) {
 // Explicit CLI use only; importing this module in Node tests never reads files.
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const paths = process.argv.slice(2);
-  if (paths.length !== 2) {
-    console.error('Usage: node tools/compare-w11-manual-snapshots.mjs BEFORE.json AFTER.json');
+  if (paths.length !== 3) {
+    console.error('Usage: node tools/compare-w11-manual-snapshots.mjs BEFORE.json DURING.json AFTER.json');
     process.exitCode = 2;
   } else {
     try {
-      const [before, after] = paths.map((path) => JSON.parse(readFileSync(path, 'utf8')));
-      const result = compareManualSnapshots(before, after);
+      const [before, during, after] = paths.map((path) => JSON.parse(readFileSync(path, 'utf8')));
+      const result = compareManualSnapshotSequence(before, during, after);
       console.log(result.structurallyConsistent
         ? 'STRUCTURALLY CONSISTENT (manual gates remain NOT RUN)'
         : 'INCONSISTENT (review required; manual gates remain NOT RUN)');

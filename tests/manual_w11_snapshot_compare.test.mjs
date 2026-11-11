@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareManualSnapshots } from '../tools/compare-w11-manual-snapshots.mjs';
+import { compareManualSnapshots, compareManualSnapshotSequence } from '../tools/compare-w11-manual-snapshots.mjs';
 
 // Synthetic fixtures only: not actual Windows 11 testing or beta approval.
 const oldTicks = '638971111111111111';
@@ -369,4 +369,107 @@ test('rejects candidate and Explorer lifetimes from before the observed boot', (
   const staleCandidate = after('after-explorer-restart');
   staleCandidate.candidateProcesses[0].startTimeUtcTicks = staleTicks;
   assert.match(check(before(), staleCandidate).errors.join(' '), /candidate process lifetime predates Windows boot/);
+});
+
+
+const during = () => ({
+  ...structuredClone(before()), stage: 'during',
+  capturedAtUtc: '2026-10-26T08:01:30.0000000Z',
+  candidateProcesses: [{ pid: 999, startTimeUtcTicks: runtimeTicks, role: 'runtime' }]
+});
+const afterRestart = () => {
+  const observed = after('after-explorer-restart');
+  observed.explorerProcesses = [{ pid: 222, startTimeUtcTicks: newTicks }];
+  for (const bar of observed.taskbars) {
+    bar.ownerPid = 222;
+    bar.ownerStartTimeUtcTicks = newTicks;
+  }
+  return observed;
+};
+const sequence = (active, observed) => compareManualSnapshotSequence(before(), active, observed);
+
+test('three-stage snapshots observe one running runtime before clean exit and force-kill', () => {
+  for (const stage of ['after-clean-exit', 'after-force-kill']) {
+    const result = sequence(during(), after(stage));
+    assert.equal(result.structurallyConsistent, true, result.errors.join('; '));
+    assert.equal(result.manualGateStatus, 'NOT RUN');
+    assert.equal(result.betaApproved, false);
+  }
+});
+
+test('three-stage Explorer restart preserves the same running FedoraWin lifetime', () => {
+  const result = sequence(during(), afterRestart());
+  assert.equal(result.structurallyConsistent, true, result.errors.join('; '));
+  assert.equal(result.betaApproved, false);
+});
+
+test('intermediate snapshot cannot omit the runtime or contain multiple runtimes', () => {
+  for (const candidates of [
+    [],
+    [{ pid: 998, startTimeUtcTicks: runtimeTicks, role: 'guardian' }],
+    [{ pid: 999, startTimeUtcTicks: runtimeTicks, role: 'runtime' },
+      { pid: 998, startTimeUtcTicks: runtimeTicks, role: 'runtime' }]
+  ]) {
+    const active = during();
+    active.candidateProcesses = candidates;
+    const result = sequence(active, after('after-force-kill'));
+    assert.match(result.errors.join(' '), /exactly one observed FedoraWin runtime/);
+    assert.equal(result.betaApproved, false);
+  }
+});
+
+test('running evidence must be captured between baseline and recovery', () => {
+  for (const capturedAtUtc of [
+    before().capturedAtUtc,
+    '2026-10-26T08:05:00.0000000Z',
+    '2026-10-26T08:06:00.0000000Z'
+  ]) {
+    const active = during();
+    active.capturedAtUtc = capturedAtUtc;
+    assert.equal(sequence(active, after()).structurallyConsistent, false);
+  }
+});
+
+test('running evidence must use the same session, boot, binary, and Explorer', () => {
+  for (const key of ['windows11Build', 'sessionId', 'bootTimeUtcTicks',
+    'executableSha256', 'executablePath']) {
+    const active = during();
+    active[key] = key === 'sessionId' ? 3 : key === 'bootTimeUtcTicks'
+      ? String(BigInt(bootTicks) + 10000000n) : 'different';
+    assert.match(sequence(active, after()).errors.join(' '), /Running snapshot/);
+  }
+  const changed = during();
+  const earlyExplorerTicks = String(dotnetEpoch +
+    BigInt(Date.parse('2026-10-26T08:01:15Z')) * 10000n);
+  changed.explorerProcesses = [{ pid: 222, startTimeUtcTicks: earlyExplorerTicks }];
+  for (const bar of changed.taskbars) {
+    bar.ownerPid = 222;
+    bar.ownerStartTimeUtcTicks = earlyExplorerTicks;
+  }
+  assert.match(sequence(changed, after()).errors.join(' '), /Explorer changed before/);
+});
+
+test('Explorer restart rejects replacement runtime even when its PID is reused', () => {
+  const observed = afterRestart();
+  observed.candidateProcesses[0].startTimeUtcTicks =
+    String(BigInt(runtimeTicks) + 10000000n);
+  assert.match(sequence(during(), observed).errors.join(' '), /did not preserve the observed FedoraWin runtime lifetime/);
+});
+
+test('Explorer restart must happen after live-runtime observation', () => {
+  const active = during();
+  active.capturedAtUtc = '2026-10-26T08:03:00.0000000Z';
+  assert.match(sequence(active, afterRestart()).errors.join(' '), /Replacement Explorer must start after/);
+});
+
+test('running guardian cannot predate its runtime', () => {
+  const active = during();
+  active.candidateProcesses.push({ pid: 998, startTimeUtcTicks: oldTicks, role: 'guardian' });
+  assert.match(sequence(active, after()).errors.join(' '), /Running guardian predates/);
+});
+
+test('intermediate stage must be explicitly marked during', () => {
+  const active = during();
+  active.stage = 'after-clean-exit';
+  assert.match(sequence(active, after()).errors.join(' '), /Intermediate snapshot stage must be during/);
 });
