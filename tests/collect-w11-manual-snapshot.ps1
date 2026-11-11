@@ -1,12 +1,12 @@
 <#
 Read-only Windows 11 evidence snapshot for a HUMAN manual test session.
 This does not launch FedoraWin, change Explorer/DWM/taskbar state, or pass gates.
-Capture before and after each manual procedure; preserve original recordings too.
+Capture before, during, and after each manual procedure; preserve original recordings too.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Executable,
     [Parameter(Mandatory = $true)]
-    [ValidateSet('before', 'after-clean-exit', 'after-force-kill', 'after-explorer-restart')]
+    [ValidateSet('before', 'during', 'after-clean-exit', 'after-force-kill', 'after-explorer-restart')]
     [string]$Stage,
     [string]$OutputDirectory = 'artifacts/manual-w11',
     [string]$ExpectedExecutableSha256 = ''
