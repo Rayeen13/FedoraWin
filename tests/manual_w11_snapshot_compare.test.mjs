@@ -439,10 +439,12 @@ test('running evidence must use the same session, boot, binary, and Explorer', (
     assert.match(sequence(active, after()).errors.join(' '), /Running snapshot/);
   }
   const changed = during();
-  changed.explorerProcesses = [{ pid: 222, startTimeUtcTicks: newTicks }];
+  const earlyExplorerTicks = String(dotnetEpoch +
+    BigInt(Date.parse('2026-10-26T08:01:15Z')) * 10000n);
+  changed.explorerProcesses = [{ pid: 222, startTimeUtcTicks: earlyExplorerTicks }];
   for (const bar of changed.taskbars) {
     bar.ownerPid = 222;
-    bar.ownerStartTimeUtcTicks = newTicks;
+    bar.ownerStartTimeUtcTicks = earlyExplorerTicks;
   }
   assert.match(sequence(changed, after()).errors.join(' '), /Explorer changed before/);
 });
