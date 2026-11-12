@@ -403,6 +403,37 @@ test('three-stage Explorer restart preserves the same running FedoraWin lifetime
   assert.equal(result.betaApproved, false);
 });
 
+test('live runtime cannot hide Explorer primary taskbar then restore it after exit', () => {
+  for (const observed of [after('after-clean-exit'), after('after-force-kill'), afterRestart()]) {
+    const active = during();
+    active.taskbars[0].visible = false;
+    const result = sequence(active, observed);
+    assert.equal(result.structurallyConsistent, false);
+    assert.match(result.errors.join(' '), /Running snapshot changed primary Explorer taskbar visibility/);
+    assert.equal(result.manualGateStatus, 'NOT RUN');
+    assert.equal(result.betaApproved, false);
+  }
+});
+
+test('live runtime cannot change secondary taskbar visibility and later restore it', () => {
+  const active = during();
+  active.taskbars[1].visible = true;
+  const result = sequence(active, after('after-force-kill'));
+  assert.equal(result.structurallyConsistent, false);
+  assert.match(result.errors.join(' '), /Running snapshot changed secondary Explorer taskbar count or visibility/);
+  assert.equal(result.betaApproved, false);
+});
+
+test('live runtime accepts the same taskbar visibility even when HWNDs are recreated', () => {
+  const active = during();
+  active.taskbars[0].hwnd = '123456789012345679';
+  active.taskbars[1].hwnd = '987654321098765433';
+  const result = sequence(active, after('after-force-kill'));
+  assert.equal(result.structurallyConsistent, true, result.errors.join('; '));
+  assert.equal(result.manualGateStatus, 'NOT RUN');
+  assert.equal(result.betaApproved, false);
+});
+
 test('intermediate snapshot cannot omit the runtime or contain multiple runtimes', () => {
   for (const candidates of [
     [],

@@ -316,8 +316,19 @@ export function compareManualSnapshotSequence(before, during, after) {
        baseline.primary.ownerStartTimeUtcTicks !== active.primary.ownerStartTimeUtcTicks)) {
     errors.push('Explorer changed before the running snapshot was captured.');
   }
-  if (baseline.secondary.length !== active.secondary.length) {
-    errors.push('Running snapshot lost or added Explorer secondary taskbars.');
+  // A clean post-exit taskbar is not sufficient: FedoraWin must not hide
+  // Explorer's taskbar while the native runtime is active. Compare the live
+  // observation to the baseline as well as the final recovery observation.
+  // Run this structural check with Windows taskbar auto-hide disabled.
+  if (baseline.primary && active.primary &&
+      baseline.primary.visible !== active.primary.visible) {
+    errors.push('Running snapshot changed primary Explorer taskbar visibility.');
+  }
+  const secondaryVisibility = (bars) =>
+    bars.map((bar) => String(bar.visible)).sort().join(',');
+  if (baseline.secondary.length !== active.secondary.length ||
+      secondaryVisibility(baseline.secondary) !== secondaryVisibility(active.secondary)) {
+    errors.push('Running snapshot changed secondary Explorer taskbar count or visibility.');
   }
   if (after.stage === 'after-explorer-restart' && observed.primary && middle !== null) {
     const replacementStarted =
