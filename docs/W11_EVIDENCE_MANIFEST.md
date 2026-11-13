@@ -98,7 +98,9 @@ The comparator checks the snapshots' contracts, UTC ordering, Windows build,
 binary hash and path, interactive session and boot lifetime, Explorer taskbar PID + **process lifetime**, and baseline
 primary/secondary taskbar visibility. All taskbar HWNDs in each snapshot must
 share the primary taskbar's Explorer PID and creation lifetime; mixed-generation
-secondary taskbars and duplicate numeric HWND aliases are rejected. Clean exit and forced-kill observations
+secondary taskbars and duplicate numeric HWND aliases are rejected. A single PID
+cannot simultaneously identify an Explorer process and a FedoraWin runtime or
+guardian within the same capture; cross-role PID collisions fail closed. Clean exit and forced-kill observations
 must retain the primary Explorer owner's identity; an Explorer restart must
 change it. A missing taskbar, changed display count, or mismatch returns a
 nonzero exit code for investigation. The process check is observational and cannot authenticate that a person actually
