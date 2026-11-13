@@ -114,6 +114,17 @@ function inspect(snapshot, label, errors) {
     }
   }
 
+
+  // A Windows PID cannot identify Explorer and a FedoraWin candidate at the
+  // same instant. Reject cross-role collisions even if both process lists
+  // are individually well-formed; otherwise synthetic recovery evidence
+  // could claim the same process owns the shell and the running app.
+  for (const proc of running) {
+    if (lifetimes.has(proc.pid)) {
+      errors.push(`${label}: candidate PID overlaps an Explorer process PID.`);
+    }
+  }
+
   const primary = [];
   const secondary = [];
   const seenHwnds = new Set();
