@@ -434,6 +434,32 @@ test('live runtime accepts the same taskbar visibility even when HWNDs are recre
   assert.equal(result.betaApproved, false);
 });
 
+test('rejects a candidate PID that simultaneously belongs to Explorer', () => {
+  const active = during();
+  active.candidateProcesses[0].pid = 111;
+  const liveResult = sequence(active, after('after-force-kill'));
+  assert.equal(liveResult.structurallyConsistent, false);
+  assert.match(liveResult.errors.join(' '), /during: candidate PID overlaps an Explorer process PID/);
+  assert.equal(liveResult.manualGateStatus, 'NOT RUN');
+  assert.equal(liveResult.betaApproved, false);
+
+  const guardian = during();
+  guardian.candidateProcesses.push({
+    pid: 111, startTimeUtcTicks: runtimeTicks, role: 'guardian'
+  });
+  assert.match(sequence(guardian, after()).errors.join(' '),
+    /during: candidate PID overlaps an Explorer process PID/);
+
+  const recovered = afterRestart();
+  recovered.candidateProcesses.push({
+    pid: 222, startTimeUtcTicks: newTicks, role: 'guardian'
+  });
+  const restartResult = sequence(during(), recovered);
+  assert.equal(restartResult.structurallyConsistent, false);
+  assert.match(restartResult.errors.join(' '), /after: candidate PID overlaps an Explorer process PID/);
+  assert.equal(restartResult.betaApproved, false);
+});
+
 test('intermediate snapshot cannot omit the runtime or contain multiple runtimes', () => {
   for (const candidates of [
     [],
