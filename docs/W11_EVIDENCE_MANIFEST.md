@@ -65,14 +65,16 @@ To compare two collected records without changing Windows state:
 node tools/compare-w11-manual-snapshots.mjs './artifacts/manual-w11/w11-before-....json' './artifacts/manual-w11/w11-during-....json' './artifacts/manual-w11/w11-after-force-kill-....json'
 ```
 
-Snapshot schema v3 binds both snapshots to the same interactive Windows
+Snapshot schema v4 binds both snapshots to the same interactive Windows
 session ID and Windows boot lifetime (lossless .NET UTC ticks from the observed
 OS last-boot time). This rejects a reboot or different logon session as
 evidence of forced-kill/Explorer recovery. A session ID is not a host identity
 or cryptographic attestation; original recordings and operator review remain
-mandatory. Schema v1/v2 snapshots must be recaptured.
+mandatory. Schema v1/v2/v3 snapshots must be recaptured.
 
-Snapshot schema v3 also records `candidateProcesses`: the PIDs, lossless
+Snapshot schema v4 records the interactive `sessionId` for each Explorer and FedoraWin process, not only the snapshot collector. Processes in other logon sessions cannot prove shell continuity or a live FedoraWin runtime on the tested desktop; the collector excludes them and the comparator rejects missing or mismatched per-process session IDs. Old schema-v3 snapshots must be recaptured.
+
+Snapshot schema v4 also records `candidateProcesses`: the PIDs, lossless
 process creation ticks and runtime/guardian roles of **currently running processes
 using the selected executable path**. It observes both the main runtime and its
 independently launched frame/taskbar guardians without terminating them.
@@ -88,7 +90,7 @@ observed Windows boot lifetime. Multiple runtime instances make ownership of
 the manually exercised UI ambiguous. A guardian started after the baseline is
 permitted but is not proof of recovery or DWM rollback.
 Wait for guardian recovery to finish before collecting post-exit evidence.
-Snapshots collected with schema v1/v2 must be recaptured; they cannot establish
+Snapshots collected with schema v1/v2/v3 must be recaptured; they cannot establish
 the absence of lingering processes. If a candidate process's path, command line
 or creation lifetime cannot be read, collection fails closed.
 

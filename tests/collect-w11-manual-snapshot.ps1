@@ -92,7 +92,7 @@ public static class FedoraWinManualTaskbarSnapshot {
 '@
 }
 
-$explorers = @(Get-Process -Name explorer -ErrorAction SilentlyContinue)
+$explorers = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sessionId })
 if ($explorers.Count -eq 0) { throw 'Explorer is not running; manual snapshot is invalid.' }
 $explorerRows = @()
 $explorerLifetime = @{}
@@ -102,6 +102,7 @@ foreach ($process in $explorers) {
     $explorerLifetime[[int]$process.Id] = $ticks
     $explorerRows += [ordered]@{
         pid = [int]$process.Id
+        sessionId = [int]$process.SessionId
         startTimeUtcTicks = $ticks
     }
 }
@@ -131,6 +132,8 @@ $binaryName = [IO.Path]::GetFileName($exe).Replace("'", "''")
 $possibleProcesses = @(Get-CimInstance -ClassName Win32_Process -Filter "Name = '$binaryName'" -ErrorAction Stop)
 $candidateProcesses = @()
 foreach ($candidate in $possibleProcesses) {
+    # Other logon sessions do not demonstrate a runtime on this desktop.
+    if ([int]$candidate.SessionId -ne $sessionId) { continue }
     if ([string]::IsNullOrWhiteSpace([string]$candidate.ExecutablePath)) {
         throw "Cannot read executable path for matching-name PID $($candidate.ProcessId); process identity is ambiguous."
     }
@@ -150,6 +153,7 @@ foreach ($candidate in $possibleProcesses) {
     }
     $candidateProcesses += [ordered]@{
         pid = [int]$candidate.ProcessId
+        sessionId = [int]$candidate.SessionId
         startTimeUtcTicks = ([DateTime]$candidate.CreationDate).ToUniversalTime().Ticks.ToString([System.Globalization.CultureInfo]::InvariantCulture)
         role = $role
     }
@@ -157,7 +161,7 @@ foreach ($candidate in $possibleProcesses) {
 
 $timestamp = [DateTime]::UtcNow
 $record = [ordered]@{
-    schemaVersion = 3
+    schemaVersion = 4
     evidenceType = 'read-only-environment-snapshot'
     stage = $Stage
     capturedAtUtc = $timestamp.ToString('o')

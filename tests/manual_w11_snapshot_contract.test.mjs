@@ -12,8 +12,12 @@ test('snapshot is observational and cannot change Explorer or native DWM state',
   assert.match(script, /candidateProcesses\s*=\s*\$candidateProcesses/);
   assert.match(script, /GetCurrentProcess\(\)\.SessionId/);
   assert.match(script, /LastBootUpTime/);
+  assert.match(script, /Where-Object\s*\{\s*\$_\.SessionId\s+-eq\s+\$sessionId\s*\}/);
+  assert.match(script, /\$candidate\.SessionId\s+-ne\s+\$sessionId/);
+  assert.match(script, /sessionId\s*=\s*\[int\]\$process\.SessionId/);
+  assert.match(script, /sessionId\s*=\s*\[int\]\$candidate\.SessionId/);
   assert.match(script, /bootTimeUtcTicks\s*=\s*\$bootTimeUtcTicks/);
-  assert.match(script, /schemaVersion\s*=\s*3/);
+  assert.match(script, /schemaVersion\s*=\s*4/);
   assert.match(script, /GetWindowThreadProcessId/);
   assert.match(script, /StartTime\.ToUniversalTime\(\)\.Ticks\.ToString\(/);
   assert.match(script, /hwnd\s*=\s*\$bar\.Hwnd\.ToString\(/);

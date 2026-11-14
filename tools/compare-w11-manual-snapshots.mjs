@@ -35,7 +35,7 @@ function inspect(snapshot, label, errors) {
     errors.push(`${label}: expected a snapshot object.`);
     return null;
   }
-  if (snapshot.schemaVersion !== 3 ||
+  if (snapshot.schemaVersion !== 4 ||
       snapshot.evidenceType !== 'read-only-environment-snapshot' ||
       snapshot.manualGateStatus !== 'NOT RUN' || snapshot.betaApproved !== false) {
     errors.push(`${label}: invalid snapshot contract; never use a manual PASS here.`);
@@ -81,11 +81,14 @@ function inspect(snapshot, label, errors) {
       const startTicks = validTicks
         ? BigInt(proc.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS : null;
       const beforeBoot = bootTicks !== null && startTicks !== null && startTicks < bootTicks;
+      const wrongSession = !Number.isSafeInteger(proc?.sessionId) || proc.sessionId !== snapshot.sessionId;
       if (!proc || !Number.isSafeInteger(proc.pid) || proc.pid <= 0 ||
-          seenCandidatePids.has(proc.pid) || !validTicks || startTicks < 0n ||
+          seenCandidatePids.has(proc.pid) || wrongSession || !validTicks || startTicks < 0n ||
           beforeBoot || (capturedTicks !== null && startTicks > capturedTicks) ||
           !['runtime', 'guardian'].includes(proc.role)) {
-        errors.push(beforeBoot
+        errors.push(wrongSession
+          ? `${label}: candidate process belongs to another or unknown Windows session.`
+          : beforeBoot
           ? `${label}: candidate process lifetime predates Windows boot.`
           : `${label}: invalid/duplicate candidate PID, lifetime, or process role.`);
         continue;
@@ -102,10 +105,13 @@ function inspect(snapshot, label, errors) {
       const validTicks = typeof row?.startTimeUtcTicks === 'string' && DECIMAL_TICKS.test(row.startTimeUtcTicks);
       const startTicks = validTicks ? BigInt(row.startTimeUtcTicks) - DOTNET_UNIX_EPOCH_TICKS : null;
       const beforeBoot = bootTicks !== null && startTicks !== null && startTicks < bootTicks;
+      const wrongSession = !Number.isSafeInteger(row?.sessionId) || row.sessionId !== snapshot.sessionId;
       if (!row || !Number.isSafeInteger(row.pid) || row.pid <= 0 ||
-          !validTicks || startTicks < 0n || beforeBoot ||
+          wrongSession || !validTicks || startTicks < 0n || beforeBoot ||
           (capturedTicks !== null && startTicks > capturedTicks) || lifetimes.has(row.pid)) {
-        errors.push(beforeBoot
+        errors.push(wrongSession
+          ? `${label}: Explorer process belongs to another or unknown Windows session.`
+          : beforeBoot
           ? `${label}: Explorer process lifetime predates Windows boot.`
           : `${label}: invalid/duplicate Explorer PID, lossless start-time ticks, or future lifetime.`);
       } else {
