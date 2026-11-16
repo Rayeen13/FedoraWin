@@ -186,6 +186,9 @@ export function compareManualSnapshots(before, after) {
       // ambiguous even when every process has a valid lifetime.
       errors.push('Explorer-restart snapshot requires exactly one FedoraWin runtime.');
     }
+    if (observed.running.filter((proc) => proc.role === 'guardian').length > 1) {
+      errors.push('Explorer-restart snapshot has ambiguous multiple recovery guardians.');
+    }
     // The baseline contains no candidate process. A runtime whose creation
     // predates that baseline cannot establish this test session's launch.
     const baselineTicks = captureUtcTicks(before.capturedAtUtc);
@@ -304,6 +307,9 @@ export function compareManualSnapshotSequence(before, during, after) {
     }
   }
 
+  if (active.running.filter((proc) => proc.role === 'guardian').length > 1) {
+    errors.push('Running snapshot has ambiguous multiple recovery guardians.');
+  }
   const runtimes = active.running.filter((proc) => proc.role === 'runtime');
   if (runtimes.length !== 1) {
     errors.push('Running snapshot requires exactly one observed FedoraWin runtime.');

@@ -568,3 +568,28 @@ test('requires process session IDs in every schema-v4 snapshot', () => {
   assert.equal(result.manualGateStatus, 'NOT RUN');
   assert.equal(result.betaApproved, false);
 });
+
+
+test('rejects multiple distinct recovery guardians in the running snapshot', () => {
+  const active = during();
+  active.candidateProcesses.push(
+    { pid: 997, sessionId: 2, startTimeUtcTicks: runtimeTicks, role: 'guardian' },
+    { pid: 998, sessionId: 2, startTimeUtcTicks: runtimeTicks, role: 'guardian' }
+  );
+  const result = sequence(active, after());
+  assert.equal(result.structurallyConsistent, false);
+  assert.match(result.errors.join(' '), /ambiguous multiple recovery guardians/);
+  assert.equal(result.betaApproved, false);
+});
+
+test('rejects multiple distinct recovery guardians after Explorer restart', () => {
+  const observed = afterRestart();
+  observed.candidateProcesses.push(
+    { pid: 997, sessionId: 2, startTimeUtcTicks: runtimeTicks, role: 'guardian' },
+    { pid: 998, sessionId: 2, startTimeUtcTicks: runtimeTicks, role: 'guardian' }
+  );
+  const result = sequence(during(), observed);
+  assert.equal(result.structurallyConsistent, false);
+  assert.match(result.errors.join(' '), /ambiguous multiple recovery guardians/);
+  assert.equal(result.betaApproved, false);
+});
