@@ -593,3 +593,29 @@ test('rejects multiple distinct recovery guardians after Explorer restart', () =
   assert.match(result.errors.join(' '), /ambiguous multiple recovery guardians/);
   assert.equal(result.betaApproved, false);
 });
+
+
+test('Explorer restart preserves guardian identity and rejects post-restart replacement', () => {
+  const active = during();
+  active.candidateProcesses.push({ pid: 998, sessionId: 2, startTimeUtcTicks: runtimeTicks, role: 'guardian' });
+  const recovered = afterRestart();
+  recovered.candidateProcesses.push({ pid: 998, sessionId: 2, startTimeUtcTicks: runtimeTicks, role: 'guardian' });
+  const valid = sequence(active, recovered);
+  assert.equal(valid.structurallyConsistent, true, valid.errors.join('; '));
+  assert.equal(valid.betaApproved, false);
+  for (const changed of [
+    [],
+    [{ pid: 997, sessionId: 2, startTimeUtcTicks: runtimeTicks, role: 'guardian' }],
+    [{ pid: 998, sessionId: 2, startTimeUtcTicks: String(BigInt(runtimeTicks) + 10000000n), role: 'guardian' }]
+  ]) {
+    const snapshot = afterRestart();
+    snapshot.candidateProcesses.push(...changed);
+    const result = sequence(active, snapshot);
+    assert.equal(result.structurallyConsistent, false);
+    assert.match(result.errors.join(' '), /did not preserve the observed recovery guardian lifetime/);
+    assert.equal(result.manualGateStatus, 'NOT RUN');
+    assert.equal(result.betaApproved, false);
+  }
+  const missingDuring = sequence(during(), recovered);
+  assert.match(missingDuring.errors.join(' '), /did not preserve the observed recovery guardian lifetime/);
+});

@@ -325,6 +325,16 @@ export function compareManualSnapshotSequence(before, during, after) {
       }
     }
     if (after.stage === 'after-explorer-restart') {
+      // A replacement guardian launched after Explorer restart cannot attest
+      // continuity of the recovery owner observed before the restart.
+      const liveGuardians = active.running.filter((proc) => proc.role === 'guardian');
+      const recoveredGuardians = observed.running.filter((proc) => proc.role === 'guardian');
+      if (liveGuardians.length !== recoveredGuardians.length ||
+          (liveGuardians.length === 1 && recoveredGuardians.length === 1 &&
+           (liveGuardians[0].pid !== recoveredGuardians[0].pid ||
+            liveGuardians[0].startTimeUtcTicks !== recoveredGuardians[0].startTimeUtcTicks))) {
+        errors.push('Explorer restart did not preserve the observed recovery guardian lifetime.');
+      }
       const surviving = observed.running.filter((proc) => proc.role === 'runtime');
       if (surviving.length === 1 &&
           (surviving[0].pid !== runtime.pid ||
