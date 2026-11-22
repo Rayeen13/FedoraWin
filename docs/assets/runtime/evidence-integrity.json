@@ -1,110 +1,110 @@
 {
-  "source_sha": "5968df182e9f8cf5578e6de14464c27ea0a0f9ed",
+  "source_sha": "70b82afc099df24ab2aeefa55e08949f7c238b83",
   "source_branch": "dev/gnome-native-20260914",
-  "github_run_id": "44661858512",
-  "captured_utc": "2026-11-20T02:41:44.7208562Z",
+  "github_run_id": "44976938934",
+  "captured_utc": "2026-11-22T02:44:13.6985035Z",
   "runner_image": "win25-vs2026",
-  "executable_sha256": "8fcde464fb093f544621bd7974b86098a926e778cad7dd217b8f7769ec74f25a",
-  "executable_bytes": 9716736,
-  "gallery_metadata_sha256": "945f66bb22010aa8583f2b9a537d892fc324453a52721bb8ef68d90c91d6d47b",
+  "executable_sha256": "32d553717aed70e129272c9b1ff0ee37d23b0defa69f7b4ad2607c451ca8f54d",
+  "executable_bytes": 9715200,
+  "gallery_metadata_sha256": "abb39ad1f337e5174f63b4b99bdd0d0fc3ba6a8b4cfef2dd1a426b21499183a9",
   "screenshots": {
     "desktop": {
       "filename": "desktop.png",
       "width": 1024,
       "height": 768,
-      "sha256": "fb97ce0d2b4cf1d7b685db5d63301275fabd0588e5b4e95fbed02fa8271164a9",
-      "bytes": 160423
+      "sha256": "8fd7902f0d3823f61a675eb0f11d228f869b04b9d88a1c10acd6917f6d2bce32",
+      "bytes": 160774
     },
     "panel": {
       "filename": "panel.png",
       "width": 1024,
       "height": 32,
-      "sha256": "f3f3a6e8055341f77f25d1d73861f92c1ece70f2f6804edd0796dc0aecf71120",
-      "bytes": 1240
+      "sha256": "6e63a8f45ce54ec0e37861edc79376084d75e0d7a27235b44da7983226a2dca7",
+      "bytes": 1278
     },
     "activities": {
       "filename": "activities.png",
       "width": 1024,
       "height": 736,
-      "sha256": "3f33c3bfd66840a028e95dd080bb1d09134c95ea65878e31a3058fe237c06505",
-      "bytes": 301954
+      "sha256": "ef380895aa9ab8bf54bd5fd3f734f052da3ed24265a149fa8a7add6cf7764ebf",
+      "bytes": 303811
     },
     "apps": {
       "filename": "apps.png",
       "width": 1024,
       "height": 736,
-      "sha256": "c984770ab2179a8367e3922d3581772e3340f301d3b441bb14ed083c8795a62f",
-      "bytes": 348186
+      "sha256": "ade25f878e3beb2aec0ac9e01e027ddfdd5da960f93eb82f1c3b91a45bcce669",
+      "bytes": 352411
     },
     "search_terminal": {
       "filename": "search_terminal.png",
       "width": 1024,
       "height": 736,
-      "sha256": "50f7753d4d970d2c344a54a2e9a0e2622255b3c0481e8811d01ede20577350ad",
-      "bytes": 273485
+      "sha256": "9ad279e57c0b98032f781f56ca74c0cab87db12cef74908af0202e724c112f37",
+      "bytes": 272616
     },
     "quick_settings_dark": {
       "filename": "quick_settings_dark.png",
       "width": 408,
       "height": 510,
-      "sha256": "1c01fcc0186b30abbce2666d2a2d76dbb284b7a46819a5ccca7f623138b76eea",
-      "bytes": 27091
+      "sha256": "a2f00a00f7d349bab20679f183c7284296563f78dae6452fba3d5efcba1dcad0",
+      "bytes": 27082
     },
     "quick_settings_light": {
       "filename": "quick_settings_light.png",
       "width": 408,
       "height": 510,
-      "sha256": "d349855cc9fd83c7da5a3856e1c5da3e61162f146797cf304d563ea3b02a922d",
-      "bytes": 25470
+      "sha256": "90d23ada0f09eec6e9a1ca0053f953957c23eafd833c164e5428cfb35f3815e7",
+      "bytes": 25535
     },
     "appearance": {
       "filename": "appearance.png",
       "width": 408,
       "height": 510,
-      "sha256": "e6c1109f088b86bdcbc8afd7f44fb9005ef1a8cca5186266c3b12eba9b590881",
-      "bytes": 20629
+      "sha256": "4877761117fc68c8b39fd580c0a2552d151481a037517a6f2925741713b22cf3",
+      "bytes": 20691
     },
     "power_mode": {
       "filename": "power_mode.png",
       "width": 408,
       "height": 510,
-      "sha256": "c62730fc36e040cfc2c1b206e0c6841b4812d5bcdcb4ee309e260f12fd095853",
-      "bytes": 29133
+      "sha256": "4a148fff51d422f40960fb2db2d3f1f917c4fc37ff597a7123b1bb0bb139f16d",
+      "bytes": 29198
     },
     "wifi": {
       "filename": "wifi.png",
       "width": 408,
       "height": 510,
-      "sha256": "18ebf70bd8014eeb312c26a3844d533f309979b04f864d36a97ac040c40669ce",
-      "bytes": 27033
+      "sha256": "47a31edb0feb76eaca9f7741527a57f45d2dc5ead9a7437109da2a1f609f0b20",
+      "bytes": 27100
     },
     "bluetooth": {
       "filename": "bluetooth.png",
       "width": 408,
       "height": 510,
-      "sha256": "4aed7e1cfdc9164f95e34bdbec35205560f19942537729e7b620833c1cdbbbd2",
-      "bytes": 27064
+      "sha256": "c3f351a2496d7fefb87014a53a454bcbe27ce720daa1ab92b592a962a64ab10d",
+      "bytes": 27143
     },
     "radio_pause": {
       "filename": "radio_pause.png",
       "width": 408,
       "height": 510,
-      "sha256": "2e5e8495f3f66d462577303122df78c5813c5760013132c87814f755f89afb58",
-      "bytes": 32639
+      "sha256": "a4697794142c5419868a1147eacbfcd584bac6c07a7f3a4eaba34e7c7e174746",
+      "bytes": 32716
     },
     "date_menu": {
       "filename": "date_menu.png",
       "width": 760,
       "height": 540,
-      "sha256": "54a0f26e226472b1e063ed7485bb8ac320fe7fc7ee628a0c9266b81a8c1b5079",
-      "bytes": 28996
+      "sha256": "ec3ae264616e98d34253b47f916e5b2af05514310eadc62e16fc49314438959f",
+      "bytes": 29383
     },
     "native_frame": {
       "filename": "native_frame.png",
       "width": 820,
       "height": 520,
-      "sha256": "c9e17e514ba7a66601d9d5caa430dd5a2b0ef51a861c3be2c0366f9adab9a4fe",
-      "bytes": 8158
+      "sha256": "ba70e07322be5b2db94b7d6bc7a86d48f70b0afb32757900f64827896585b2ae",
+      "bytes": 8345
     },
     "native_frame_light": {
       "filename": "native_frame_light.png",
