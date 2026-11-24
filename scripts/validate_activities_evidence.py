@@ -52,6 +52,10 @@ def validate(record):
         minimum = 20 if record.get("invocation_type") == "cold" else 100
         if total < minimum:
             errors.append(f"invocations_total: requires at least {minimum} samples")
+        # Percentile aggregates require at least one successful invocation.
+        # Otherwise an all-failed run could claim valid latency statistics.
+        if type(failed) is int and failed == total:
+            errors.append("invocations_failed: all invocations failed; no successful latency samples")
     for key in MILESTONES:
         values = record.get(key)
         if not isinstance(values, dict):
@@ -124,6 +128,17 @@ class EvidenceTests(unittest.TestCase):
         errors = validate(sample)
         self.assertTrue(any("breaches" in e for e in errors))
         self.assertTrue(any("finite" in e for e in errors))
+
+    def test_all_failed_invocations_rejected(self):
+        for invocation_type, total in (("cold", 20), ("warm", 100)):
+            sample = self.sample()
+            sample["invocation_type"] = invocation_type
+            sample["invocations_total"] = total
+            sample["invocations_failed"] = total
+            errors = validate(sample)
+            self.assertTrue(any("all invocations failed" in error for error in errors))
+            sample["invocations_failed"] = total - 1
+            self.assertEqual(validate(sample), [])
 
     def test_invalid_counts_and_gate_ids(self):
         sample = self.sample()
