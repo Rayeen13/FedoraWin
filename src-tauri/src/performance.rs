@@ -56,6 +56,7 @@ extern "system" {
     fn OpenProcess(access: u32, inherit_handle: i32, process_id: u32) -> isize;
     fn CloseHandle(handle: isize) -> i32;
     fn GetCurrentProcessId() -> u32;
+    fn GetLastError() -> u32;
 }
 
 #[link(name = "psapi")]
@@ -74,6 +75,11 @@ fn process_tree(root: u32) -> Result<HashSet<u32>, String> {
     entry.size = size_of::<ProcessEntry32W>() as u32;
 
     let mut ok = unsafe { Process32FirstW(snapshot, &mut entry) };
+    if ok == 0 {
+        let error = unsafe { GetLastError() };
+        unsafe { CloseHandle(snapshot) };
+        return Err(format!("Process32FirstW failed: {error}"));
+    }
     while ok != 0 {
         relationships.push((entry.process_id, entry.parent_process_id));
         entry = unsafe { zeroed() };
@@ -81,8 +87,13 @@ fn process_tree(root: u32) -> Result<HashSet<u32>, String> {
         ok = unsafe { Process32NextW(snapshot, &mut entry) };
     }
 
+    let enumeration_error = unsafe { GetLastError() };
     unsafe {
         CloseHandle(snapshot);
+    }
+    // ERROR_NO_MORE_FILES is the only successful enumeration terminator.
+    if enumeration_error != 18 {
+        return Err(format!("Process32NextW failed: {enumeration_error}"));
     }
 
     let mut tree = HashSet::from([root]);
@@ -126,13 +137,23 @@ fn working_set(process_id: u32) -> Option<u64> {
     }
 }
 
+fn sum_working_sets(
+    samples: impl IntoIterator<Item = (u32, Option<u64>)>,
+) -> Result<u64, String> {
+    samples.into_iter().try_fold(0u64, |total, (pid, bytes)| {
+        let bytes = bytes.ok_or_else(|| {
+            format!("memory sample unavailable for PID {pid}; retry snapshot")
+        })?;
+        total
+            .checked_add(bytes)
+            .ok_or_else(|| "memory sample overflow".into())
+    })
+}
+
 pub fn snapshot() -> Result<MemorySnapshot, String> {
     let root = unsafe { GetCurrentProcessId() };
     let tree = process_tree(root)?;
-    let bytes = tree
-        .iter()
-        .filter_map(|process_id| working_set(*process_id))
-        .sum::<u64>();
+    let bytes = sum_working_sets(tree.iter().map(|&pid| (pid, working_set(pid))))?;
     let working_set_mb = bytes.div_ceil(1024 * 1024);
 
     Ok(MemorySnapshot {
@@ -146,7 +167,14 @@ pub fn snapshot() -> Result<MemorySnapshot, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{HARD_LIMIT_MB, TARGET_IDLE_MB};
+    use super::{sum_working_sets, HARD_LIMIT_MB, TARGET_IDLE_MB};
+
+    #[test]
+    fn incomplete_memory_snapshot_is_not_a_budget_pass() {
+        assert_eq!(sum_working_sets([(1, Some(10)), (2, Some(20))]), Ok(30));
+        assert!(sum_working_sets([(1, Some(10)), (2, None)]).is_err());
+        assert!(sum_working_sets([(1, Some(u64::MAX)), (2, Some(1))]).is_err());
+    }
 
     #[test]
     fn memory_budget_keeps_hard_limit_above_target() {
