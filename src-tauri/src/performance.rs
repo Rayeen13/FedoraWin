@@ -137,13 +137,10 @@ fn working_set(process_id: u32) -> Option<u64> {
     }
 }
 
-fn sum_working_sets(
-    samples: impl IntoIterator<Item = (u32, Option<u64>)>,
-) -> Result<u64, String> {
+fn sum_working_sets(samples: impl IntoIterator<Item = (u32, Option<u64>)>) -> Result<u64, String> {
     samples.into_iter().try_fold(0u64, |total, (pid, bytes)| {
-        let bytes = bytes.ok_or_else(|| {
-            format!("memory sample unavailable for PID {pid}; retry snapshot")
-        })?;
+        let bytes = bytes
+            .ok_or_else(|| format!("memory sample unavailable for PID {pid}; retry snapshot"))?;
         total
             .checked_add(bytes)
             .ok_or_else(|| "memory sample overflow".into())
